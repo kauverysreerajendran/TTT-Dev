@@ -1,0 +1,2336 @@
+
+{% extends "base.html" %} {% load static %} {% block content %}
+{% load stock_filters %} 
+
+<style>
+
+  
+ /* Tray validation message styles (non-destructive) */
+.tray-validation-message {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1;
+  padding: 6px 8px;
+  border-radius: 6px;
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+}
+.tray-validation-success {
+  background: #e8f5e8;
+  color: #175d26;
+  border: 1px solid #28a745;
+}
+.tray-validation-error {
+  background: #fff3f3;
+  color: #8a1f1f;
+  border: 1px solid #dc3545;
+}
+
+/* Instant input validation styles */
+.input-valid {
+  border: 2px solid #28a745 !important;
+  background-color: #e8f5e8 !important;
+  box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25) !important;
+}
+.input-invalid {
+  border: 2px solid #dc3545 !important;
+  background-color: #fff3f3 !important;
+  box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25) !important;
+}
+.input-loading {
+  border: 2px solid #6c757d !important;
+  background-color: #f8f9fa !important;
+}
+.input-empty {
+  border: 1px solid #ddd !important;
+  background-color: #fff !important;
+  box-shadow: none !important;
+}
+
+/* Enhanced tray input validation styles */
+#delinkTrayTable input[type="text"].input-valid,
+#halfFilledTraySection input[type="text"].input-valid {
+  border: 2px solid #28a745 !important;
+  background-color: #e8f5e8 !important;
+}
+
+#delinkTrayTable input[type="text"].input-invalid,
+#halfFilledTraySection input[type="text"].input-invalid {
+  border: 2px solid #dc3545 !important;
+  background-color: #fff3f3 !important;
+}
+
+#delinkTrayTable input[type="text"].input-loading,
+#halfFilledTraySection input[type="text"].input-loading {
+  border: 2px solid #6c757d !important;
+  background-color: #f8f9fa !important;
+}
+.tray-id-loading {
+  margin-top:6px;
+  font-size:11px;
+  color:#6c757d;
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+/* Tray ID error styling - moved below .delink-grid > div */
+.tray-id-error {
+  color: #d32f2f;
+  font-size: 11px;
+  font-weight: bold;
+  background-color: #ffebee;
+  padding: 4px 6px;
+  border-radius: 4px;
+  margin-top: 4px;
+}
+
+
+/* ensure the input parent keeps space for messages */
+.delink-grid > div { position: relative; }
+
+
+  /* UNIFIED: Simple solid colors matching model slider - no gradients or complex borders */
+.delink-grid > div.bg-1,
+.delink-grid > .lot-color-1 { background: #e8f5e8 !important; border: 1px solid #ddd !important; }
+.delink-grid > div.bg-2,
+.delink-grid > .lot-color-2 { background: #e3f2fd !important; border: 1px solid #ddd !important; }
+.delink-grid > div.bg-3,
+.delink-grid > .lot-color-3 { background: #fff3e0 !important; border: 1px solid #ddd !important; }
+.delink-grid > div.bg-4,
+.delink-grid > .lot-color-4 { background: #f3e5f5 !important; border: 1px solid #ddd !important; }
+.delink-grid > div.bg-5,
+.delink-grid > .lot-color-5 { background: #fff8e1 !important; border: 1px solid #ddd !important; }
+
+/* Ensure text and input contrast for colored cells */
+.delink-grid > div.bg-1 input,
+.delink-grid > div.bg-2 input,
+.delink-grid > div.bg-3 input,
+.delink-grid > div.bg-4 input,
+.delink-grid > div.bg-5 input {
+  background: transparent !important;
+  color: #1f2937 !important;
+  font-weight: 600;
+}
+
+
+  /* De-link Tray Scan UI (visual-only, non-destructive) - REDUCED HEIGHT */
+.delink-section {
+  margin: 4px 6px 8px 6px;
+  font-family: "Segoe UI", Arial, sans-serif;
+}
+.delink-header {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:8px;
+  padding:4px 6px;
+  color:#374151;
+  font-weight:700;
+  font-size:13px;
+  margin-top: -10px;
+}
+.delink-header small { font-weight:500; color:#6b7280; margin-left:4px; }
+
+/* Grid of tray inputs - Horizontal scroll layout - REDUCED HEIGHT */
+.delink-grid {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 0;
+  justify-content: flex-start;
+  align-items: flex-start;
+  margin-top: -8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: #b0b0b0 #f5f5f5;
+  max-height: 60px;
+}
+
+/* Remove the hiding of ui-hidden elements in delink grid - let them scroll with others */
+/* Remove the hiding of ui-hidden elements in delink grid - let them scroll with others and be editable */
+.delink-grid > .ui-hidden {
+  display: block !important; /* Ensure visible */
+  width: auto !important;
+  height: auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  visibility: visible !important;
+  background: #f0f0f0 !important; /* Light background to indicate header */
+  opacity: 0.7; /* Slightly dim to show they are not primary inputs */
+}
+
+/* cell adjustments - horizontal layout with fixed width - REDUCED HEIGHT */
+.delink-grid > div {
+  flex: 0 0 160px; /* Fixed width for horizontal scrolling */
+  min-width: 160px;
+  max-width: 160px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  min-height: 32px;
+  max-height: 42px;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  border: 1px solid #e0e7ef;
+  background: #ffffff;
+  margin: 0;
+}
+
+/* Allow inputs in ui-hidden divs to be editable */
+.delink-grid > .ui-hidden input[type="text"] {
+  pointer-events: auto !important; /* Enable interaction */
+  background: transparent !important;
+  color: #666 !important; /* Dim text color for header indication */
+  cursor: text !important; /* Show text cursor */
+}
+
+/* Inputs inside cells: compact and full width */
+.delink-grid input[type="text"],
+.delink-grid .tray-input {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  padding: 6px 8px;      /* reduced padding */
+  font-size: 13px;
+  color: #2f3742;
+  font-weight:600;
+  height: 28px;          /* consistent small height */
+  box-sizing: border-box;
+}
+
+/* Make inputs occupy full width once serial columns hidden */
+.delink-grid > div:not(.ui-hidden) .tray-input,
+.delink-grid > div:not(.ui-hidden) input[type="text"] {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+
+
+
+/* Responsive fallbacks - Horizontal scroll adjustments */
+/* On mobile devices, allow smaller cell width but maintain horizontal scroll */
+@media (max-width:768px) {
+  .delink-grid > div {
+    flex: 0 0 150px;
+    min-width: 150px;
+    max-width: 150px;
+  }
+}
+
+
+/* Inputs inside cells: compact and full width */
+.delink-grid input[type="text"],
+.delink-grid .tray-input {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  padding: 6px 8px;      /* reduced padding */
+  font-size: 13px;
+  color: #2f3742;
+  font-weight:600;
+  height: 28px;          /* consistent small height */
+  box-sizing: border-box;
+}
+
+/* De-link Tray Scan: Horizontal scroll layout */
+#delinkTrayTable {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 0;
+  justify-content: flex-start;
+  align-items: flex-start;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: #b0b0b0 #f5f5f5;
+}
+
+/* Each tray input cell - horizontal layout consistent sizing */
+#delinkTrayTable > div {
+  flex: 0 0 180px; /* Fixed width for horizontal scrolling */
+  min-width: 180px;
+  max-width: 180px;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border-radius: 6px;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #e0e7ef;
+  margin: 0;
+  transition: border-color 0.2s ease;
+}
+
+#delinkTrayTable > div:hover {
+  border-color: #028084;
+}
+
+#delinkTrayTable input[type="text"] {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  padding: 6px 8px;
+  font-size: 13px;
+  color: #2f3742;
+  font-weight: 500;
+  height: 28px;
+  box-sizing: border-box;
+}
+
+#delinkTrayTable input[type="text"]:focus {
+  background: #f8fafc;
+}
+
+/* Responsive: Horizontal scroll adjustments for delinkTrayTable */
+@media (max-width: 768px) {
+  #delinkTrayTable > div {
+    flex: 0 0 150px;
+    min-width: 150px;
+    max-width: 150px;
+  }
+}
+
+/* Placeholder style */
+.delink-grid input[type="text"]::placeholder {
+  color: rgba(47,55,66,0.45);
+  font-weight:500;
+  font-size:13px;
+}
+
+/* Responsive: 2 cols on small screens, 1 col on very small */
+@media (max-width:900px) {
+  .delink-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width:460px) {
+  .delink-grid { grid-template-columns: 1fr; }
+}
+
+/* Model card color palette for visual distinction */
+/* UNIFIED: Simple solid backgrounds for model items to match tray cells */
+.model-loaded-item.bg-1 { background: #e8f5e8 !important; }
+.model-loaded-item.bg-2 { background: #e3f2fd !important; }
+.model-loaded-item.bg-3 { background: #fff3e0 !important; }
+.model-loaded-item.bg-4 { background: #f3e5f5 !important; }
+.model-loaded-item.bg-5 { background: #fff8e1 !important; }
+/* Add more as needed */
+
+    .status-icon.active.pass {
+    background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%) !important;
+    border-color: #2e7d32 !important;
+    box-shadow: 0 4px 16px rgba(76, 175, 80, 0.4) !important;
+  }
+
+  
+/* ========== Tablet override — paste at file end (after other table styles) ========== */
+/* --- Tablet: freeze first 3 columns consistently with desktop --- */
+@media (pointer: coarse) and (min-width: 680px) and (max-width: 1400px) {
+
+*{
+  font-size: 20px !important; /* Increase font size for better readability */
+}
+
+:root { --app-font-size: 20px; }
+.rounded-circle{
+  padding: 17px !important;
+}
+.model-image-tooltip{
+  transform: translateX(-25%) !important;
+  top: 45% !important;
+  z-index: 500000 !important; /* high so it sits above table & scrollbar */
+
+}
+
+
+  /* Core layout blocks */
+  .content-wrapper,
+  .card, .card-body,
+  .table-responsive,
+  #order-listing,
+  #trayScanModal_DayPlanning,
+  .tray-scan-modal-DayPlanning,
+  .pagination-wrapper {
+    font-size: var(--app-font-size) !important;
+    line-height: 1.35 !important;
+  }
+
+  /* Table headings / cells / icons */
+  #order-listing th,
+  #order-listing td,
+  #order-listing thead th {
+    font-size: var(--app-font-size) !important;
+    vertical-align: middle !important;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+  }
+
+  /* Ensure heading/title and date controls match */
+  h4.text-left.mt-0.mb-3,
+  .calendar-bar .date-input-group label,
+  .calendar-bar .date-input-group input,
+  #search-date-range-simple,
+  #clear-date-filter-simple,
+  .calendar-btn,
+  #trayScanModal_DayPlanning input.form-control,#trayValidateBtn,
+  #trayScanModal_DayPlanning table th, #trayScanModal_DayPlanning table td,
+  #modalModelNo_DayPlanning
+ {
+    font-size: var(--app-font-size) !important;
+  }  
+
+  /* Reserve space for filter icons in header cells */
+#order-listing th {
+  position: relative;
+  overflow: visible !important;
+  white-space: normal !important; /* allow wrapping */
+}
+
+/* Ensure filter icons always stay to the right */
+#order-listing th .fa-filter {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px !important;
+  opacity: 0.8;
+  cursor: pointer;
+}
+
+  /* Column 1 */
+  #order-listing th:nth-child(1),
+  #order-listing td:nth-child(1) {
+    position: sticky;
+    left: 0 !important;
+    min-width: 90px !important;
+    max-width: 90px !important;
+    background: #f7fafd;
+    z-index: 30;
+  }
+
+  /* Column 2 */
+  #order-listing th:nth-child(2),
+  #order-listing td:nth-child(2) {
+    position: sticky;
+    left: 90px !important;   /* = width of col1 */
+    min-width: 125px !important;
+    max-width: 125px !important;
+    background: #f7fafd;
+    z-index: 25;
+  }
+
+  /* Column 3 */
+  #order-listing th:nth-child(3),
+  #order-listing td:nth-child(3) {
+    position: sticky;
+    left: 215px !important;  /* 75 (col1) + 100 (col2 min) */
+    min-width: 140px !important;
+    max-width: 140px !important;
+    background: #f7fafd;
+    z-index: 20;
+  }
+
+  /* Sticky header */
+  #order-listing thead th {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    background: #028084 !important;
+    color: #e5fcff !important;
+  }
+}
+
+@media (pointer: coarse) and (min-width: 680px) and (max-width: 1400px) {
+  .table-container {
+    overflow-x: auto;
+  }
+
+  /* Other columns (fit remaining space) */
+  #order-listing th:nth-child(4)  { min-width: 140px !important; max-width: 140px !important; }
+  #order-listing th:nth-child(5)  { min-width: 120px !important; max-width: 120px !important; }
+  #order-listing th:nth-child(6)  { min-width: 135px !important; max-width: 135px !important; }
+  #order-listing th:nth-child(7)  { min-width: 115px !important; max-width: 125px !important; }
+  #order-listing th:nth-child(8)  { min-width: 140px !important; max-width: 140px !important; }
+  #order-listing th:nth-child(9)  { min-width: 140px !important; max-width: 145px !important; }
+  #order-listing th:nth-child(10) { min-width: 120px !important; max-width: 120px !important; }
+  #order-listing th:nth-child(11) { min-width: 120px !important; max-width: 130px !important; }
+  #order-listing th:nth-child(12) { min-width: 130px !important; max-width: 130px !important; }
+  #order-listing th:nth-child(13) { min-width: 120px !important; max-width: 130px !important; }
+  #order-listing th:nth-child(14) { min-width: 130px !important; max-width: 130px !important; }
+  #order-listing th:nth-child(15) { min-width: 115px !important; max-width: 115px !important; }
+  #order-listing th:nth-child(16) { min-width: 130px !important; max-width: 150px !important; }
+  #order-listing th:nth-child(17) { min-width: 130px !important; max-width: 130px !important; }
+  #order-listing th:nth-child(18) { min-width: 130px !important; max-width: 130px !important; }
+  #order-listing th:nth-child(19) { min-width: 140px !important; max-width: 140px !important; }
+  #order-listing th:nth-child(20) { min-width: 130px !important; max-width: 130px !important; }
+
+
+  /* Prevent overlap */
+  #order-listing th:nth-child(-n+3),
+  #order-listing td:nth-child(-n+3) {
+    z-index: 45 !important;
+  }
+
+  /* Hide hidden columns */
+  #order-listing th[hidden],
+  #order-listing td[hidden] {
+    display: none !important;
+  }
+}
+    .model-image-tooltip {
+    position: fixed !important;
+    z-index: 99999 !important;
+    /* Optionally, add a box-shadow for visibility */
+    box-shadow: 0 4px 24px rgba(0,0,0,0.18);
+  }
+      /* Add to your CSS file for Excel-like grid lines */
+.table-bordered th, .table-bordered td {
+  border: 1px solid #d9dedf !important;
+}
+  /* Make the table header sticky */
+thead th {
+  position: sticky;
+  top: 0;
+  background-color: white; /* or your table header bg color */
+  z-index: 5; /* ensure it stays above the table rows */
+  
+}
+
+#order-listing thead th {
+  height: 38px !important; /* Increase as needed */
+  background: #028084 !important;
+  color: #e5fcff !important;
+  vertical-align: middle !important;
+}
+/* style for hol/unhold row - blurred bg */
+#order-listing tr:last-child td {
+  margin-bottom: 0 !important;
+  padding-bottom: 0 !important;
+  /* background: #f4f3f3 !important; */
+}
+/* Gird line color combination */
+#order-listing th,
+#order-listing td {
+  border-right: 1.5px solid #bababa !important; /* Vertical lines: blue */
+  border-bottom: 1.5px solid #121413 !important; /* Horizontal lines: green */
+}
+
+  
+/* Default: Desktop/Laptop (wider columns for larger font) - server */
+/* #order-listing th:nth-child(1) {
+  min-width: 90px;
+  max-width: 90px;
+} */ /* S.No */
+/* #order-listing th:nth-child(2) {
+  min-width: 90px;
+  max-width: 100px;
+} */ /* Last Updated */
+/* #order-listing th:nth-child(3) {
+  min-width: 90px;
+  max-width: 120px;
+} */ /* Plating */
+#order-listing th:nth-child(4) {
+  min-width: 110px;
+  max-width: 120px;
+} /* Polishing Stk No */
+#order-listing th:nth-child(5) {
+  min-width: 90px;
+  max-width: 100px;
+} /* Plating Color */
+#order-listing th:nth-child(6) {
+  min-width: 100px;
+  max-width: 110px;
+} /* Category */
+#order-listing th:nth-child(7) {
+  min-width: 90px;
+  max-width: 95px;
+} /* Polish Finish */
+#order-listing th:nth-child(8) {
+  min-width: 110px;
+  max-width: 110px;
+} /* Version */
+#order-listing th:nth-child(9) {
+  min-width: 105px;
+  max-width: 105px;
+} /* Tray Cate-Capacity */
+#order-listing th:nth-child(10) {
+  min-width: 90px;
+  max-width: 100px;
+} /* Source */
+#order-listing th:nth-child(11) {
+  min-width: 115px;
+  max-width: 115px;
+} /* No of Trays */
+#order-listing th:nth-child(12) {
+  min-width: 100px;
+  max-width: 105px;
+} /* Input Qty */
+#order-listing th:nth-child(13) {
+  min-width: 95px;
+  max-width: 100px;
+} /* Process Status */
+#order-listing th:nth-child(14) {
+  min-width: 95px;
+  max-width: 100px;
+} /*  Action */
+#order-listing th:nth-child(15) {
+  min-width: 90px;
+  max-width: 100px;
+} /* Lot Status */
+#order-listing th:nth-child(16) {
+  min-width: 110px;
+  max-width: 110px;
+} /* Current Stage */
+#order-listing th:nth-child(17) {
+  min-width: 110px;
+  max-width: 100px;
+} /* Remarks */
+#order-listing th:nth-child(18) {
+  min-width: 100px;
+  max-width: 110px;
+}
+
+@media (min-width: 600px) and (max-width: 900px) {
+  #order-listing {
+    table-layout: auto !important; /* Let columns auto-fit content */
+    width: 100% !important;
+    min-width: unset !important;
+    max-width: 100vw !important;
+  }
+  /* Adjust width for all headings (th) and cells (td) */
+  #order-listing th,
+  #order-listing td {
+    min-width: 160px !important;
+    max-width: 260px !important;
+    width: 180px !important;
+  }
+  #order-listing th {
+    position: relative;
+    padding-right: 48px !important; /* More space for filter icon */
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: ellipsis;
+  }
+  #order-listing th .fa-filter {
+    position: absolute;
+    right: 18px !important;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 2;
+    background: transparent;
+    pointer-events: auto;
+  }
+}
+/* Right-align filter icons */
+#order-listing th .fa-filter {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  opacity: 0.7;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+#order-listing th .fa-filter:hover {
+  opacity: 1;
+}
+
+
+  
+#order-listing th:last-child,
+#order-listing td:last-child {
+  border-right: none;
+  max-width: 95px;
+  min-width: 100px;
+}
+/* Overall Table Shrink */
+#order-listing tr,
+#order-listing td,
+#order-listing th {
+  height: 20px !important;
+  padding-top: 2px !important;
+  padding-bottom: 2px !important;
+  padding-left: 6px !important;
+  padding-right: 6px !important;
+}
+/* Table heading font size */
+/* Add this at the end of your <style> block in DP_PickTable.html */
+
+/* Professional table header styling with proper text wrapping */
+#order-listing th {
+  position: relative;
+  padding: 8px 12px 8px 16px !important;
+  text-align: left !important;
+  vertical-align: middle !important;
+  white-space: normal !important;
+  line-height: 1.3 !important;
+  word-break: keep-all !important;
+  hyphens: none !important;
+  /* font-size: 13px; */
+  /* font-weight: 600 !important; */
+  background: #028084 !important;
+  color: #e5fcff !important;
+  border-bottom: 2.5px solid #bdbdbd !important;
+  /* min-width: 80px;
+  max-width: 140px; */
+   overflow-wrap: break-word;
+  word-wrap: break-word;
+   z-index: 20 !important;
+}
+
+/* Make sure header cells for sticky columns are always above body cells */
+/* Fix: Prevent shadow/rows from showing behind sticky columns while scrolling */
+#order-listing th:nth-child(-n+3),
+#order-listing td:nth-child(-n+3) {
+  z-index: 30 !important; 
+box-shadow: 2px 0 8px rgba(0,0,0,0.04);
+}
+
+/* Prevent sticky columns from overlapping sticky header */
+#order-listing td:nth-child(-n+3) {
+  z-index: 11 !important;
+}
+  /* Make the first column sticky and opaque */
+#order-listing td:first-child,
+#order-listing th:first-child {
+  position: sticky;
+  left: 0;
+  background: #fff;      /* Or match your table background */
+  z-index: 2;            /* Above blurred rows */
+  box-shadow: 2px 0 4px rgba(0,0,0,0.03); /* Optional: subtle shadow */
+}
+/* Force specific table headers to wrap onto two lines */
+#order-listing th:nth-child(4),   /* Polishing Stk No */
+#order-listing th:nth-child(5),   /* Plating Color */
+#order-listing th:nth-child(7),   /* Polish Finish */
+#order-listing th:nth-child(9),   /* Tray Cate-Capacity */
+#order-listing th:nth-child(11),  /* No of Tray */
+#order-listing th:nth-child(12),  /* Input Qty */
+#order-listing th:nth-child(13)   /* Process Status */ {
+  white-space: normal !important;
+  line-height: 1.2 !important;
+  word-break: break-word !important;
+
+  text-align: center;
+  vertical-align: middle;
+  padding-top: 5px !important;
+  padding-bottom: 5px !important;
+}
+/* Freeze style for 1st - 3 columns */
+/* --- Freeze first 3 columns and table header for #order-listing --- */
+#order-listing {
+  position: relative;
+  border-collapse: separate !important;
+  border-spacing: 0;
+  background: #fff;
+  /* Ensure enough left padding for sticky columns */
+}
+
+#order-listing th,
+#order-listing td {
+  background-clip: padding-box;
+  /* Prevent overlap artifacts */
+  z-index: 1;
+}
+
+/* Sticky header */
+#order-listing thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #028084 !important;
+  color: #e5fcff !important;
+}
+
+/* Freeze 1st column */
+#order-listing th:nth-child(1),
+#order-listing td:nth-child(1) {
+  position: sticky;
+  left: 0 !important;
+  z-index: 12; /* Above header */
+  background: #f7fafd;
+  min-width: 75px;
+  max-width: 75px;
+}
+
+/* Freeze 2nd column - Last Updated*/
+#order-listing th:nth-child(2),
+#order-listing td:nth-child(2) {
+  position: sticky;
+  left: 75px; /* Match min-width of 1st col */
+  z-index: 12;
+  background: #f7fafd;
+  min-width: 100px; /* Increased width */
+  max-width: 110px; /* Increased width */
+}
+
+/* Freeze 3rd column */
+#order-listing th:nth-child(3),
+#order-listing td:nth-child(3) {
+  position: sticky;
+  left: 175px; /* 100px (1st) + 90px (2nd) */
+  z-index: 12;
+  background: #f7fafd;
+  min-width: 130px; /* Increased width 100 - old value*/
+  max-width: 140px; /* Increased width  110 - old value*/
+}
+
+/* Prevent sticky columns from overlapping sticky header */
+#order-listing th:nth-child(-n + 3) {
+  z-index: 12;
+}
+#order-listing td:nth-child(-n + 3) {
+  z-index: 11;
+}
+
+/* Ensure sticky columns and header work together */
+#order-listing th,
+#order-listing td {
+  box-sizing: border-box;
+  /* Prevent content shake */
+  /* overflow: hidden; */
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+
+    .blurred-heading, .row-inactive-blur {
+    filter: blur(2px) grayscale(0.7) opacity(0.6);
+    pointer-events: none !important;
+    user-select: none;
+    cursor: not-allowed;
+    background: #f5f5f5 !important;
+  }
+    /* Show remark tooltip above the trigger instead of below */
+  .remark-tooltip {
+    top: auto !important;
+    bottom: 110% !important;
+  }
+#trayScanDetails.table-grid {
+  display: grid !important;
+  grid-template-columns: 94px 175px 150px !important;
+  gap: 0px !important;
+  max-height: 300px !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  padding-right: 10px;
+  margin-top: 10px;
+  border: 1px solid #ddd;
+}
+ 
+#trayScanModal{
+overflow: scroll !important;
+width: 435px !important;
+}
+#trayScanDetails.table-grid::-webkit-scrollbar {
+  width: 8px;
+}
+ 
+#trayScanDetails.table-grid::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+ 
+#trayScanDetails.table-grid::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+ 
+#trayScanDetails.table-grid::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+ 
+ 
+.tray-scan-modal.open {
+  width:500px !important;
+}
+/* For the 4-column layout (with validation status) */
+#trayScanDetails.table-grid.four-column {
+  grid-template-columns: 50px 1fr 100px 140px !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+ 
+/* Styling individual grid cells, only inside trayScanDetails */
+#trayScanDetails.table-grid > div {
+  background: #f7f7f7;
+  padding: 8px 12px;
+  font-size: 12px;
+  border: 1px solid #ddd;
+  margin: 0; /* reset any margin from <p> or others */
+}
+ 
+/* S.no column specific styling */
+#trayScanDetails.table-grid > div:nth-child(3n+1):not(:nth-child(-n+4)) {
+  text-align: center;
+  font-weight: 600;
+  padding: 8px 4px; /* Reduced horizontal padding for S.no */
+}
+ 
+/* For mobile responsiveness */
+@media (max-width: 768px) {
+  #trayScanDetails.table-grid {
+    grid-template-columns: 45px 1fr 1fr !important; /* Even smaller S.no column on mobile */
+  }
+  #trayScanDetails.table-grid.four-column {
+    grid-template-columns: 40px 1fr 80px 100px !important;
+  }
+  #trayScanDetails.table-grid > div:nth-child(3n+1):not(:nth-child(-n+4)) {
+    padding: 6px 2px; /* Further reduced padding on mobile */
+    font-size: 11px;
+  }
+}
+ 
+/* For very small screens */
+@media (max-width: 480px) {
+  #trayScanDetails.table-grid {
+    grid-template-columns: 35px 1fr 80px !important; /* Minimal S.no column */
+  }
+  #trayScanDetails.table-grid.four-column {
+    grid-template-columns: 30px 1fr 70px 90px !important;
+  }
+}
+      /* UNIFIED: Lot ID Colors matching bg-* classes (removed lot-color-6 for consistency) */
+.lot-color-1 { background-color: #e8f5e8 !important; border: 1px solid #ddd !important; } /* Light Green */
+.lot-color-2 { background-color: #e3f2fd !important; border: 1px solid #ddd !important; } /* Light Blue */
+.lot-color-3 { background-color: #fff3e0 !important; border: 1px solid #ddd !important; } /* Light Orange */
+.lot-color-4 { background-color: #f3e5f5 !important; border: 1px solid #ddd !important; } /* Light Purple */
+.lot-color-5 { background-color: #fff8e1 !important; border: 1px solid #ddd !important; } /* Light Yellow */
+
+/* Color legend styling */
+.lot-legend {
+  margin-top: 10px; 
+  font-size: 12px; 
+  display: flex; 
+  gap: 10px; 
+  flex-wrap: wrap;
+}
+
+.lot-legend span {
+  padding: 2px 8px; 
+  border-radius: 4px; 
+  border: 1px solid #ccc;
+  font-weight: bold;
+}
+/* Modal Base Styles */
+.right-slide-modal {
+  position: fixed;
+  top: 0;
+  right: -100%;
+  width: 100%;
+  max-width: 650px;
+  height: 100%;
+  background: #ffffff;
+  box-shadow: -4px 0 12px rgba(0, 0, 0, 0.15);
+  transition: right 0.4s ease, opacity 0.3s ease;
+  z-index: 10500;
+  overflow-y: auto;
+  font-family: 'Segoe UI', sans-serif;
+  border-radius: 16px 0 0 16px;
+}
+
+
+/* Center and float the right-slide-modal, prevent cropping on small screens */
+.right-slide-modal.open {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  right: auto !important;
+  transform: translate(-50%, -50%);
+  margin: 0;
+  opacity: 1;
+  max-width: 1300px;        /* Wider modal */
+  width: 98vw;              /* Responsive width */
+  min-height: 80vh;         /* Prevent cropping top/bottom */
+  max-height: 98vh;         /* Prevent cropping bottom/top */
+  height: auto;
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.18);
+  background: #fff;
+  z-index: 10500;
+  display: block;
+  overflow-y: auto;         /* Allow scrolling if content overflows */
+  overflow-x: hidden;
+}
+
+/* Responsive: On small screens, modal fills most of viewport */
+@media (max-width: 900px) {
+  .right-slide-modal.open {
+    max-width: 99vw;
+    min-height: 90vh;
+    max-height: 99vh;
+    border-radius: 8px;
+  }
+}
+
+/* Flexible modal content */
+.right-slide-content {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  min-height: 100%;
+  height: 60vh;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+/* Make tray sections flexible */
+#delinkTrayTable, #halfFilledTrayTable {
+  flex-grow: 1;
+  min-height: 100px;
+  background: transparent;
+}
+
+#halfFilledTraySection {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  margin-top: 10px;
+}
+
+/* Make form sections and headers responsive */
+.form-section {
+  flex-shrink: 0;
+  margin-bottom: 10px;
+}
+
+h6 {
+  flex-shrink: 0;
+  margin-bottom: 8px;
+  margin-top: 15px;
+}
+
+.right-slide-modal:not(.open) {
+  opacity: 0;
+}
+
+.right-slide-modal.minimized {
+  right: 0 !important;
+  width: 350px !important;
+  max-width: 350px !important;
+  height: 60px !important;
+  min-height: 60px !important;
+  overflow: hidden;
+  border-radius: 16px 0 0 0;
+  transition: width 0.3s, height 0.3s;
+  padding: 0 !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: fixed !important;
+  top: 20px !important;
+  z-index: 10500 !important;
+}
+
+.right-slide-modal.minimized .right-slide-content {
+  width: 100%;
+  height: 100%;
+  padding: 8px 16px !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.right-slide-modal.minimized .modal-header {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between !important;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.right-slide-modal.minimized .modal-header h3 {
+  font-size: 14px !important;
+  margin: 0;
+  flex: 1;
+  text-align: left !important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.right-slide-modal.minimized .close-btn {
+  display: block !important;
+  font-size: 18px !important;
+  margin-left: 10px;
+  flex-shrink: 0;
+}
+
+.right-slide-modal.minimized .modal-actions,
+.right-slide-modal.minimized .form-section,
+.right-slide-modal.minimized .model-slider-wrapper,
+.right-slide-modal.minimized h4 {
+  display: none !important;
+}
+
+.right-slide-modal.minimized .tray-table,
+.right-slide-modal.minimized .action-buttons,
+.right-slide-modal.minimized #selectedItemsStatus {
+  display: none !important;
+}
+
+
+/* Modal Header: full width, linear gradient background, flex layout */
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  width: 100%;
+  padding: 20px;
+      background: linear-gradient(
+      90deg,
+      #e0f7fa 0%,
+      #b2ebf2 33%,
+      #ffe0b2 66%,
+      #f8bbd0 100%
+    );
+  border-radius: 16px 16px 0 0;
+  min-height: 56px;
+  position: relative;
+  box-sizing: border-box;
+}
+
+/* Place modal-actions at top right inside modal-header */
+.modal-header .modal-actions {
+    position: absolute;
+    top: 12px;
+    right: 60px;
+    margin: 10px;
+    gap: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    z-index: 2;
+}
+
+/* Ensure modal-header h3 takes full width except for actions */
+.modal-header h3 {
+  flex: 1 1 auto;
+  text-align: left;
+  margin: 0;
+  font-size: 18px;
+  padding-left: 24px;
+  padding-right: 180px; /* leave space for actions */
+  color: #028084;
+  font-weight: 700;
+  background: none;
+}
+
+/* Responsive: stack actions below header on small screens */
+@media (max-width: 600px) {
+  .modal-header {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 0 0 8px 0;
+  }
+  .modal-header .modal-actions {
+    position: static;
+    margin-top: 8px;
+    justify-content: flex-end;
+    width: 100%;
+  }
+  .modal-header h3 {
+    padding-right: 0;
+    padding-left: 8px;
+  }
+}
+
+.highlight {
+  color: #028084;
+}
+
+.close-btn {
+  font-size: 26px;
+  text-decoration: none;
+  color: red;
+  cursor: pointer;
+}
+
+.close-btn:hover {
+  color: red;
+}
+
+/* Modal Actions */
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 10px 0;
+  flex-wrap: wrap;
+}
+
+.btn-action {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 20px;
+  font-size: 13px;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+
+.btn-action:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.btn-action.blue { 
+  background-color: #0378bd; 
+}
+
+.btn-action.teal { 
+  background-color: #02b4a8; 
+}
+
+.cycle-status {
+  background: #e6f9fa;
+  padding: 6px 14px;
+  border-radius: 20px;
+  color: #017d7a;
+  font-size: 13px;
+}
+
+/* Modal Form Section - Improved alignment and spacing */
+.form-section {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 18px;
+  align-items: flex-end;
+  padding: 18px 24px 16px 24px;
+  background: #f5f6fa;
+  border-radius: 18px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  justify-content: flex-start;
+}
+
+/* Individual form group styling */
+.form-group {
+  flex: 1 1 150px;
+  min-width: 140px;
+  max-width: 200px;
+  margin-bottom: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+/* Label styling */
+.form-group label {
+  margin-bottom: 4px;
+  font-size: 13px;
+  color: #555;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Input field styling - editable fields are light blue */
+.form-group input:not([disabled]) {
+  width: 100%;
+  background: #e3f2fd;
+  border: 1.5px solid #bcdffb;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 14px;
+  transition: background 0.2s, border 0.2s;
+  margin-bottom: 0;
+  box-sizing: border-box;
+}
+
+.form-group input[disabled] {
+    width: 100%;
+    background: #f3f3f3;
+    border: 1.5px solid #e0e0e0;
+    color: #1f1f1f;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+/* Validation status and auto-save indicator */
+#jigValidationStatus, #autoSaveStatus {
+  display: block;
+  margin-top: 10px;
+  font-size: 11px;
+  color: #666;
+  border-radius: 6px;
+  padding: 2px 6px;
+  width: auto;
+  max-width: 200px;
+}
+
+/* Responsive: Stack fields on small screens */
+@media (max-width: 900px) {
+  .form-section {
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px 8px;
+  }
+  .form-group {
+    max-width: 100%;
+    min-width: 120px;
+  }
+}
+
+/* QR validation error styling */
+.qr-validation-error {
+  color: #dc3545;
+  font-size: 12px;
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+/* UPDATED: Flexible Tray Table - Responsive Design */
+/* --- FLEXIBLE & DISTINCT COLORS FOR .tray-table --- */
+.tray-table {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  margin: 5px 0;
+  border: 1px solid #e0e7ef;
+  border-radius: 8px;
+  min-height: 80px;
+  height: 120px;
+  overflow-y: hidden !important;
+  overflow-x: auto !important;
+  scrollbar-width: thin;
+  scrollbar-color: #b0b0b0 #f5f5f5;
+  flex-grow: 1;
+  background: #f7fafd;
+  align-items: flex-start;
+  padding: 8px;
+}
+
+/* Header cells: soft blue-green - NO STICKY POSITIONING */
+.tray-table > div:nth-child(1),
+.tray-table > div:nth-child(2) {
+  /* Removed position: sticky to allow scrolling with other cells */
+  background: linear-gradient(90deg, #dcdcdc 60%, #e0f7fa 100%);
+  font-weight: bold;
+  color: #017d7a;
+  
+}
+
+/* Data cells: horizontal layout with consistent styling */
+.tray-table > div {
+  background: #f0fdfc;
+  border: 1px solid #e0e7ef;
+  padding: 10px 8px;
+  font-size: 13px;
+  text-align: center;
+  flex: 0 0 120px;
+  min-width: 120px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+.tray-table > div:nth-child(4n+3) { background: #ffffff; }
+.tray-table > div:nth-child(4n+4) { background: #ffffff; }
+.tray-table > div:nth-child(4n+1) { background: #ffffff; }
+.tray-table > div:nth-child(4n+2) { background: #ffffff; }
+
+/* Responsive for mobile - Horizontal scroll adjustments */
+@media (max-width: 768px) {
+  .tray-table {
+    height: 100px;
+    font-size: 12px;
+  }
+  .tray-table > div {
+    flex: 0 0 100px;
+    min-width: 100px;
+    height: 50px;
+    padding: 7px 4px;
+    font-size: 12px;
+  }
+}
+
+/* Responsive for tablet */
+@media (min-width: 769px) and (max-width: 1200px) {
+  .tray-table {
+    height: 110px;
+    font-size: 14px;
+  }
+  .tray-table > div {
+    flex: 0 0 110px;
+    min-width: 110px;
+    height: 55px;
+    padding: 8px 5px;
+    font-size: 14px;
+  }
+}
+
+/* Responsive for desktop */
+@media (min-width: 1201px) {
+  .tray-table {
+    height: 120px;
+    font-size: 13px;
+  }
+  .tray-table > div {
+    padding: 10px 8px;
+    font-size: 13px;
+  }
+}
+
+/* Chrome, Edge, Safari - Horizontal scrollbar */
+.tray-table::-webkit-scrollbar {
+  height: 8px; /* Changed from width to height for horizontal scroll */
+}
+.tray-table::-webkit-scrollbar-thumb {
+  background: #b0b0b0;
+  border-radius: 4px;
+}
+.tray-table::-webkit-scrollbar-track {
+  background: #f5f5f5;
+  border-radius: 4px;
+}
+
+
+.tray-table > div {
+  background: #f0fdfc;
+  border: 1px solid #d1d1d1;
+  padding: 8px;
+  font-size: 13px;
+  text-align: center;
+}
+
+.tray-table > div:nth-child(-n+2) { /* Changed from -n+3 to -n+2 - NO STICKY */
+  /* Removed position: sticky to allow all cells to scroll together */
+      background: linear-gradient(
+          90deg,
+          #e0f7fa 0%,
+          #b2ebf2 33%,
+          #ffe0b2 66%,
+          #f8bbd0 100%
+        );
+  font-weight: bold;
+  color: #028084;
+}
+
+/* Responsive Tray Table for all screen sizes */
+@media (max-width: 768px) {
+  .tray-table {
+    max-height: 35vh;
+    font-size: 12px;
+    grid-template-columns: 1fr 2fr; /* Adjust column ratio for mobile */
+  }
+  .tray-table > div {
+    padding: 6px 4px;
+    font-size: 12px;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1200px) {
+  .tray-table {
+    max-height: 40vh;
+    font-size: 14px;
+  }
+  .tray-table > div {
+    padding: 8px 6px;
+    font-size: 14px;
+  }
+}
+
+@media (min-width: 1201px) {
+  .tray-table {
+    max-height: 50vh;
+    font-size: 13px;
+  }
+  .tray-table > div {
+    padding: 8px;
+    font-size: 13px;
+  }
+}
+
+/* Responsive Tray Table for all screen sizes */
+@media (max-width: 768px) {
+  .tray-table {
+    max-height: 35vh;
+    font-size: 12px;
+    grid-template-columns: 1fr 2fr; /* Adjust column ratio for mobile */
+  }
+  .tray-table > div {
+    padding: 6px 4px;
+    font-size: 12px;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1200px) {
+  .tray-table {
+    max-height: 40vh;
+    font-size: 14px;
+  }
+  .tray-table > div {
+    padding: 8px 6px;
+    font-size: 14px;
+  }
+}
+
+@media (min-width: 1201px) {
+  .tray-table {
+    max-height: 50vh;
+    font-size: 13px;
+  }
+  .tray-table > div {
+    padding: 8px;
+    font-size: 13px;
+  }
+}
+
+/* Status indicator styling */
+#selectedItemsStatus {
+  animation: fadeIn 0.3s ease;
+  margin: 15px 0;
+  padding: 10px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #666;
+  display: none;
+}
+
+/* Action Buttons in Modal */
+.action-buttons {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 10px;
+  margin-top: 6px;
+  padding: 5px;
+  justify-content: center;
+}
+
+.action-buttons button {
+  min-width: 60px;
+  max-width: 120px;
+  padding: 6px 14px;
+  font-size: 14px;
+  border: none !important;         /* Remove all borders */
+  box-shadow: none !important;     /* Remove any shadow */
+  outline: none !important;        /* Remove outline */
+  background-clip: padding-box;
+  border-radius: 22px;
+  flex: 0 1 auto;
+}
+.btn-twitter { 
+  background-color: #028084a8; 
+  color: white; 
+}
+
+.btn-success { 
+  background-color: #28a745; 
+  color: white; 
+}
+
+.btn-warning { 
+  background-color: #ffc107; 
+  color: #000; 
+}
+
+.btn-danger { 
+  background-color: #dc3545; 
+  color: white; 
+}
+
+/* Animations for Modal */
+@keyframes fadeIn {
+  from { 
+    opacity: 0; 
+    transform: translateY(-10px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
+}
+
+/* Toast animations */
+@keyframes slideInToast {
+  from { 
+    opacity: 0; 
+    transform: translateX(100%); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateX(0); 
+  }
+}
+
+@keyframes slideOutToast {
+  from { 
+    opacity: 1; 
+    transform: translateX(0); 
+  }
+  to { 
+    opacity: 0; 
+    transform: translateX(100%); 
+  }
+}
+
+/* Modal message animations */
+@keyframes slideInMessage {
+  from { 
+    opacity: 0; 
+    transform: translateY(-10px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
+}
+
+@keyframes slideOutMessage {
+  from { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
+  to { 
+    opacity: 0; 
+    transform: translateY(-10px); 
+  }
+}
+
+/* Filter indicator animation */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* Model Slider in Modal */
+.model-slider-wrapper {
+  position: relative;
+  margin-bottom: 20px;
+}
+
+.slider-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0,0,0,0.1);
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 16px;
+  color: #666;
+  z-index: 10;
+  display: none;
+}
+
+.prev-btn {
+  left: 4px;
+}
+
+.next-btn {
+  right: 4px;
+}
+
+.model-slider-container {
+  overflow: hidden;
+  margin: 0 15px;
+}
+
+.model-slider {
+  display: flex;
+  transition: transform 0.3s ease;
+  gap: 12px;
+}
+
+.model-loaded-item {
+  min-width: 100px;
+  flex: 0 0 auto;
+  margin-right: 12px;
+  display: flex;
+  align-items: center;
+  background: linear-gradient(135deg, #e8f5e8 0%, #fff5bd 100%);
+  border: 1px solid #28a745;
+  border-radius: 12px;
+  padding: 5px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  margin-top: 10px;
+}
+
+/* Responsive Design for Modal */
+@media (max-width: 600px) {
+  .right-slide-content {
+    padding: 16px;
+  }
+  
+  .tray-table {
+    grid-template-columns: 1fr;
+  }
+  
+  .form-section {
+    grid-template-columns: 1fr;
+  }
+  
+  .action-buttons button {
+    flex: 1 1 100%;
+  }
+}
+
+/* UI Improvement: Color-code primary models and newly added models for easy identification */
+.primary-model {
+  background: #e3f2fd !important;
+}
+
+.new-model {
+  background: #e8f5e8 !important;
+}
+
+.primary-input {
+  background: #e3f2fd !important;
+}
+
+.new-input {
+  background: #e8f5e8 !important;
+}
+</style>
+
+<div class="content-wrapper">
+   <div class="col-12 grid-margin stretch-card">
+      <div class="card">
+         <div class="card-body" style="padding-bottom:12px;">
+            <h5 class="text-left mt-0 mb-4" style="font-weight:700;">Jig Loading Pick Table</h5>
+            <div class="table-responsive" style="overflow: scroll !important">
+              <table id="order-listing" class="table">
+                <thead>
+                  <tr>
+                    <th>
+                      S.No <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Last<br>Updated
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Plating<br> Stk No
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Polishing<br>Stk No
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Plating Color
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Polish Finish
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                   
+                    <th style="display: none;">
+                      Version <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Source - Location
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Tray Cate- <br> Capacity
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      No of <br> Trays <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      LOT Qty
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Jig Type
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      IP Info<i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Process Status
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Action <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Lot <br> Status
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Current <br> Stage
+                      <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                    <th>
+                      Remarks <i class="fa fa-filter" aria-hidden="true"></i>
+                    </th>
+                  </tr>
+                </thead>
+              <tbody>
+                {% for data in master_data %}
+                <tr class="highlighted-tray-scan{% if data.jig_hold_lot %} row-inactive-blur{% endif %}" 
+                    data-batch-id="{{ data.batch_id }}" 
+                    data-stock-lot-id="{{ data.stock_lot_id }}">
+
+                <td>
+                      <div style="display: flex; align-items: center; gap: 3px;">
+                          <input type="checkbox"
+                                class="model-select-checkbox"
+                                data-model-no="{{ data.model_stock_no__model_no }}"
+                                data-stock-lot-id="{{ data.stock_lot_id }}"
+                                data-img-url="{{ data.model_images.0|default:'/static/assets/images/imagePlaceholder.png' }}"
+                                style="display: none; border:2px solid #dc3545;" />                      
+                     
+                        <span style="display:flex; align-items:center; gap:2px;">
+                    {% if is_admin %}
+                      <!-- Admin users: Show toggle switch -->
+                      <label class="hold-toggle-switch" style="margin-bottom:0;">
+                        {% if not data.jig_hold_lot %}
+                          <input type="checkbox" class="hold-toggle-btn" checked />
+                          <span class="hold-slider"></span>
+                        {% else %}
+                          <input type="checkbox" class="hold-toggle-btn" />
+                          <span class="hold-slider"></span>
+                        {% endif %}
+                      </label>
+                      <!-- Hold remark icon -->
+                      <span class="hold-remark-icon"
+                            style="display:{% if data.jig_hold_lot or data.jig_release_lot or data.jig_holding_reason or data.jig_release_reason %}inline-block{% else %}none{% endif %}; cursor:pointer;"
+                            title="{% if data.jig_holding_reason %}Holding Reason: {{ data.jig_holding_reason }}{% endif %}{% if data.jig_holding_reason and data.jig_release_reason %}&#10;{% endif %}{% if data.jig_release_reason %}Release Reason: {{ data.jig_release_reason }}{% endif %}">
+                        {% if data.jig_hold_lot or data.jig_release_lot or data.jig_holding_reason or data.jig_release_reason %}
+                          <img src="{% static 'assets/icons/view2.png' %}" alt="Remark" style="width:12px; height:12px;" />
+                        {% endif %}
+                      </span>
+                    {% else %}
+                      <!-- Non-admin: Only show view icon if there's a holding/release reason -->
+                      {% if data.jig_hold_lot or data.jig_release_lot or data.jig_holding_reason or data.jig_release_reason %}
+                        <span class="hold-remark-icon"
+                              style="display:inline-block; cursor:pointer;"
+                              title="{% if data.jig_holding_reason %}Holding Reason: {{ data.jig_holding_reason }}{% endif %}{% if data.jig_holding_reason and data.jig_release_reason %}&#10;{% endif %}{% if data.jig_release_reason %}Release Reason: {{ data.jig_release_reason }}{% endif %}">
+                          <img src="{% static 'assets/icons/view2.png' %}" alt="View Reason" style="width:18px; height:18px;" />
+                        </span>
+                      {% endif %}
+                    {% endif %}
+                    <span class="sno-value">{{ page_obj.start_index|add:forloop.counter0 }}</span>
+
+
+                        </span>
+                      </div>
+                  </td> 
+                  <td {% if data.jig_hold_lot %} class="row-inactive-blur" {% endif %}>
+                    {{ data.brass_audit_last_process_date_time|date:"d-M-y" }}<br>
+                    <span style="display:inline-block; margin-top:4px;word-break: break-all;">
+                      {{ data.brass_audit_last_process_date_time|date:"h:i A" }}
+                    </span>
+                  </td>
+                  <!-- Model/Stock No - Image hover -->  
+                  <td {% if data.jig_hold_lot %} class="row-inactive-blur" {% endif %}>
+                      <span class="model-hover-trigger" style="cursor: pointer; word-break: break-all;">
+                        {{ data.plating_stk_no|highlight_plating_color|safe_html }}
+                        <div class="model-image-tooltip" style="position: absolute; left: 80%; top: 110%; transform: translateX(-50%); background: #fff; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); padding: 12px 18px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; opacity: 0; pointer-events: none; transition: opacity 0.2s; min-width: 220px;">
+                          
+                          <!-- Header with Info and Close buttons -->
+                          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <button class="info-btn" style="background: #007bff; color: white; border: none; border-radius: 4px; padding: 4px 8px; font-size: 12px; cursor: pointer;">
+                               Info
+                            </button>
+                            <button class="close-btn" style="background: #dc3545; color: white; border: none; border-radius: 4px; padding: 4px 8px; font-size: 12px; cursor: pointer;">
+                               Close
+                            </button>
+                          </div>
+                              <!-- Image gallery section -->
+                              <div style="display: flex; align-items: center; gap: 8px;">
+                                <!-- Hide scroll buttons since only one image is shown -->
+                                <div class="img-gallery" style="display: flex; gap: 6px; overflow: hidden; width: 180px;">
+                                  <img src="{{ data.model_images.0|default:'/static/assets/images/imagePlaceholder.png' }}" style="width: 55px; height: 55px; object-fit: cover; border-radius: 6px;" />
+                                </div>
+                              </div>
+                        </div>
+                      </span>
+                    </td>
+                  <td {% if data.jig_hold_lot %} class="row-inactive-blur" {% endif %}>{{ data.polishing_stk_no }}</td>
+                  <td {% if data.jig_hold_lot %} class="row-inactive-blur" {% endif %}>{{ data.plating_color }}</td>
+                  <td {% if data.jig_hold_lot %} class="row-inactive-blur" {% endif %}>{{ data.polish_finish }}</td>
+                  <td {% if data.jig_hold_lot %} class="row-inactive-blur" {% endif %} style="display: none;">{{ data.version__version_internal }}</td>             
+                  <td {% if data.jig_hold_lot %} class="row-inactive-blur" {% endif %}>{{ data.location__location_name }}</td>
+                  <td {% if data.jig_hold_lot %} class="row-inactive-blur" {% endif %}>{{ data.tray_type }} {{ data.tray_capacity }}</td>
+                  <td {% if data.jig_hold_lot %} class="row-inactive-blur" {% endif %}>{{ data.no_of_trays }}</td>
+                  <td {% if data.jig_hold_lot %} class="row-inactive-blur" {% endif %}>
+                    <input type="number"
+                          class="edit-qty-input"
+                          value="{{ data.display_qty|default:0 }}"
+                          data-batch-id="{{ data.batch_id }}"
+                          style="width: 60px; padding: 2px 6px; font-size: 13px; border: 1px solid #ccc; border-radius: 4px;"
+                          readonly />
+                  </td>
+                    <td {% if data.jig_hold_lot %} class="row-inactive-blur" {% endif %}>
+                      Jig{% if data.jig_capacity %} - {{ data.jig_capacity }}{% endif %}
+                    </td>
+                  <td {% if data.jig_hold_lot %} class="row-inactive-blur" {% endif %}>
+                      <span class="mobile-cross-icon" title="Item removed" style="cursor: pointer; display: inline-flex; align-items: center;">
+                        <img src="{% static 'assets/icons/viewRemarks.png' %}" alt="View Remarks" 
+                          style="width:20px; height:20px; {% if data.jig_remarks %}filter: brightness(1);{% else %}filter: grayscale(100%) brightness(0.6);{% endif %}" 
+                          data-bs-toggle="tooltip" 
+                          data-placement="right" 
+                          data-bs-original-title="{% if data.jig_remarks %}{{ data.jig_remarks }}{% else %}No remark{% endif %}">
+                      </span>
+                  </td>
+                              <!-- ... existing code ... -->
+                                          <td {% if data.jig_hold_lot %} class="row-inactive-blur" {% endif %}>
+                                            <div class="d-flex">
+                                              <div
+                                                title="Tray Scan"
+                                                class="d-flex align-items-center justify-content-center rounded-circle ms-1"
+                                                style="
+                                                  width: 20px;
+                                                  height: 20px;
+                                                  color: white;
+                                                  font-weight: bold;
+                                                  line-height: 20px;
+                                                  text-align: center;
+                                                  padding-top: 1px;
+                                                  padding-right: 1px;
+                                                  {% if data.batch_status.status == 'Yet to Start' %}
+                                                    background: #bdbdbd; /* gray */
+                                                  {% elif data.batch_status.status == 'Draft' %}
+                                                    background: linear-gradient(90deg, #0c8249 50%, #bdbdbd 50%); /* half green, half gray */
+                                                  {% elif data.batch_status.status == 'Partial Load' %}
+                                                    background: linear-gradient(90deg, #0c8249 50%, #bdbdbd 50%); /* half green, half gray */
+                                                  {% elif data.batch_status.status == 'Yet to Release' or data.batch_status.status == 'Released' %}
+                                                    background: #0c8249; /* full green */
+                                                  {% else %}
+                                                    background: #bdbdbd; /* default gray */
+                                                  {% endif %}
+                                                "
+                                              >
+                                                L
+                                              </div>
+                                            </div>
+                                          </td>
+                        <!-- ... existing code ... -->
+                  <!-- Action buttons cell -->
+                  <td {% if data.jig_hold_lot %} class="row-inactive-blur" {% endif %}>
+           
+                    <a href="#" class="jig-delete-batch-btn" data-stock-lot-id="{{ data.stock_lot_id }}" title="Delete"
+                      {% if data.batch_status.status == "Yet to Release" or data.batch_status.status == "Released" %}
+                        style="pointer-events: none; opacity: 0.5;"
+                        tabindex="-1"
+                        aria-disabled="true"
+                      {% endif %}
+                    >
+                      <img src="{% static 'assets/icons/bin.png' %}" alt="Delete" style="width: 20px; margin-right: 8px; height: auto" />
+                    </a>
+                    
+                    <!-- Add Jig button section -->
+                    {% if data.batch_status.status == 'Yet to Release' %}
+                        <button
+                            type="button"
+                            class="btn btn-social-icon-text btn-twitter"
+                            style="background-color: #028084a8; cursor: not-allowed;"
+                            disabled
+                        >
+                            <i class="fa fa-check"></i>Added
+                        </button>
+                    {% else %}
+                        <a href="#rightSideModal" class="open-jig-modal-btn" data-stock-lot-id="{{ data.stock_lot_id }}">
+                            <button
+                                type="button"
+                                class="btn btn-social-icon-text btn-twitter"
+                                style="background-color: #028084a8"
+                            >
+                                <i class="fa fa-plus"></i>Add Jig
+                            </button>
+                        </a>
+
+                    {% endif %}
+                    <!-- CORRECTED -->
+                    <a href="#"
+                      title="View"
+                      class="text-primary tray-scan-btn-BQ-view tray-scan-btn-Jig"
+                      style="text-decoration: underline"
+                      data-stock-lot-id="{{ data.stock_lot_id }}"
+                      data-batch-id="{{ data.batch_id }}"
+                      data-model-no="{{ data.plating_stk_no }}"
+                      data-no-of-trays="{{ data.no_of_trays }}"
+                      data-tray-capacity="{{ data.tray_capacity|default:'0' }}"
+                      data-moved-to-d-picker="{{ data.Moved_to_D_Picker }}"
+                      data-model-image="{{ data.model_images.0|default:'' }}"
+                      data-total-batch-quantity="{{ data.display_qty|default:0 }}"
+                      data-physical-qty="{{ data.physical_qty|default:0 }}"
+                      data-missing-qty="{{ data.missing_qty|default:0 }}"
+                      data-brass-qc-accptance="{{ data.brass_audit_accptance|yesno:'true,false' }}"
+                      data-brass-qc-rejection="{{ data.brass_audit_rejection|yesno:'true,false' }}"
+                      data-brass-qc-few-cases-accptance="{{ data.brass_audit_few_cases_accptance|yesno:'true,false' }}">
+                      <img src="{% static 'assets/icons/view.png' %}"
+                            alt="View"
+                            style="width: 20px; margin-right: 8px; height: auto; cursor:pointer;" />
+                    </a>
+                  </td>
+                  <td {% if data.jig_hold_lot %} class="row-inactive-blur" {% endif %}>
+                    {% if data.batch_status.status == "On-Hold" %}
+                      <div class="d-inline-block px-3 fw-semibold text-center rounded-pill"
+                          style="border: 1px solid #dc3545; background-color: #f8d7da; color: #721c24; font-size: 13px; white-space: nowrap; padding: 5px;">
+                        On Hold
+                      </div>
+                    {% elif data.batch_status.status == "Draft" %}
+                      <div class="d-inline-block px-3 fw-semibold text-center rounded-pill"
+                          style="border: 1px solid #4997ac; background-color: #d1f2f3; color: #03425d; font-size: 13px; white-space: nowrap; padding: 5px;">
+                        Draft
+                      </div>
+                    {% elif data.batch_status.status == "Yet to Release" or data.batch_status.status == "Released" %}
+                      <div class="d-inline-block px-3 fw-semibold text-center rounded-pill"
+                          style="border: 1px solid #0c8249; background-color: #e8f5e8; color: #0c8249; font-size: 13px; white-space: nowrap; padding: 5px;">
+                        {{ data.batch_status.status }}
+                      </div>
+                    {% elif data.batch_status.status == "Yet to Start" %}
+                      <div class="d-inline-block px-3 fw-semibold text-center rounded-pill"
+                          style="border: 1px solid #f9a825; background-color: #fff8e1; color: #b26a00; font-size: 13px; white-space: nowrap; padding: 5px;">
+                        Yet to Start
+                      </div>
+                    {% else %}
+                      <div class="d-inline-block px-3 fw-semibold text-center rounded-pill"
+                          style="border: 1px solid #bdbdbd; background-color: #f4f3f3; color: #666; font-size: 13px; white-space: nowrap; padding: 5px;">
+                        {{ data.batch_status.status|default:"-" }}
+                      </div>
+                    {% endif %}
+                  </td>
+                    <td {% if data.jig_hold_lot %} class="row-inactive-blur" {% endif %}>
+                      <div class="d-inline-block px-3 fw-semibold text-center rounded-pill"
+                           style="border: 1px solid #d1edf3; background-color: #d1edf3; color: #033b5d; font-size: 13px; white-space: nowrap; padding: 5px;">
+                        {{ data.last_process_module|default:"N/A" }}
+                      </div>
+                    </td>
+                        <td {% if data.jig_hold_lot %} class="row-inactive-blur" {% endif %}>
+                        <!-- VoiceRec with tooltip (audio remark) -->
+                        <!-- VoiceRec with tooltip (audio remark) -->
+                          <a href="#" title="Add Audio Remark" class="remark-tooltip-trigger" style="display: inline-flex; align-items: center; height: 28px; margin-left: 0; position: relative; cursor: pointer;">
+                            <img src="{% static 'assets/icons/rec.png' %}" alt="VoiceRec" style="width: 20px; height: 20px"/>
+                            <div class="remark-tooltip" style="position: absolute; top: 110%; left: 50%; transform: translateX(-50%); width: 265px; background: #fff; border: 1px solid #ccc; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0.3s ease; padding: 10px; z-index: 1000;">
+                              <!-- Audio recording UI placeholder -->
+                              <div style="display: flex; align-items: center; gap: 10px;">
+                                <button type="button" style="background: #28a745; color: #fff; border: none; border-radius: 50%; width: 40px; height: 40px; font-size: 20px; display: flex; align-items: center; justify-content: center;">
+                                  <i class="fa fa-microphone"></i>
+                                </button>
+                                <span style="font-size: 14px; color: #333;">Hold to record audio</span>
+                                  <div style="text-align: right; margin-top: 10px;">
+                                <button type="button" style="background-color: #007bff; color: #fff; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 14px;">
+                                  <i class="fa fa-send"></i>
+                                </button>
+                              </div>
+                              </div>
+                            
+                            </div>
+                          </a>
+
+                          <a
+                            href="#"
+                            title="Add Remark"
+                            class="remark-tooltip-trigger"
+                            style="display: inline-flex; align-items: center; height: 20px; margin-left: 5px; position: relative; cursor: pointer;"
+                          >
+                            <img
+                              src="{% static 'assets/icons/chat_icon.png' %}"
+                              alt="Chat"
+                              style="width: 20px; height: 20px; {% if data.jig_pick_remarks %}filter: grayscale(0) brightness(1.1) sepia(1) hue-rotate(80deg) saturate(3) contrast(1.2); opacity: 1;{% else %}opacity: 0.7;{% endif %}"
+                            />
+
+                            <div
+                              class="remark-tooltip"
+                              style="position: absolute; top: 110%; left: 50%; transform: translateX(-50%); width: 270px; background: #fff; border: 1px solid #ccc; border-radius: 6px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0.3s ease; padding: 15px; z-index: 1000;"
+                            >
+                              <textarea
+                                placeholder="Type your remark..."
+                                style="width: 75%; height: 40px; resize: vertical; border: 1px solid #ccc; padding: 5px; border-radius: 4px; font-family: Arial, sans-serif; font-size: 14px;"
+                                {% if data.jig_pick_remarks %}readonly{% endif %}
+                              >{{ data.jig_pick_remarks|default_if_none:"" }}</textarea>
+                              <div style="text-align: right; margin-top: -35px">
+                                {% if not data.jig_pick_remarks %}
+                                  <button
+                                    type="button"
+                                    style="background-color: #007bff; color: #fff; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 14px;"
+                                  >
+                                    <i class="fa fa-send"></i>
+                                  </button>
+                                {% else %}
+                                  <div style="margin-top: 40px; color: #31708f; background: #d9edf7; border: 1px solid #bce8f1; border-radius: 4px; padding: 8px 12px; font-size: 10px; text-align: left;">
+                                    <i class="fa fa-info-circle" style="margin-right: 6px;"></i>
+                                    Remark already saved and cannot be edited.
+                                  </div>
+                                {% endif %}
+                              </div>
+                            </div>
+                          </a>
+                       
+                        </td>
+                </tr>
+              {% endfor %}
+              </tbody>
+              </table>
+
+              <!-- Enhanced Right Slide-in Modal -->
+              <div id="rightSideModal" class="right-slide-modal">
+                <div class="right-slide-content">
+                  
+                  <!-- Header with close button -->
+                  <div class="modal-header">
+                    <h3 style="width: 100%; text-align: center; color: #000">
+                      Jig Loading / Model No: <span class="highlight" id="rightModalModelNo">-</span>
+                    </h3>
+                    <a href="#" class="close-btn" title="Close Modal">&times;</a>
+                  </div>
+
+                  <!-- Top Actions -->
+                  <div class="modal-actions">
+                      <a class="nav-link btn-action blue" id="jig-composition-link" href="#">Jig Composition</a>
+                      <button type="button" class="btn-action teal">Add Model</button>
+                      <div class="cycle-status" id="cycleStatusDisplay">
+                          No of Cycle: <strong id="cycleCount">-/-</strong>
+                          <span id="cycleAlertMessage" style="display: none; margin-left: 8px;">
+                              <span class="cycle-alert-badge">
+                                  <i class="fa fa-exclamation-triangle" style="margin-right: 3px; font-size: 10px;"></i>
+                                  <span id="cycleAlertText">Alert</span>
+                              </span>
+                          </span>
+                      </div>
+
+                  </div>
+
+                  <!-- Form Fields -->
+                  <div class="form-section" >
+                    <div class="form-group">
+                      <label>Jig QR ID</label>
+                      <input type="text" placeholder="Enter Jig QR ID" id="modalJigQrId" />
+                    </div>
+                    <div class="form-group">
+                      <label>Nickel Bath Type</label>
+                      <input type="text" placeholder="Auto Fetch" disabled id="modalBathType" />
+                    </div>
+                    <div class="form-group">
+                      <label>Broken/Buildup Hooks</label>
+                      <input type="number" placeholder="Enter Broken/Buildup Hooks" id="modalFaultySlots" min="0" />
+                    </div>
+                    <div class="form-group">
+                      <label>Empty Hooks</label>
+                      <input type="text" placeholder="Auto Fetch" disabled id="modalEmptySlots" />
+                    </div>
+                    <div class="form-group">
+                      <label>Loaded Case Qty</label>
+                      <input type="text" placeholder="Auto Fetch" disabled id="modalLotQty" />
+                    </div>
+
+                    <div class="form-group">
+                      <label>Jig Capacity</label>
+                      <input type="text" placeholder="Auto Fetch" disabled id="modalJigCapacity" />
+                    </div>
+                  </div>
+
+                  <!-- Model Slider Section -->
+                  <!-- <h6>No of Model Loaded:</h6> -->
+                  <div class="model-slider-wrapper" style="position: relative; margin-bottom: 10px;">
+                    <button class="slider-btn prev-btn" style="position: absolute; top: 50%; transform: translateY(-50%); left: 4px; background: rgba(0,0,0,0.1); border: none; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 16px; color: #666; z-index: 10; display: none;">&#10094;</button>
+                    <div class="model-slider-container" style="overflow: hidden; margin: 0 40px;">
+                      <div class="model-slider" id="modelSliderDynamic" style="display: flex; transition: transform 0.3s ease; gap: 12px;">
+                        <!-- Dynamic model items will be injected here -->
+                      </div>
+                    </div>
+                    <button class="slider-btn next-btn" style="position: absolute; top: 50%; transform: translateY(-50%); right: 4px; background: rgba(0,0,0,0.1); border: none; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 16px; color: #666; z-index: 10; display: none;">&#10095;</button>
+                  </div>
+
+                  <!-- UPDATED: De-link Tray Section - Only 2 columns -->
+                  
+                  <h6>De-link Tray Scan:</h6>
+                  <div class="tray-table" id="delinkTrayTable" style="padding: 8px;">
+                    <!-- Only tray scan input boxes, no S.No or Tray ID headings/numbers -->
+                    <!-- Example: dynamically inject tray inputs like below -->
+                    {% for tray in tray_scan_rows %}
+                      <input type="text"
+                             class="tray-input"
+                             placeholder="{{ tray.model_no }} - Scan Tray ID"
+                             data-lot-id="{{ tray.lot_id }}"
+                             style="width:100%; margin-bottom:8px; border-radius:6px; border:1px solid #e0e7ef; padding:6px 8px;" />
+                    {% endfor %}
+                  </div>
+
+<div id="halfFilledTraySection" style="display: none;">
+  <h6>Half Filled Tray / Top Tray to be Scan:</h6>
+  <div class="half-filled-inputs" style="display: flex; gap: 15px; align-items: center; margin-top: 10px;">
+    <div style="display: flex; flex-direction: column; gap: 5px;">
+      <label style="font-size: 12px; font-weight: 600; color: #666;">Tray ID</label>
+      <input type="text" id="halfFilledTrayId" placeholder="Scan remaining tray ID" style="width: 200px; padding: 8px 12px; border: 1px solid #e0e7ef; border-radius: 6px; font-size: 14px;" />
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 5px;">
+      <label style="font-size: 12px; font-weight: 600; color: #666;">Remaining Quantity</label>
+      <input type="number" id="halfFilledTrayQty" readonly style="width: 120px; padding: 8px 12px; border: 1px solid #e0e7ef; border-radius: 6px; font-size: 14px; background-color: #f8f9fa;" />
+    </div>
+  </div>
+  <!-- Add halfFilledTrayTable element expected by JavaScript population functions -->
+  <div id="halfFilledTrayTable" style="margin-top: 10px;"></div>
+</div>
+                  
+
+                  <!-- Status indicator for selected items -->
+                  <div id="selectedItemsStatus" style="margin: 15px 0; padding: 10px; background: #f8f9fa; border-radius: 6px; font-size: 14px; color: #666; display: none;">
+                    <strong>Selected Items:</strong> <span id="selectedCount">0</span> items selected
+                  </div>
+
+                  <!-- Footer Buttons -->
+                  <div class="action-buttons">
+                    <button class="btn-twitter">Add Jig</button>
+                    <button class="btn-success">Submit</button>
+                    <button class="btn-warning">Draft</button>
+                    <!-- <button class="btn-secondary" id="clearDraftBtn" style="background-color:#6c757d;">Clear Draft</button> -->
+                    <button class="btn-danger">Cancel</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Tray Scan Modal -->
+                <div id="trayScanModal_DayPlanning" class="tray-scan-modal-DayPlanning"style="display:none"> 
+                  <div class="tray-scan-modal-DayPlanning-content">
+                    <span id="closeTrayScanModal_DayPlanning" class="tray-scan-close-readonly">&times;</span>
+                    
+                    <div class="modal-top-header" style="display: flex; align-items: center; gap: 20px; padding-bottom: 10px;">
+                      <div class="user-profile" style="display: flex; align-items: center; gap: 8px">
+                        <img src="/static/assets/images/imagePlaceholder.png" alt="User Profile" style="border-radius: 50%; width: 50px; height: 50px; object-fit: cover;" />
+                        <!-- Model No and Lot Qty in same line -->
+                        <div style="display: flex; flex-direction: column; gap: 2px;">
+                          <div style="display: flex; align-items: center; gap: 15px;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                              <span style="font-weight: bold; color: #666;">Model No:</span>
+                              <h6 id="modalModelNo_DayPlanning" style="margin: 0; color: #028084; font-weight: bold;">(Fetch Dynamically)</h6>
+                            </div>
+                          <h7 style="margin: 0; color: #666666; font-weight: bold;">
+                              Lot Qty: <span id="modalLotQty_DayPlanning" style="font-weight:bold; color:#e67e22;"></span>
+                          </h7>
+                          </div>
+                            
+                        </div>
+                      </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                      <h5 style="text-align: center; margin: 0; flex: 1; font-weight: 600; color:#595959">
+                        Jig loading - Tray Scan 
+                      </h5>
+                      <button id="trayValidateBtn" type="button" style="display: flex; align-items: center; gap: 6px; background: #f5faff; border: 1px solid #023E4DCC; color: #023E4DCC; border-radius: 20px; padding: 4px 14px; font-size: 12px; font-weight: 500; cursor: pointer;">
+                       
+                        Tray Validate
+                      </button>
+                      <input id="trayValidateInput" type="text" placeholder="Enter validation info..." style="position: absolute; left: -9999px; opacity: 0; pointer-events: none;" />
+                      <img src="{% static 'assets/icons/redo2.png' %}" alt="Redo" id="trayScanRedoBtn" style="width: 24px; height: 24px; cursor: pointer; margin-left: 8px;" title="Clear Tray IDs" />
+                    </div>
+                    <div id="trayErrorMessage" style="display: none; background-color: #ffebee; border: 1px solid #f44336; color: #c62828; padding: 8px 12px; border-radius: 4px; margin-bottom: 10px; font-size: 12px; text-align: center;">
+                      <span id="trayErrorText"></span>
+                    </div>
+                    <div id="trayScanDetails_DayPlanning" class="table-grid">
+                      <!-- Headers and dynamic content will be injected here -->
+                    </div>
+                  </div>
+                </div>           
+            </div>
+          </div>
+            <!-- Pagination Section -->
+            <div class="pagination-wrapper">
+              <nav aria-label="Page navigation">
+                                <ul class="pagination justify-content-end mb-0">
+                  {# Previous button #}
+                  {% if page_obj.has_previous %}
+                    <li>
+                      <a href="?page={{ page_obj.previous_page_number }}" aria-label="Previous">
+                        <span aria-hidden="true"><i class="fa fa-chevron-left"></i></span>
+                      </a>
+                    </li>
+                  {% else %}
+                    <li class="disabled">
+                      <span aria-hidden="true"><i class="fa fa-chevron-left"></i></span>
+                    </li>
+                  {% endif %}
+                
+                  {# Always show first page #}
+                  {% if page_obj.number > 3 %}
+                    <li><a href="?page=1">1</a></li>
+                    {% if page_obj.number > 4 %}
+                      <li class="disabled"><span>…</span></li>
+                    {% endif %}
+                  {% endif %}
+                
+                  {# Show pages around current page #}
+                  {% for num in page_obj.paginator.page_range %}
+                    {% if num >= page_obj.number|add:'-2' and num <= page_obj.number|add:'2' %}
+                      {% if num == page_obj.number %}
+                        <li class="active"><span>{{ num }}</span></li>
+                      {% else %}
+                        <li><a href="?page={{ num }}">{{ num }}</a></li>
+                      {% endif %}
+                    {% endif %}
+                  {% endfor %}
+                
+                  {# Show ellipsis and last page if needed #}
+                  {% if page_obj.number < page_obj.paginator.num_pages|add:'-2' %}
+                    {% if page_obj.number < page_obj.paginator.num_pages|add:'-3' %}
+                      <li class="disabled"><span>…</span></li>
+                    {% endif %}
+                    <li><a href="?page={{ page_obj.paginator.num_pages }}">{{ page_obj.paginator.num_pages }}</a></li>
+                  {% endif %}
+                
+                  {# Next button #}
+                  {% if page_obj.has_next %}
+                    <li>
+                      <a href="?page={{ page_obj.next_page_number }}" aria-label="Next">
+                        <span aria-hidden="true"><i class="fa fa-chevron-right"></i></span>
+                      </a>
+                    </li>
+                  {% else %}
+                    <li class="disabled">
+                      <span aria-hidden="true"><i class="fa fa-chevron-right"></i></span>
+                    </li>
+                  {% endif %}
+                </ul>
+              </nav>
+            </div>
+     </div>
+   </div>
+</div>
+</div>
+
+<!-- Hold Remark Modal -->
+<div id="holdRemarkModal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.18); z-index:20000; align-items:center; justify-content:center;">
+   <div style="background:#fff; border-radius:10px; padding:28px 32px 18px 32px; min-width:320px; max-width:90vw; box-shadow:0 4px 24px rgba(0,0,0,0.18); position:relative;">
+      <span id="closeHoldRemarkModal" style="position:absolute; top:8px; right:16px; font-size:22px; font-weight:bold; color:#d9534f; cursor:pointer;">&times;</span>
+      <h5 style="margin-bottom:16px; color:#028084;">Row Hold Remark</h5>
+      <textarea id="holdRemarkInput" maxlength="50" style="width:100%; height:60px; border:1px solid #ccc; border-radius:6px; padding:8px; font-size:15px; resize:none;" placeholder="Enter remark (max 50 chars)"></textarea>
+      <div style="text-align:right; margin-top:10px;">
+         <button id="saveHoldRemarkBtn" style="background:#007bff; color:#fff; border:none; border-radius:20px; padding:6px 18px; font-size:15px; cursor:pointer;">Save</button>
+      </div>
+      <div id="holdRemarkError" style="color:red; font-size:13px; min-height:18px; margin-top:6px;"></div>
+   </div>
+</div>
+
+{% block script %}
+{% endblock %}
+{% endblock content %}
