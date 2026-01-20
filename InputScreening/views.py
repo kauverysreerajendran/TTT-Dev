@@ -140,7 +140,9 @@ class IS_PickTable(APIView):
             tray_scan_exists=True,
 
         ).exclude(
-            totalstockmodel__remove_lot=True    
+            totalstockmodel__remove_lot=True
+        ).exclude(
+        totalstockmodel__accepted_Ip_stock=True   
         ).order_by('-date_time')
 
         # Pagination

@@ -17,7 +17,7 @@ from modelmasterapp.models import (
      Brass_Qc_Accepted_TrayID_Store, IQF_Accepted_TrayID_Store,TrayAutoSaveData
 )
 from IQF.models import *
-from Jig_Loading.models import JigLoadTrayId,JigDetails
+from Jig_Loading.models import JigLoadTrayId
 from Jig_Unloading.models import JigUnload_TrayId, JigUnloadAfterTable
 from BrassAudit.models import *
 from InputScreening.models import (

@@ -21,11 +21,11 @@ class IQFTrayId(models.Model):
     delink_tray = models.BooleanField(default=False, help_text="Is tray delinked")
     delink_tray_qty = models.CharField(max_length=50, null=True, blank=True, help_text="Delinked quantity")
     
-    IP_tray_verified= models.BooleanField(default=False, help_text="Is tray verified in IP")
+    IP_tray_verified = models.BooleanField(default=False, help_text="Is tray verified in IP")
     
-    rejected_tray= models.BooleanField(default=False, help_text="Is tray rejected")
+    rejected_tray = models.BooleanField(default=False, help_text="Is tray rejected")
 
-    new_tray=models.BooleanField(default=True, help_text="Is tray new")
+    new_tray = models.BooleanField(default=True, help_text="Is tray new")
     iqf_reject_verify = models.BooleanField(default=False, help_text="Is tray rejection verified in IQF")
 
     # Tray configuration fields (filled by admin)
@@ -70,6 +70,7 @@ class IQF_Draft_Store(models.Model):
     
     class Meta:
         unique_together = ['lot_id', 'draft_type']
+  
         
 class IQF_Rejection_Table(models.Model):
     rejection_reason_id = models.CharField(max_length=10, null=True, blank=True, editable=False)
@@ -90,7 +91,7 @@ class IQF_Rejection_Table(models.Model):
     def __str__(self):
         return f"{self.rejection_reason} "
     
-        
+
 class IQF_Rejection_ReasonStore(models.Model):
     rejection_reason = models.ManyToManyField(IQF_Rejection_Table, blank=True)
     lot_id = models.CharField(max_length=50, null=True, blank=True, help_text="Lot ID")
@@ -109,6 +110,7 @@ class IQF_Rejected_TrayScan(models.Model):
     rejected_tray_quantity = models.CharField(help_text="Rejected Tray Quantity")
     rejection_reason = models.ForeignKey(IQF_Rejection_Table, on_delete=models.CASCADE)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
+    top_tray = models.BooleanField(default=False, help_text="Is this the top tray in rejection")
     
     def __str__(self):
         return f"{self.rejection_reason} - {self.rejected_tray_quantity} - {self.lot_id}"

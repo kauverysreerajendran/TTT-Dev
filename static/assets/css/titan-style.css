@@ -1,7 +1,5 @@
 /* Common styles */
 
-
-
 /* Add width for .tray-scan-modal-content for all media queries used in this file */
 
 /* Default (all screens) */
@@ -579,17 +577,34 @@ td:first-child * {
   background: #f7fafd !important; /* Match your sticky column bg */
   background-color: #f7fafd !important;
   z-index: 9 !important;
-}
-.row-inactive,
-.row-inactive td {
-  background: #ededed !important;
-  background-color: #ededed !important;
+  filter: none !important;
 }
 .row-inactive-blur {
+  filter: blur(1px);
+  cursor: not-allowed !important;
+}
+.row-inactive * {
+  cursor: not-allowed !important;
+}
+.row-inactive .hold-slider {
+  filter: none !important;
+}
+.row-inactive-blur,
+.row-inactive td:not(:first-child) {
   filter: blur(0.7px);
   cursor: not-allowed !important;
   user-select: none;
   pointer-events: none; /* allow hover for cursor effect */
+}
+.row-inactive .hold-toggle-btn {
+  filter: none !important;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+.row-inactive .hold-remark-icon {
+  filter: none !important;
+  pointer-events: auto !important;
+  cursor: pointer !important;
 }
 
 /* end of toggle style switch */
@@ -914,8 +929,6 @@ td:first-child * {
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.08));
   z-index: 100051;
 }
-
-
 
 .model-image-tooltip {
   position: fixed !important;
@@ -1337,8 +1350,6 @@ h6 {
   padding: 10px;
   font-family: Arial, sans-serif;
 }
-
-
 
 .tray-scan-close {
   position: absolute;
@@ -2782,7 +2793,6 @@ html {
 
 .content-wrapper {
   transition: opacity 0.3s ease;
-  
 }
 
 .tray-scan-modal,
@@ -3049,8 +3059,6 @@ body {
   min-height: 100vh;
 }
 
-
-
 .card-body {
   width: 100%;
   /* overflow-x: auto; */
@@ -3239,4 +3247,4 @@ h4,
 label.hold-toggle-disabled {
   opacity: 0.5;
   pointer-events: none;
-} 
+}

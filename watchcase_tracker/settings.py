@@ -172,7 +172,7 @@ REST_FRAMEWORK = {
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'JL_Wacthcase',
+        'NAME': 'watchcase2026',
         'USER':'postgres',
         'PASSWORD':'postgres',
         'HOST':'localhost',

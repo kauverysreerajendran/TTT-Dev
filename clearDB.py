@@ -5,9 +5,9 @@ import django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'watchcase_tracker.settings')  # Replace 'your_project_name' with 'watchcase_tracker'
 django.setup()
 
-from modelmasterapp.models import TotalStockModel, ModelMasterCreation, TrayAutoSaveData, TrayId
-from Jig_Loading.models import Jig, JigDetails, JigAutoSave, JigLoadingManualDraft
-from Brass_QC.models import Brass_QC_Draft_Store
+from modelmasterapp.models import *
+from Jig_Loading.models import *
+from Brass_QC.models import *
 
 def clear_database():
     """
@@ -18,9 +18,9 @@ def clear_database():
     ModelMasterCreation.objects.all().delete()
     TrayAutoSaveData.objects.all().delete()
     Jig.objects.all().delete()
-    JigDetails.objects.all().delete()
-    JigAutoSave.objects.all().delete()
     JigLoadingManualDraft.objects.all().delete()
+    JigCompleted.objects.all().delete()
+    JigAutoSave.objects.all().delete()
     Brass_QC_Draft_Store.objects.all().delete()
     TrayId.objects.all().delete()
 

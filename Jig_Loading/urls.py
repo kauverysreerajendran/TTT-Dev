@@ -14,4 +14,5 @@ urlpatterns = [
     path('jig-submit/', JigSubmitAPIView.as_view(), name='jig_submit'),
     path('validate-lock-jig-id/', views.validate_lock_jig_id, name='validate_lock_jig_id'),
     path('jig_tray_id_list/', views.jig_tray_id_list, name='jig_tray_id_list'),
+    path('jig-completed-data/', JigCompletedDataAPIView.as_view(), name='jig_completed_data'),
 ]

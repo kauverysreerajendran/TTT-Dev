@@ -118,37 +118,9 @@ class JigCompletedAdmin(admin.ModelAdmin):
     readonly_fields = ['updated_at', 'draft_data']
 
 
-# Jig Details Table
-class JigDetailsAdmin(admin.ModelAdmin):
-    list_display = [
-        'jig_qr_id',
-        'lot_id',
-        'total_cases_loaded',
-        'jig_cases_remaining_count',
-        'no_of_cycle',
-        'get_created_by',
-        'date_time',
-        'draft_save',
-        'jig_lot_id',
-    ]
-    list_filter = ['draft_save', 'no_of_cycle', 'date_time', 'created_by']
-    search_fields = ['jig_qr_id', 'lot_id', 'jig_lot_id', 'created_by__username']
-    readonly_fields = ['date_time', 'jig_lot_id']
-    ordering = ['-date_time']
-    
-    def get_created_by(self, obj):
-        """Display created by user in a readable format"""
-        if obj.created_by:
-            return f"{obj.created_by.username} ({obj.created_by.get_full_name() or 'No name'})"
-        return '-'
-    get_created_by.short_description = 'Created By'
-    get_created_by.admin_order_field = 'created_by__username'
-
-
 admin.site.register(Jig, JigAdmin)
 admin.site.register(JigLoadTrayId, JigLoadTrayIdAdmin)
 admin.site.register(JigLoadingMaster, JigLoadingMasterAdmin)
-admin.site.register(JigDetails, JigDetailsAdmin)
 admin.site.register(BathNumbers, BathNumbersAdmin)
 admin.site.register(JigAutoSave, JigAutoSaveAdmin)
 admin.site.register(JigLoadingManualDraft, JigLoadingManualDraftAdmin)

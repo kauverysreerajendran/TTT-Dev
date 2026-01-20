@@ -3057,8 +3057,8 @@ function recalcLoadedCasesQty() {
   
   let total = 0;
   
-  // Count regular delink tray inputs with valid alerts
-  document.querySelectorAll(".tray-id-input:not(.half-filled-tray-input)").forEach(function (inp) {
+  // Count all tray inputs (delink and half-filled)
+  document.querySelectorAll(".tray-id-input").forEach(function (inp) {
     if (
       inp.value.trim() !== "" &&
       inp.parentNode.querySelector(".tray-valid-alert")
@@ -3067,63 +3067,24 @@ function recalcLoadedCasesQty() {
     }
   });
   
-  // Count half-filled tray inputs with valid alerts
-  const halfFilledSection = document.getElementById('halfFilledTraySection');
-  if (halfFilledSection) {
-    halfFilledSection.querySelectorAll(".tray-id-input").forEach(function (inp) {
-      if (
-        inp.value.trim() !== "" &&
-        inp.parentNode.querySelector(".tray-valid-alert")
-      ) {
-        total += parseInt(inp.getAttribute("data-tray-qty") || "0", 10);
-      }
-    });
+  // Update modal data validation based on scanned trays
+  if (window.currentModalData) {
+    window.currentModalData.loaded_cases_qty = total;
+    window.currentModalData.empty_hooks = Math.max(0, window.currentModalData.jig_capacity - total);
+    window.currentModalData.can_save = total >= window.currentModalData.jig_capacity;
+    if (window.currentModalData.modal_validation) {
+      window.currentModalData.modal_validation.overall_valid = window.currentModalData.can_save;
+      window.currentModalData.modal_validation.hooks_balance_valid = window.currentModalData.can_save;
+    }
   }
   
-  // Check if broken hooks are present
-  const brokenHooksInput = document.getElementById('brokenBuildupHooksInput');
-  const brokenHooks = brokenHooksInput ? parseInt(brokenHooksInput.value || 0) : 0;
-
-  // If broken hooks are present and all trays are scanned, show effective loaded cases
-  if (brokenHooks > 0) {
-    // Count delink and half-filled tray inputs separately for better accuracy
-    const delinkInputs = document.querySelectorAll("#delinkTableSection .tray-id-input");
-    const halfFilledInputs = document.querySelectorAll("#halfFilledTraySection .tray-id-input");
-    const totalTrayInputs = delinkInputs.length + halfFilledInputs.length;
-    
-    let validCount = 0;
-    // Count valid delink trays
-    delinkInputs.forEach(function (inp) {
-      if (
-        inp.value.trim() !== "" &&
-        inp.parentNode.querySelector(".tray-valid-alert")
-      ) {
-        validCount++;
-      }
-    });
-    // Count valid half-filled trays
-    halfFilledInputs.forEach(function (inp) {
-      if (
-        inp.value.trim() !== "" &&
-        inp.parentNode.querySelector(".tray-valid-alert")
-      ) {
-        validCount++;
-      }
-    });
-
-    if (totalTrayInputs > 0 && validCount >= totalTrayInputs) {
-      // All trays validly scanned (including half-filled) - show effective loaded cases
-      loadedCaseQtyElem.textContent = `${lotQtyElem.value}/${lotQtyElem.value}`;
-    } else {
-      // Still scanning or invalid - show actual scanned count
-      loadedCaseQtyElem.textContent = `${total}/${lotQtyElem.value}`;
-    }
-  } else {
-    // No broken hooks - show actual scanned count from all trays, capped at jig capacity
-    const denominator = lotQtyElem ? lotQtyElem.value : jigCapacityElem.value;
-    total = Math.min(total, parseInt(denominator));
-    loadedCaseQtyElem.textContent = `${total}/${denominator}`;
-  }
+  // Update display: loaded / jig_capacity, cap at jig_capacity
+  const denominator = jigCapacityElem.value;
+  const displayTotal = Math.min(total, parseInt(denominator));
+  loadedCaseQtyElem.textContent = `${displayTotal}/${denominator}`;
+  
+  // Update submit button state
+  updateSubmitButtonState();
 }
 
 // Manual Draft - Fetch and restore data when opening modal
@@ -4479,5 +4440,4 @@ document.addEventListener('DOMContentLoaded', function() {
 
 {% endblock %}
 {% endblock content %}
-
 

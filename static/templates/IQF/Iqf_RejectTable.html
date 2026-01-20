@@ -2,6 +2,49 @@
 {% load stock_filters %} 
 
 <style>
+
+/* ===== SORTING STYLES ===== */
+.table th {
+    position: relative;
+    padding-right: 30px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.table th .fa-filter,
+.table th .fa-sort,
+.table th .fa-sort-up,
+.table th .fa-sort-down {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: white;
+    font-size: 12px;
+}
+
+.table th .fa-sort-up {
+    color: #ffd700 !important; /* Active sort ascending - yellow */
+}
+
+.table th .fa-sort-down {
+    color: #ffd700 !important; /* Active sort descending - yellow */
+}
+
+.table th:hover .fa-filter,
+.table th:hover .fa-sort {
+    color: #ffd700 !important;
+}
+
+.table th.sortable {
+    cursor: pointer;
+}
+
+.table th.sortable:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+/* ===== END SORTING STYLES ===== */
+
   .rejection-table td, .rejection-table th {
   padding: 10px 12px;
   border: 1px solid #e6e6e6;
@@ -658,50 +701,50 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                         <label for="select-all-checkbox" style="font-weight: 600; color: #fff; font-size: 13px; margin: 0; cursor:pointer;">Select All</label>
                       </div>
                     </th>
-                    <th>
-                      S.No <i class="fa fa-filter" aria-hidden="true"></i>
+                    <th class="sortable" data-column-index="1">
+                      S.No <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
-                     <th>
+                     <th class="sortable" data-column-index="2">
                       Last<br>Updated
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
-                    <th>
+                    <th class="sortable" data-column-index="3">
                       Plating <br> Stk No
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
-                    <th>
+                    <th class="sortable" data-column-index="4">
                       Polish <br> Stk No
-                      <i class="fa fa-filter" aria-hidden="true"></i>
-                    <th>
+                      <i class="fa fa-sort" aria-hidden="true"></i>
+                    </th>
+                    <th class="sortable" data-column-index="5">
                       Plating Color
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
-                    <th>
+                    <th class="sortable" data-column-index="6">
                       Polish Finish
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
-
-                    <th>
+                    <th class="sortable" data-column-index="7">
                       Source - Location
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
-                    <th>
+                    <th class="sortable" data-column-index="8">
                       Tray Type <br> Capacity
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
-                    <th> 
+                    <th class="sortable" data-column-index="9"> 
                       Tray Cate- <br> Capacity
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
-                    <th>
+                    <th class="sortable" data-column-index="10">
                       Reject Qty
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
                     <th>
                       Reject Reason
                       <i class="fa fa-filter" aria-hidden="true"></i>
                     </th>
-                                        <th>
+                    <th>
                       Lot <br> Remark
                       <i class="fa fa-filter" aria-hidden="true"></i>
                     </th>
@@ -1464,8 +1507,9 @@ document.addEventListener("DOMContentLoaded", function () {
             modalUserImg.src = modelImage || "/static/assets/images/imagePlaceholder.png";
           }
     
-          // ✅ UPDATED: Fetch ONLY rejected tray data
-          let traysData = [];
+          // ✅ UPDATED: Fetch rejected and delinked tray data separately
+          let rejectedTraysData = [];
+          let delinkedTraysData = [];
           let rejectionSummary = {};
           try {
             const params = new URLSearchParams({
@@ -1480,66 +1524,118 @@ document.addEventListener("DOMContentLoaded", function () {
             const resp = await fetch(`/iqf/iqf_RejectTable_tray_id_list/?${params}`);
             const result = await resp.json();
             if (result.success) {
-              traysData = result.trays || [];
+              rejectedTraysData = result.rejected_trays || [];
+              delinkedTraysData = result.delinked_trays || [];
               rejectionSummary = result.rejection_summary || {};
-              console.log('✅ Fetched ONLY brass rejected trays:', traysData);
+              console.log('✅ Fetched rejected trays:', rejectedTraysData);
+              console.log('✅ Fetched delinked trays:', delinkedTraysData);
               console.log('📊 Rejection summary:', rejectionSummary);
             }
           } catch (e) {
             console.error('❌ Error fetching tray data:', e);
           }
-    function buildTableHTML(showValidationColumn = false) {
-      let html = `
-        <table class="table table-bordered table-sm" style="width:100%; margin-bottom:0;">
-          <thead>
-            <tr>
-              <th style="width:50px;">S.no</th>
-              <th>Tray ID</th>
-              <th>Tray Qty</th>
-              ${showValidationColumn ? '<th>Tray Validation Status</th>' : ''}
-            </tr>
-          </thead>
-          <tbody>
-      `;
-    
-      // ✅ Sort traysData by tray_quantity ascending
-      const sortedTrays = traysData.slice().sort((a, b) => (a.tray_quantity || 0) - (b.tray_quantity || 0));
-    
-      sortedTrays.forEach((tray, idx) => {
-        html += `
-          <tr>
-            <td>${idx + 1}</td>
-            <td>
-              <input type="text" class="form-control" value="${tray.tray_id || ''}" readonly style="width: 100%;" />
-            </td>
-            <td>
-              <input type="number" class="form-control" value="${tray.tray_quantity || ''}" readonly style="width: 100%;" />
-            </td>
-            ${showValidationColumn ? `
-              <td>
-                <div class="validation-status">
-                  <div class="status-icon fail">
-                    <img src="/static/assets/icons/fail.png" alt="Fail" title="Fail" style="width:18px; height:18px;" />
-                  </div>
-                  <div class="status-icon pass">
-                    <img src="/static/assets/icons/pass.png" alt="Pass" title="Pass" style="width:18px; height:18px;" />
-                  </div>
-                </div>
-              </td>
-            ` : ''}
-          </tr>
-        `;
-      });
-    
-      html += '</tbody></table>';
-      return html;
-    }
+          function buildTableHTML(showValidationColumn = false) {
+            let html = '';
+            
+            // ✅ Rejected Trays Section
+            if (rejectedTraysData.length > 0) {
+              html += `
+                <h6 style="margin-top: 10px; margin-bottom: 8px; font-weight: 600; color: #333;">
+                  Rejected Trays
+                </h6>
+                <table class="table table-bordered table-sm" style="width:100%; margin-bottom:10px;">
+                  <thead>
+                    <tr>
+                      <th style="width:50px;">S.no</th>
+                      <th>Tray ID</th>
+                      <th>Tray Qty</th>
+                      ${showValidationColumn ? '<th>Tray Validation Status</th>' : ''}
+                    </tr>
+                  </thead>
+                  <tbody>
+              `;
+              
+              // Sort rejected trays by tray_quantity ascending
+              const sortedRejectedTrays = rejectedTraysData.slice().sort((a, b) => (a.tray_quantity || 0) - (b.tray_quantity || 0));
+              
+              sortedRejectedTrays.forEach((tray, idx) => {
+                const isTopTray = tray.top_tray || tray.is_top_tray || false;
+                const displaySno = isTopTray ? `${idx + 1} (Top Tray)` : `${idx + 1}`;
+                const isNewTray = tray.new_tray || false;
+                const newTrayBadge = isNewTray ? '🆕' : '';
+                
+                html += `
+                  <tr>
+                    <td>${displaySno} ${newTrayBadge}</td>
+                    <td>
+                      <input type="text" class="form-control" value="${tray.tray_id || ''}" readonly style="width: 100%;" />
+                    </td>
+                    <td>
+                      <input type="number" class="form-control" value="${tray.tray_quantity || ''}" readonly style="width: 100%;" />
+                    </td>
+                    ${showValidationColumn ? `
+                      <td>
+                        <div class="validation-status">
+                          <div class="status-icon fail">
+                            <img src="/static/assets/icons/fail.png" alt="Fail" title="Fail" style="width:18px; height:18px;" />
+                          </div>
+                          <div class="status-icon pass">
+                            <img src="/static/assets/icons/pass.png" alt="Pass" title="Pass" style="width:18px; height:18px;" />
+                          </div>
+                        </div>
+                      </td>
+                    ` : ''}
+                  </tr>
+                `;
+              });
+              
+              html += '</tbody></table>';
+            }
+            
+            // ✅ Delinked Trays Section
+            if (delinkedTraysData.length > 0) {
+              html += `
+                <h6 style="margin-top: 15px; margin-bottom: 8px; font-weight: 600; color: #666;">
+                  Delink Table (${delinkedTraysData.length} empty tray${delinkedTraysData.length > 1 ? 's' : ''})
+                </h6>
+                <table class="table table-bordered table-sm" style="width:100%; margin-bottom:0;">
+                  <thead>
+                    <tr>
+                      <th style="width:50px;">S.no</th>
+                      <th>Available Tray ID</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+              `;
+              
+              delinkedTraysData.forEach((tray, idx) => {
+                html += `
+                  <tr>
+                    <td>${idx + 1}</td>
+                    <td>
+                      <input type="text" class="form-control" value="${tray.tray_id || ''}" readonly style="width: 100%;" />
+                    </td>
+                  </tr>
+                `;
+              });
+              
+              html += '</tbody></table>';
+            }
+            
+            // If no data at all
+            if (rejectedTraysData.length === 0 && delinkedTraysData.length === 0) {
+              html = '<p style="text-align:center; padding:20px; color:#999;">No trays found</p>';
+            }
+            
+            return html;
+          }
           // Show table 
           detailsDiv.innerHTML = buildTableHTML(false);
     
           // Store data for later use
           modal.buildTableHTML = buildTableHTML;
-          modal.traysData = traysData;
+          modal.rejectedTraysData = rejectedTraysData;
+          modal.delinkedTraysData = delinkedTraysData;
           modal.rejectionSummary = rejectionSummary;
     
           // Show the modal
@@ -2308,6 +2404,69 @@ document.addEventListener("DOMContentLoaded", function () {
       setTimeout(unlockParentActions, 200);
     });
   }
+
+  // ===== SORTING FUNCTIONALITY =====
+  
+  // Column mapping for sorting
+  const columnMapping = {
+    1: 'serial_number',
+    2: 'iqf_rejected_last_process_date_time', 
+    3: 'plating_stk_no',
+    4: 'polishing_stk_no',
+    5: 'plating_color',
+    6: 'polish_finish',
+    7: 'vendor_location',
+    8: 'tray_type',
+    9: 'tray_capacity',
+    10: 'total_rejection_quantity'
+  };
+
+  // Get current sort parameters from URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const currentSort = urlParams.get('sort');
+  const currentOrder = urlParams.get('order');
+
+  // Update sort icons on page load
+  if (currentSort && currentOrder) {
+    const currentColumn = Object.keys(columnMapping).find(key => columnMapping[key] === currentSort);
+    if (currentColumn) {
+      const th = document.querySelector(`th[data-column-index="${currentColumn}"]`);
+      if (th) {
+        const icon = th.querySelector('i');
+        if (icon) {
+          icon.className = currentOrder === 'asc' ? 'fa fa-sort-up' : 'fa fa-sort-down';
+        }
+      }
+    }
+  }
+
+  // Add click event listeners to sortable headers
+  document.querySelectorAll('th.sortable').forEach(function(th) {
+    th.addEventListener('click', function() {
+      const columnIndex = this.getAttribute('data-column-index');
+      const sortField = columnMapping[columnIndex];
+      
+      if (!sortField) return;
+
+      let newOrder = 'asc';
+      
+      // If clicking the same column, toggle order
+      if (currentSort === sortField) {
+        newOrder = currentOrder === 'asc' ? 'desc' : 'asc';
+      }
+
+      // Build new URL with sort parameters
+      const newUrl = new URL(window.location);
+      newUrl.searchParams.set('sort', sortField);
+      newUrl.searchParams.set('order', newOrder);
+      
+      // Navigate to the new URL
+      window.location.href = newUrl.toString();
+    });
+  });
+  
+  // ===== END SORTING FUNCTIONALITY =====
+
 });
 </script>
 {% endblock %} {% endblock content %}

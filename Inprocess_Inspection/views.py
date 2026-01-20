@@ -19,6 +19,7 @@ from datetime import datetime, timedelta
 import pytz
 from django.db.models import Q
 from .models import InprocessInspectionTrayCapacity
+from Jig_Loading.models import JigCompleted
 
 # Inprocess Inspection View
 class InprocessInspectionView(TemplateView):
@@ -120,24 +121,27 @@ class InprocessInspectionView(TemplateView):
                 lot_id=OuterRef('lot_id')
             ).values('batch_id__polish_finish')[:1]
         
-        # Fetch JigDetails with polish_finish annotation (prefer TotalStock, fallback to Recovery)
+        # Fetch JigCompleted with polish_finish annotation (prefer TotalStock, fallback to Recovery)
+        # ✅ FILTER: Exclude completed records (where jig_position is NOT NULL)
         try:
-                # ...existing code...
-                # ...existing code...
-                jig_details = JigDetails.objects.select_related('bath_numbers').filter(
-                    Q(bath_numbers__isnull=True) | Q(jig_position__isnull=True) | Q(jig_position='')
-                ).order_by('-jig_loaded_date_time')
-                # ...existing code...
-                # ...existing code...
+                
+                
+                jig_details = JigCompleted.objects.filter(
+                    jig_position__isnull=True  # Only get records NOT completed (no jig_position selected)
+                ).annotate(
+                    polish_finish=Coalesce(Subquery(total_polish_finish_subquery), Subquery(recovery_polish_finish_subquery))
+                ).order_by('-updated_at')
+                
+                
         except Exception as e:
             print(f"⚠️ Error with polish_finish annotation, using default: {e}")
             # Fallback without polish_finish annotation
-            jig_details = JigDetails.objects.select_related('bath_numbers').order_by('-id')
+            jig_details = JigCompleted.objects.order_by('-updated_at')
             # Add default polish_finish_name to each jig_detail
             for jig_detail in jig_details:
                 jig_detail.polish_finish_name = 'No Polish Finish'
         
-        print(f"📊 Total JigDetails found: {len(jig_details)}")
+        print(f"📊 Total JigCompleted found: {len(jig_details)}")
         
         # Group bath numbers by type for better organization
         bath_numbers_by_type = {}
@@ -150,7 +154,7 @@ class InprocessInspectionView(TemplateView):
         context['all_bath_numbers'] = BathNumbers.objects.filter(is_active=True).order_by('bath_type', 'bath_number')
         
         
-        # Process each JigDetails to handle multiple models and lots
+        # Process each JigCompleted to handle multiple models and lots
         processed_jig_details = []
         
         for idx, jig_detail in enumerate(jig_details):
@@ -642,10 +646,85 @@ class InprocessInspectionView(TemplateView):
         jig_detail.model_polishing_stk_nos_list = model_cases_data['model_polishing_stk_nos_list']
         jig_detail.model_version_names_list = model_cases_data['model_version_names_list']
         
+        # Set model_presents and plating_color from models_data
+        models_data = model_cases_data.get('models_data', [])
+        if models_data:
+            jig_detail.model_presents = ", ".join([m.get('model_name', '') for m in models_data])
+            jig_detail.plating_color = models_data[0].get('plating_color', 'No Plating Color') if models_data else 'No Plating Color'
+            jig_detail.no_of_model_cases = [m.get('model_name', '') for m in models_data]  # For circles display
+        else:
+            # If no models_data, try to extract from original no_of_model_cases (from draft_data)
+            jig_detail.model_presents = "No Model Info"
+            jig_detail.plating_color = "No Plating Color"
+            
+            # CRITICAL FIX: Parse the original no_of_model_cases from draft_data if it exists
+            # This preserves model data saved during jig loading
+            original_no_of_model_cases = original_jig_detail.no_of_model_cases
+            if original_no_of_model_cases:
+                parsed_models = self.parse_model_cases(original_no_of_model_cases)
+                jig_detail.no_of_model_cases = parsed_models
+                print(f"   ✅ Parsed no_of_model_cases from draft_data: {parsed_models}")
+            else:
+                jig_detail.no_of_model_cases = []
+        
+        # For single model jigs, set no_of_model_cases if model_no is available
+        if not jig_detail.no_of_model_cases and hasattr(jig_detail, 'model_no') and jig_detail.model_no:
+            jig_detail.no_of_model_cases = [jig_detail.model_no]
+        
+        # Set template attributes for Inprocess Inspection table
+        jig_detail.jig_qr_id = jig_detail.jig_id  # For JIG ID column
+        jig_detail.jig_loaded_date_time = jig_detail.IP_loaded_date_time or jig_detail.updated_at  # For Date & Time column
+        jig_detail.total_cases_loaded = jig_detail.updated_lot_qty  # For Jig Lot Qty column
+        
+        # Parse draft_data for bath_type and tray info
+        draft_data = jig_detail.draft_data or {}
+        jig_detail.ep_bath_type = draft_data.get('nickel_bath_type', 'Bright')  # For Bath Type column
+        
+        # Get tray info from draft_data first, fallback to model_cases_data if not available
+        jig_detail.tray_type = draft_data.get('tray_type', None)
+        jig_detail.tray_capacity = draft_data.get('tray_capacity', None)
+        
+        # If tray info not in draft_data, try to get from model_cases_data (model data)
+        if not jig_detail.tray_type or jig_detail.tray_type == 'No Tray Type':
+            if models_data and len(models_data) > 0:
+                jig_detail.tray_type = models_data[0].get('tray_type', 'No Tray Type')
+            else:
+                jig_detail.tray_type = 'No Tray Type'
+        
+        if not jig_detail.tray_capacity or jig_detail.tray_capacity == 0:
+            if models_data and len(models_data) > 0:
+                jig_detail.tray_capacity = models_data[0].get('tray_capacity', 0)
+            else:
+                jig_detail.tray_capacity = 0
+        
+        # Fallback: Fetch plating_color from TotalStockModel if not set and models_data is empty
+        if not models_data and jig_detail.plating_color == 'No Plating Color':
+            try:
+                tsm = TotalStockModel.objects.filter(lot_id=jig_detail.lot_id).first()
+                if tsm and tsm.plating_color:
+                    jig_detail.plating_color = tsm.plating_color.plating_color
+                    print(f"   🔄 Plating color fallback from TotalStockModel: {jig_detail.plating_color}")
+            except Exception as e:
+                print(f"   ⚠️ Error fetching plating_color from TotalStockModel: {e}")
+        
+        # Fallback: Fetch tray info from TotalStockModel if not set
+        if not jig_detail.tray_type or jig_detail.tray_type == 'No Tray Type':
+            try:
+                tsm = TotalStockModel.objects.filter(lot_id=jig_detail.lot_id).first()
+                if tsm and tsm.batch_id:
+                    mmc = tsm.batch_id
+                    if mmc.model_stock_no and mmc.model_stock_no.tray_type:
+                        jig_detail.tray_type = mmc.model_stock_no.tray_type.tray_type
+                        jig_detail.tray_capacity = self.get_dynamic_tray_capacity(mmc.model_stock_no.tray_type.tray_type if mmc.model_stock_no.tray_type else "No Tray Type")
+                        print(f"   🔄 Tray info fallback from TotalStockModel: type={jig_detail.tray_type}, capacity={jig_detail.tray_capacity}")
+            except Exception as e:
+                print(f"   ⚠️ Error fetching tray info from TotalStockModel: {e}")
+        
         print(f"   📝 Multi-lot data assigned (as lists):")
         print(f"      lot_plating_stk_nos: {jig_detail.lot_plating_stk_nos}")
         print(f"      lot_polishing_stk_nos: {jig_detail.lot_polishing_stk_nos}")
         print(f"      lot_version_names: '{jig_detail.lot_version_names}'")
+
         
         print(f"   📝 Multi-model data assigned:")
         print(f"      model_plating_stk_nos: '{jig_detail.model_plating_stk_nos}'")
@@ -802,6 +881,18 @@ class InprocessInspectionView(TemplateView):
                             if not hasattr(jig_detail, key) or getattr(jig_detail, key) is None:
                                 setattr(jig_detail, key, value)
                         
+                        # If plating_stock_num is set, try to populate no_of_model_cases from it
+                        if hasattr(jig_detail, 'plating_stock_num') and jig_detail.plating_stock_num:
+                            try:
+                                model_master = ModelMaster.objects.filter(plating_stk_no=jig_detail.plating_stock_num).first()
+                                if model_master:
+                                    jig_detail.no_of_model_cases = [model_master.model_no]
+                                    print(f"   📦 Populated no_of_model_cases from plating_stock_num: {jig_detail.no_of_model_cases}")
+                                else:
+                                    print(f"   ⚠️ No ModelMaster found for plating_stock_num: {jig_detail.plating_stock_num}")
+                            except Exception as e:
+                                print(f"   ⚠️ Error populating model from plating_stock_num: {e}")
+                        
                         # Keep existing model display logic for frontend (multiple model circles)
                         if jig_detail.no_of_model_cases:
                             # Create color mapping for display (keeping existing functionality)
@@ -849,7 +940,66 @@ class InprocessInspectionView(TemplateView):
                         self.set_default_values(jig_detail)
                 else:
                     print(f"   ❌ No batch_id found, setting default values")
-                    self.set_default_values(jig_detail)       
+                    self.set_default_values(jig_detail)
+            else:
+                # CRITICAL FIX: If no_of_model_cases is empty, but we have plating_stk_nos,
+                # populate models from the successfully extracted plating stock numbers
+                if hasattr(jig_detail, 'final_plating_stk_nos') and jig_detail.final_plating_stk_nos:
+                    print(f"   🔧 CRITICAL FIX: Populating models from final_plating_stk_nos: {jig_detail.final_plating_stk_nos}")
+                    
+                    # Split comma-separated plating stock numbers
+                    plating_stk_nos = [x.strip() for x in jig_detail.final_plating_stk_nos.split(',')]
+                    model_numbers = []
+                    jig_model_colors = {}
+                    jig_model_images = {}
+                    
+                    # For each plating stock number, find the corresponding ModelMaster
+                    for plating_stk_no in plating_stk_nos:
+                        try:
+                            # Find ModelMaster with this plating stock number
+                            model_master = ModelMaster.objects.filter(plating_stk_no=plating_stk_no).prefetch_related('images').first()
+                            if model_master:
+                                model_no = model_master.model_no
+                                model_numbers.append(model_no)
+                                
+                                # Assign color from global palette
+                                if model_no not in self._global_model_colors:
+                                    color_index = self._color_index % len(color_palette)
+                                    self._global_model_colors[model_no] = color_palette[color_index]
+                                    self._color_index += 1
+                                jig_model_colors[model_no] = self._global_model_colors[model_no]
+                                
+                                # Get model images
+                                images = []
+                                if model_master.images.exists():
+                                    for img in model_master.images.all():
+                                        if img.master_image:
+                                            images.append(img.master_image.url)
+                                
+                                if not images:
+                                    images = [static('assets/images/imagePlaceholder.png')]
+                                
+                                jig_model_images[model_no] = images
+                                print(f"   ✅ Found ModelMaster: {plating_stk_no} -> {model_no}")
+                            else:
+                                print(f"   ⚠️ No ModelMaster found for plating_stk_no: {plating_stk_no}")
+                        except Exception as e:
+                            print(f"   ❌ Error processing plating_stk_no {plating_stk_no}: {e}")
+                    
+                    # Populate the required fields for frontend
+                    jig_detail.no_of_model_cases = model_numbers
+                    jig_detail.model_colors = jig_model_colors
+                    jig_detail.model_images = jig_model_images
+                    
+                    print(f"   🎯 POPULATED FROM PLATING STK NOS:")
+                    print(f"      no_of_model_cases: {jig_detail.no_of_model_cases}")
+                    print(f"      model_colors: {jig_model_colors}")
+                    print(f"      model_images keys: {list(jig_model_images.keys())}")
+                else:
+                    # No models data at all - initialize empty dictionaries to prevent template errors
+                    jig_detail.model_colors = {}
+                    jig_detail.model_images = {}
+                    print(f"   ℹ️ No models for jig_detail, initialized empty dicts")       
     
         
     
@@ -886,17 +1036,33 @@ class InprocessInspectionView(TemplateView):
             if hasattr(model_master, 'version') and model_master.version:
                 version_name = getattr(model_master.version, 'version_name', None) or getattr(model_master.version, 'version_internal', 'No Version')
             
+            # Fetch plating_color from TotalStockModel (total stock model)
+            plating_color = "No Plating Color"
+            try:
+                tsm = TotalStockModel.objects.filter(batch_id=model_master.id).first()
+                if tsm and tsm.plating_color:
+                    plating_color = tsm.plating_color.plating_color
+            except Exception as e:
+                print(f"⚠️ Error fetching plating_color from TotalStockModel: {e}")
+            
+            # Fetch tray info from ModelMaster
+            tray_type = "No Tray Type"
+            tray_capacity = 0
+            if model_master.model_stock_no and model_master.model_stock_no.tray_type:
+                tray_type = model_master.model_stock_no.tray_type.tray_type
+                tray_capacity = model_master.model_stock_no.tray_capacity or 0
+            
             return {
                 'batch_id': batch_id,
                 'model_no': model_master.model_stock_no.model_no if model_master.model_stock_no else None,
                 'version_name': version_name,
-                'plating_color': getattr(model_master, 'plating_color', None) or "No Plating Color",
+                'plating_color': plating_color,
                 'polish_finish': getattr(model_master, 'polish_finish', None) or "No Polish Finish",
                 'plating_stk_no': getattr(model_master, 'plating_stk_no', None) or "No Plating Stock No",
                 'polishing_stk_no': getattr(model_master, 'polishing_stk_no', None) or "No Polishing Stock No",
                 'location_name': model_master.location.location_name if hasattr(model_master, 'location') and model_master.location else "No Location",
-                'tray_type': getattr(model_master, 'tray_type', None) or "No Tray Type",
-                'tray_capacity': self.get_dynamic_tray_capacity(getattr(model_master, 'tray_type', None) or "No Tray Type"),
+                'tray_type': tray_type,
+                'tray_capacity': tray_capacity,
                 'vendor_internal': getattr(model_master, 'vendor_internal', None) or "No Vendor",
                 'model_images': images,
                 'calculated_no_of_trays': 0,
@@ -1057,17 +1223,27 @@ class InprocessInspectionView(TemplateView):
         if hasattr(model_master, 'version') and model_master.version:
             version_name = getattr(model_master.version, 'version_name', None) or getattr(model_master.version, 'version_internal', 'No Version')
         
+        # Fetch plating_color from TotalStockModel (total stock model) using batch_id
+        # This ensures we get the authoritative plating color data
+        plating_color_display = "No Plating Color"
+        try:
+            tsm = TotalStockModel.objects.filter(batch_id=model_master.id).first()
+            if tsm and tsm.plating_color:
+                plating_color_display = tsm.plating_color.plating_color
+        except Exception as e:
+            print(f"⚠️ Error fetching plating_color from TotalStockModel: {e}")
+        
         return {
             'batch_id': model_master.id,
             'model_no': model_no,
             'version_name': version_name,
-            'plating_color': getattr(model_master, 'plating_color', None) or "No Plating Color",
+            'plating_color': plating_color_display,
             'polish_finish': getattr(model_master, 'polish_finish', None) or "No Polish Finish",
             'plating_stk_no': getattr(model_master, 'plating_stk_no', None) or "No Plating Stock No",
             'polishing_stk_no': getattr(model_master, 'polishing_stk_no', None) or "No Polishing Stock No",
             'location_name': model_master.location.location_name if hasattr(model_master, 'location') and model_master.location else "No Location",
-            'tray_type': getattr(model_master, 'tray_type', None) or "No Tray Type",
-            'tray_capacity': self.get_dynamic_tray_capacity(getattr(model_master, 'tray_type', None) or "No Tray Type"),
+            'tray_type': getattr(model_master, 'tray_type', None).tray_type if getattr(model_master, 'tray_type', None) else "No Tray Type",
+            'tray_capacity': self.get_dynamic_tray_capacity(getattr(model_master, 'tray_type', None).tray_type if getattr(model_master, 'tray_type', None) else "No Tray Type"),
             'vendor_internal': getattr(model_master, 'vendor_internal', None) or "No Vendor",
             'model_images': images,
             'model_stock_no_obj': model_master.model_stock_no,
@@ -1157,7 +1333,7 @@ class GetBathNumbersByTypeAPIView(APIView):
 @method_decorator(csrf_exempt, name='dispatch')
 class SaveBathNumberAPIView(APIView):
     """
-    API endpoint for saving bath number to JigDetails
+    API endpoint for saving bath number to JigCompleted
     """
     def post(self, request):
         try:
@@ -1171,13 +1347,13 @@ class SaveBathNumberAPIView(APIView):
                     'message': 'jig_id and bath_number are required'
                 }, status=400)
             
-            # Find the JigDetails record
+            # Find the JigCompleted record
             try:
-                jig_detail = JigDetails.objects.get(id=jig_id)
-            except JigDetails.DoesNotExist:
+                jig_detail = JigCompleted.objects.get(id=jig_id)
+            except JigCompleted.DoesNotExist:
                 return Response({
                     'success': False,
-                    'message': 'JigDetails record not found'
+                    'message': 'JigCompleted record not found'
                 }, status=404)
             
             # Find the BathNumbers record
@@ -1232,13 +1408,13 @@ def save_bath_number(request):
                 'message': 'Missing jig_id or bath_number'
             }, status=400)
         
-        # Get the JigDetails instance
+        # Get the JigCompleted instance
         try:
-            jig_detail = JigDetails.objects.get(id=jig_id)
-        except JigDetails.DoesNotExist:
+            jig_detail = JigCompleted.objects.get(id=jig_id)
+        except JigCompleted.DoesNotExist:
             return JsonResponse({
                 'success': False, 
-                'message': 'JigDetails not found'
+                'message': 'JigCompleted not found'
             }, status=404)
         
         # Get the BathNumbers instance
@@ -1250,7 +1426,7 @@ def save_bath_number(request):
                 'message': 'Bath number not found'
             }, status=404)
         
-        # Save the bath number to JigDetails
+        # Save the bath number to JigCompleted
         jig_detail.bath_numbers = bath_obj
         # jig_detail.last_process_module = "Inprocess Inspection"
         # jig_detail.IP_loaded_date_time = timezone.now()
@@ -1312,16 +1488,16 @@ def save_jig_remarks(request):
                 'message': 'Remarks cannot exceed 50 characters'
             }, status=400)
         
-        # Get the JigDetails instance
+        # Get the JigCompleted instance
         try:
-            jig_detail = JigDetails.objects.get(id=jig_id)
-        except JigDetails.DoesNotExist:
+            jig_detail = JigCompleted.objects.get(id=jig_id)
+        except JigCompleted.DoesNotExist:
             return JsonResponse({
                 'success': False, 
-                'message': 'JigDetails not found'
+                'message': 'JigCompleted not found'
             }, status=404)
         
-        # Save the jig position and remarks to JigDetails
+        # Save the jig position and remarks to JigCompleted
         jig_detail.jig_position = jig_position
         jig_detail.IP_loaded_date_time = timezone.now()
         jig_detail.last_process_module = "Inprocess Inspection"
@@ -1358,11 +1534,11 @@ class IISaveIPPickRemarkAPIView(APIView):
                 return JsonResponse({'success': False, 'error': 'Missing lot_id'}, status=400)
             if not pick_remarks:
                 return JsonResponse({'success': False, 'error': 'Missing pick_remarks'}, status=400)
-            # Save pick_remarks to JigDetails.remarks for all matching lot_id
-            updated = JigDetails.objects.filter(lot_id=lot_id).update(pick_remarks=pick_remarks)
+            # Save pick_remarks to JigCompleted.remarks for all matching lot_id
+            updated = JigCompleted.objects.filter(lot_id=lot_id).update(pick_remarks=pick_remarks)
             if updated == 0:
-                return JsonResponse({'success': False, 'error': 'No JigDetails found for this lot_id'}, status=404)
-            return JsonResponse({'success': True, 'message': 'Pick remarks saved to JigDetails'})
+                return JsonResponse({'success': False, 'error': 'No JigCompleted found for this lot_id'}, status=404)
+            return JsonResponse({'success': True, 'message': 'Pick remarks saved to JigCompleted'})
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)}, status=500)
   
@@ -1416,14 +1592,14 @@ class InprocessSaveHoldUnholdReasonAPIView(APIView):
   
 
 @method_decorator(csrf_exempt, name='dispatch')
-class JigDetailsDeleteAPIView(APIView):
+class JigCompletedDeleteAPIView(APIView):
     def post(self, request):
         try:
             data = request.data if hasattr(request, 'data') else json.loads(request.body.decode('utf-8'))
             lot_id = data.get('lot_id')
             if not lot_id:
                 return Response({'success': False, 'message': 'Missing lot_id'}, status=status.HTTP_400_BAD_REQUEST)
-            deleted, _ = JigDetails.objects.filter(lot_id=lot_id).delete()
+            deleted, _ = JigCompleted.objects.filter(lot_id=lot_id).delete()
             if deleted == 0:
                 return Response({'success': False, 'message': 'No record found for this lot_id'}, status=status.HTTP_404_NOT_FOUND)
             return Response({'success': True, 'message': 'Record deleted successfully'})
@@ -1484,11 +1660,13 @@ class InprocessInspectionCompleteView(TemplateView):
             from_date = yesterday
             to_date = today
 
-        # Filter JigDetails by IP_loaded_date_time
-        jig_details_qs = JigDetails.objects.filter(
-            IP_loaded_date_time__date__gte=from_date,
-            IP_loaded_date_time__date__lte=to_date
-        ).order_by('-IP_loaded_date_time')
+        # Filter JigCompleted by IP_loaded_date_time
+        # ✅ FILTER: Include only completed records (where jig_position IS NOT NULL)
+        jig_details_qs = JigCompleted.objects.filter(
+            updated_at__date__gte=from_date,
+            updated_at__date__lte=to_date,
+            jig_position__isnull=False  # Only get completed records (jig_position selected)
+        ).order_by('-updated_at')
         
         print("🔍 ==> Starting InprocessInspectionCompleteView.get_context_data")
 
@@ -1515,33 +1693,28 @@ class InprocessInspectionCompleteView(TemplateView):
                 lot_id=OuterRef('lot_id')
             ).values('batch_id__polish_finish')[:1]
         
-        # Fetch JigDetails with filters for completed items and polish_finish annotation
+        # Fetch JigCompleted with filters for completed items and polish_finish annotation
+        # ✅ FILTER: Include only completed records (where jig_position IS NOT NULL)
         try:
-            jig_details = JigDetails.objects.select_related('bath_numbers').filter(
-                bath_numbers__isnull=False,
-                jig_position__isnull=False
-            ).exclude(
-                jig_position=''
-            ).order_by('-IP_loaded_date_time')
+            jig_details = JigCompleted.objects.filter(
+                jig_position__isnull=False  # Only get completed records (jig_position selected)
+            ).annotate(
+                polish_finish=Coalesce(Subquery(total_polish_finish_subquery), Subquery(recovery_polish_finish_subquery))
+            ).order_by('-updated_at')
         except Exception as e:
             print(f"⚠️ Error with polish_finish annotation, using default: {e}")
             # Fallback without polish_finish annotation
-            jig_details = JigDetails.objects.select_related('bath_numbers').filter(
-                bath_numbers__isnull=False,
-                jig_position__isnull=False
-            ).exclude(
-                jig_position=''
-            ).order_by('-IP_loaded_date_time')
+            jig_details = JigCompleted.objects.order_by('-updated_at')
             # Add default polish_finish_name to each jig_detail
             for jig_detail in jig_details:
                 jig_detail.polish_finish_name = 'No Polish Finish'
         
-        print(f"📊 Total JigDetails found (completed): {len(jig_details)}")
+        print(f"📊 Total JigCompleted found (completed): {len(jig_details)}")
         
         # Fetch all Bath Numbers for dropdown
         bath_numbers = BathNumbers.objects.all().order_by('bath_number')
         
-        # Process each JigDetails to handle multiple models and lots - SAME AS InprocessInspectionView
+        # Process each JigCompleted to handle multiple models and lots - SAME AS InprocessInspectionView
         processed_jig_details = []
         
         for idx, jig_detail in enumerate(jig_details_qs):
@@ -1981,6 +2154,14 @@ class InprocessInspectionCompleteView(TemplateView):
         print(f"      has_multiple_lots: {jig_detail.has_multiple_lots}")
         print(f"      has_multiple_models: {jig_detail.has_multiple_models}")
         
+        # Set template attributes for Inprocess Inspection table
+        jig_detail.jig_qr_id = jig_detail.jig_id  # For JIG ID column
+        if not jig_detail.jig_id:
+            jig_detail.jig_id = f"JIG-{jig_detail.id}"
+            jig_detail.jig_qr_id = jig_detail.jig_id
+        jig_detail.jig_loaded_date_time = jig_detail.IP_loaded_date_time or jig_detail.updated_at  # For Date & Time column
+        jig_detail.total_cases_loaded = jig_detail.updated_lot_qty  # For Jig Lot Qty column
+        
         # Apply existing InprocessInspectionCompleteView logic for single model data
         self.apply_existing_logic(jig_detail)
         
@@ -2075,6 +2256,10 @@ class InprocessInspectionCompleteView(TemplateView):
                     jig_detail.primary_tray_capacity = 0
                     
                 print(f"   🎯 Applied batch data from {batch_model_class.__name__}")
+                
+                # Ensure model_presents is populated if empty
+                if not hasattr(jig_detail, 'model_presents') or not jig_detail.model_presents or jig_detail.model_presents in ['', 'No Model Info']:
+                    jig_detail.model_presents = batch_data.get('model_no', 'No Model Info')
                     
             except Exception as e:
                 print(f"   ❌ Error getting batch data: {e}")
@@ -2144,17 +2329,31 @@ class InprocessInspectionCompleteView(TemplateView):
             if hasattr(model_master, 'version') and model_master.version:
                 version_name = getattr(model_master.version, 'version_name', None) or getattr(model_master.version, 'version_internal', 'No Version')
             
+            # Fetch plating_color from TotalStockModel (total stock model)
+            plating_color = "No Plating Color"
+            try:
+                tsm = TotalStockModel.objects.filter(batch_id=model_master.id).first()
+                if tsm and tsm.plating_color:
+                    plating_color = tsm.plating_color.plating_color
+            except Exception as e:
+                print(f"⚠️ Error fetching plating_color from TotalStockModel: {e}")
+            
+            # Fetch tray info from ModelMaster
+            tray_type = "No Tray Type"
+            if model_master.model_stock_no and model_master.model_stock_no.tray_type:
+                tray_type = model_master.model_stock_no.tray_type.tray_type
+            
             return {
                 'batch_id': batch_id,
                 'model_no': model_master.model_stock_no.model_no if model_master.model_stock_no else None,
                 'version_name': version_name,
-                'plating_color': getattr(model_master, 'plating_color', None) or "No Plating Color",
+                'plating_color': plating_color,
                 'polish_finish': getattr(model_master, 'polish_finish', None) or "No Polish Finish",
                 'plating_stk_no': getattr(model_master, 'plating_stk_no', None) or "No Plating Stock No",
                 'polishing_stk_no': getattr(model_master, 'polishing_stk_no', None) or "No Polishing Stock No",
                 'location_name': model_master.location.location_name if hasattr(model_master, 'location') and model_master.location else "No Location",
-                'tray_type': getattr(model_master, 'tray_type', None) or "No Tray Type",
-                'tray_capacity': self.get_dynamic_tray_capacity(getattr(model_master, 'tray_type', None) or "No Tray Type"),
+                'tray_type': tray_type,
+                'tray_capacity': self.get_dynamic_tray_capacity(tray_type),
                 'vendor_internal': getattr(model_master, 'vendor_internal', None) or "No Vendor",
                 'model_images': images,
                 'calculated_no_of_trays': 0,

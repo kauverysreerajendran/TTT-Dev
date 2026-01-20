@@ -2,6 +2,49 @@
 {% load stock_filters %} 
 
   <style> 
+
+/* ===== SORTING STYLES ===== */
+.table th {
+    position: relative;
+    padding-right: 30px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.table th .fa-filter,
+.table th .fa-sort,
+.table th .fa-sort-up,
+.table th .fa-sort-down {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: white;
+    font-size: 12px;
+}
+
+.table th .fa-sort-up {
+    color: #ffd700 !important; /* Active sort ascending - yellow */
+}
+
+.table th .fa-sort-down {
+    color: #ffd700 !important; /* Active sort descending - yellow */
+}
+
+.table th:hover .fa-filter,
+.table th:hover .fa-sort {
+    color: #ffd700 !important;
+}
+
+.table th.sortable {
+    cursor: pointer;
+}
+
+.table th.sortable:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+/* ===== END SORTING STYLES ===== */
+
 /* ========== Tablet override — paste at file end (after other table styles) ========== */
 /* --- Tablet: freeze first 3 columns consistently with desktop --- */
 @media (pointer: coarse) and (min-width: 680px) and (max-width: 1400px) {
@@ -584,55 +627,56 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                 <thead>
                   <tr>
 
-                    <th>
-                      S.No <i class="fa fa-filter" aria-hidden="true"></i>
+                    <th class="sortable" data-column-index="1">
+                      S.No <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
-                     <th>
+                     <th class="sortable" data-column-index="2">
                       Last<br>Updated
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
-                    <th>
+                    <th class="sortable" data-column-index="3">
                       Plating <br> Stk No
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
-                    <th>
+                    <th class="sortable" data-column-index="4">
                       Polish <br> Stk No
-                      <i class="fa fa-filter" aria-hidden="true"></i>
-                    <th>
-                      Plating Color
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
-                    <th>
+                    <th class="sortable" data-column-index="5">
+                      Plating Color
+                      <i class="fa fa-sort" aria-hidden="true"></i>
+                    </th>
+                    <th class="sortable" data-column-index="6">
                       Polish Finish
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
 
-                    <th>
+                    <th class="sortable" data-column-index="7">
                       Source - Location
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
-                    <th>
+                    <th class="sortable" data-column-index="8">
                       Tray Type Capacity
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
-                    <th>
+                    <th class="sortable" data-column-index="9">
                       No of Trays
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
-                    <th>
+                    <th class="sortable" data-column-index="10">
                       Reject Qty
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
                     <th>
                       Reject Reason
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
                     <th>
                       Lot <br> Remark
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
                    
-                  </tr>
+                  </tr> 
                 </thead>
                 <tbody>
                 {% for data in master_data %}
@@ -2115,6 +2159,69 @@ document.addEventListener("DOMContentLoaded", function () {
       setTimeout(unlockParentActions, 200);
     });
   }
+  
+  // ===== SORTING FUNCTIONALITY =====
+  
+  // Column mapping for sorting
+  const columnMapping = {
+    1: 'serial_number',
+    2: 'brass_audit_rejected_last_process_date_time',
+    3: 'plating_stk_no',
+    4: 'polishing_stk_no',
+    5: 'plating_color',
+    6: 'polish_finish',
+    7: 'vendor_location',
+    8: 'tray_capacity',
+    9: 'no_of_trays',
+    10: 'total_rejection_quantity'
+  };
+
+  // Get current sort parameters from URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const currentSort = urlParams.get('sort');
+  const currentOrder = urlParams.get('order');
+
+  // Update sort icons on page load
+  if (currentSort && currentOrder) {
+    const currentColumn = Object.keys(columnMapping).find(key => columnMapping[key] === currentSort);
+    if (currentColumn) {
+      const th = document.querySelector(`th[data-column-index="${currentColumn}"]`);
+      if (th) {
+        const icon = th.querySelector('i');
+        if (icon) {
+          icon.className = currentOrder === 'asc' ? 'fa fa-sort-up' : 'fa fa-sort-down';
+        }
+      }
+    }
+  }
+
+  // Add click event listeners to sortable headers
+  document.querySelectorAll('th.sortable').forEach(function(th) {
+    th.addEventListener('click', function() {
+      const columnIndex = this.getAttribute('data-column-index');
+      const sortField = columnMapping[columnIndex];
+      
+      if (!sortField) return;
+
+      let newOrder = 'asc';
+      
+      // If clicking the same column, toggle order
+      if (currentSort === sortField) {
+        newOrder = currentOrder === 'asc' ? 'desc' : 'asc';
+      }
+
+      // Build new URL with sort parameters
+      const newUrl = new URL(window.location);
+      newUrl.searchParams.set('sort', sortField);
+      newUrl.searchParams.set('order', newOrder);
+      
+      // Navigate to the new URL
+      window.location.href = newUrl.toString();
+    });
+  });
+  
+  // ===== END SORTING FUNCTIONALITY =====
+  
 });
 </script>
 {% endblock %} {% endblock content %}

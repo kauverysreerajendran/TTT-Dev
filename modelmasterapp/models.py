@@ -58,7 +58,6 @@ class Plating_Color(models.Model):
     plating_color = models.CharField(max_length=255, unique=True, help_text="Plating color")
     plating_color_internal = models.CharField(
         max_length=10, 
-        db_index=True,
         help_text="Short internal code used in stock number (e.g., B for Black)", 
     )
     jig_unload_zone_1 = models.BooleanField(default=False, help_text="Indicates if Jig Unload Zone 1 is active")
@@ -114,22 +113,13 @@ class Category(models.Model):
 
     def __str__(self):
         return self.category_name
-     
+    
     
 class ModelMaster(models.Model):
-    BATH_TYPE_CHOICES = [
-        ('Bright', 'Bright'),
-        ('Semi Bright', 'Semi Bright'),
-        ('Dull', 'Dull'),
-    ]
     # Assuming this model holds the reference data for dropdowns and auto-fetch fields
-    model_no = models.CharField(max_length=100, db_index=True)
+    model_no = models.CharField(max_length=100)
     polish_finish = models.ForeignKey(PolishFinishType, on_delete=models.SET_NULL, null=True, blank=True)
-    ep_bath_type  = models.CharField(
-        max_length=20, 
-        choices=BATH_TYPE_CHOICES,
-        help_text="Type of bath this number belongs to"
-    )
+    ep_bath_type = models.CharField(max_length=100)
     tray_type = models.ForeignKey(TrayType, on_delete=models.SET_NULL, null=True, blank=True)
     tray_capacity = models.IntegerField(null=True, blank=True)
     images = models.ManyToManyField(ModelImage, blank=True)  # Allows multiple images
@@ -139,9 +129,9 @@ class ModelMaster(models.Model):
     wiping_required = models.BooleanField(default=False)
     date_time = models.DateTimeField(default=timezone.now)
     version = models.TextField()
-    plating_stk_no=models.CharField(max_length=50,null=True, blank=True, db_index=True)
-    polishing_stk_no=models.CharField(max_length=50,null=True, blank=True, db_index=True)  # Added field for polishing stock number
+    plating_stk_no=models.CharField(max_length=50,null=True, blank=True)
     createdby= models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+
 
     def __str__(self):
         if self.model_no and self.plating_stk_no:
@@ -205,9 +195,9 @@ class ModelMasterCreation(models.Model):
     batch_id = models.CharField(max_length=50, unique=True)
     lot_id = models.CharField(max_length=100, unique=True, null=True, blank=True)  # <== ADD THIS LINE
     model_stock_no = models.ForeignKey(ModelMaster, related_name='model_stock_no', on_delete=models.CASCADE)
-    polish_finish = models.CharField(max_length=100, db_index=True)
+    polish_finish = models.CharField(max_length=100)
     ep_bath_type = models.CharField(max_length=100)
-    plating_color=models.CharField(max_length=100,null=True,blank=True, db_index=True)
+    plating_color=models.CharField(max_length=100,null=True,blank=True)
     tray_type = models.CharField(max_length=100)
     tray_capacity = models.IntegerField(null=True, blank=True)
     images = models.ManyToManyField(ModelImage, blank=True)  # Store multiple images
@@ -217,7 +207,7 @@ class ModelMasterCreation(models.Model):
     initial_batch_quantity = models.IntegerField(default=0) #not in use
     current_batch_quantity = models.IntegerField(default=0)  # not in use
     no_of_trays = models.IntegerField(null=True, blank=True)  # Calculated field
-    vendor_internal = models.CharField(max_length=100,null=True, blank=True, db_index=True)
+    vendor_internal = models.CharField(max_length=100,null=True, blank=True)
     sequence_number = models.IntegerField(default=0)  # Add this field
     location = models.ForeignKey(Location, on_delete=models.SET_NULL, null=True, blank=True)  # Allow null values
     Moved_to_D_Picker = models.BooleanField(default=False, help_text="Moved to D Picker")
@@ -226,9 +216,9 @@ class ModelMasterCreation(models.Model):
     top_tray_qty_modify=models.IntegerField(default=0, help_text="Top Tray Quantity Modified")
     Draft_Saved=models.BooleanField(default=False,help_text="Draft Save")
     dp_pick_remarks=models.CharField(max_length=100,null=True, blank=True)
-    category=models.CharField(max_length=100, null=True, blank=True, help_text="Category of the model", db_index=True)
-    plating_stk_no=models.CharField(max_length=100, null=True, blank=True, help_text="Plating Stock Number", db_index=True)
-    polishing_stk_no=models.CharField(max_length=100,null=True, blank=True, db_index=True)
+    category=models.CharField(max_length=100, null=True, blank=True, help_text="Category of the model")
+    plating_stk_no=models.CharField(max_length=100, null=True, blank=True, help_text="Plating Stock Number")
+    polishing_stk_no=models.CharField(max_length=100,null=True, blank=True)
     holding_reason = models.CharField(max_length=255, null=True, blank=True, help_text="Reason for holding the batch")  
     release_reason= models.CharField(max_length=255, null=True, blank=True, help_text="Reason for releasing the batch")
     hold_lot = models.BooleanField(default=False, help_text="Indicates if the lot is on hold")
@@ -383,7 +373,6 @@ class TotalStockModel(models.Model):
     plating_color = models.ForeignKey(Plating_Color, on_delete=models.SET_NULL, null=True, blank=True, help_text="Plating Color")
     location = models.ManyToManyField(Location, blank=True, help_text="Multiple Locations")
     lot_id = models.CharField(max_length=50, unique=True, null=True, blank=True, help_text="Lot ID")
-    parent_lot_id = models.CharField(max_length=50, null=True, blank=True, help_text="Parent Lot ID for partial lots")
     created_at = models.DateTimeField(default=now, help_text="Timestamp of the record")
     # day planning missing qty in day planning pick table
     dp_missing_qty = models.IntegerField(default=0, help_text="Missing quantity in day planning")
@@ -481,8 +470,8 @@ class TotalStockModel(models.Model):
     send_brass_audit_to_qc=models.BooleanField(default=False, help_text="Send to Brass Audit QC")
     send_brass_audit_to_iqf=models.BooleanField(default=False, help_text="Send to IQF")
     
+    jig_draft=models.BooleanField(default=False, help_text="Jig Draft Save")
     Jig_Load_completed =models.BooleanField(default=False, help_text="Jig Load Completed")
-    jig_draft = models.BooleanField(default=False, help_text="Jig Loading Draft Save")
     jig_holding_reason = models.CharField(max_length=255, null=True, blank=True, help_text="Jig Reason for holding the batch")
     jig_release_reason = models.CharField(max_length=255, null=True, blank=True, help_text="Jig Reason for releasing the batch")
     jig_hold_lot = models.BooleanField(default=False, help_text="Indicates if the lot is on hold n Jig")
@@ -503,8 +492,6 @@ class TotalStockModel(models.Model):
     brass_release_reason= models.CharField(max_length=255, null=True, blank=True, help_text="Brass Reason for releasing the batch")
     brass_hold_lot = models.BooleanField(default=False, help_text="Indicates if the lot is on hold n Brass")
     brass_release_lot =models.BooleanField(default=False)
-    # ✅ NEW: Track when lot rejection "Proceed" has been clicked
-    brass_lot_rejection_proceeded = models.BooleanField(default=False, help_text="Brass lot rejection proceed clicked")
     
     brass_audit_holding_reason = models.CharField(max_length=255, null=True, blank=True, help_text="Brass Reason for holding the batch")  
     brass_audit_release_reason= models.CharField(max_length=255, null=True, blank=True, help_text="Brass Reason for releasing the batch")
@@ -729,42 +716,3 @@ from django.dispatch import receiver
 def delete_related_trayids(sender, instance, **kwargs):
     TrayId.objects.filter(batch_id=instance).delete()
     DraftTrayId.objects.filter(batch_id=instance).delete()
-    
-    
-    
-    
-# SS) Account Model
-from django.db.models.signals import post_delete
-from django.dispatch import receiver
-
-@receiver(post_delete, sender=ModelMasterCreation)
-def delete_related_trayids(sender, instance, **kwargs):
-    TrayId.objects.filter(batch_id=instance).delete()
-    DraftTrayId.objects.filter(batch_id=instance).delete()
-
-# Add SSOAccount model (ensure no leading indentation error)
-class SSOAccount(models.Model):
-    """
-    Map an external SSO identity to a local User account.
-    """
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sso_accounts')
-    provider = models.CharField(max_length=100, help_text="SSO provider name (e.g., google, keycloak)")
-    uid = models.CharField(max_length=255, help_text="Unique id provided by the SSO provider")
-    email = models.CharField(max_length=255, null=True, blank=True)
-    email_verified = models.BooleanField(default=False)
-    name = models.CharField(max_length=255, null=True, blank=True)
-    extra_data = models.JSONField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        unique_together = ('provider', 'uid')
-        indexes = [
-            models.Index(fields=['provider', 'uid']),
-            models.Index(fields=['email']),
-        ]
-
-    def __str__(self):
-        return f"{self.provider}:{self.uid} -> {self.user.username}"
-# ...existing code...
-    

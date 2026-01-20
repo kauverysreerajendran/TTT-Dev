@@ -316,6 +316,34 @@
     opacity: 1;
   }
 
+/* Enhanced Column Sorting Styles - Same as Brass QC */
+.sort-icon, .sort-asc, .sort-desc {
+  color: white !important;
+  font-size: 12px !important;
+  margin-left: 5px;
+  cursor: pointer;
+}
+
+.sortable:hover .sort-icon,
+.sortable:hover .sort-asc, 
+.sortable:hover .sort-desc {
+  color: #FFD700 !important;
+}
+
+.sorted .sort-asc,
+.sorted .sort-desc {
+  color: #FFD700 !important;
+}
+
+.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.sortable:hover {
+  background-color: rgba(255, 215, 0, 0.1) !important;
+}
+
   #order-listing th:last-child,
   #order-listing td:last-child {
     border-right: none;
@@ -450,7 +478,7 @@
     left: 175px; /* 100px (1st) + 90px (2nd) */
     z-index: 12;
     background: #f7fafd;
-    min-width: 95px; /* Increased width 100 - old value*/
+    min-width: 130px; /* Increased width 100 - old value*/
     max-width: 100px; /* Increased width  110 - old value*/
   }
 
@@ -682,72 +710,110 @@
           <table id="order-listing" class="table">
                 <thead>
                   <tr>
-                    <th>
-                      S.No <i class="fa fa-filter" aria-hidden="true"></i>
+                    <th data-column-index="0" class="sortable">
+                      S.No 
+                      <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
+                      <i class="fa fa-sort-asc sort-asc" aria-hidden="true" style="display:none;"></i>
+                      <i class="fa fa-sort-desc sort-desc" aria-hidden="true" style="display:none;"></i>
                     </th>
-                    <th>
+                    <th data-column-index="1" class="sortable">
                       Last<br>Updated
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
+                      <i class="fa fa-sort-asc sort-asc" aria-hidden="true" style="display:none;"></i>
+                      <i class="fa fa-sort-desc sort-desc" aria-hidden="true" style="display:none;"></i>
                     </th>
-                    <th>
+                    <th data-column-index="2" class="sortable">
                       Plating <br> Stk No
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
+                      <i class="fa fa-sort-asc sort-asc" aria-hidden="true" style="display:none;"></i>
+                      <i class="fa fa-sort-desc sort-desc" aria-hidden="true" style="display:none;"></i>
                     </th>
-                    <th>
+                    <th data-column-index="3" class="sortable">
                       Polishing <br> Stk No
-                      <i class="fa fa-filter" aria-hidden="true"></i>
-                    <th>
+                      <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
+                      <i class="fa fa-sort-asc sort-asc" aria-hidden="true" style="display:none;"></i>
+                      <i class="fa fa-sort-desc sort-desc" aria-hidden="true" style="display:none;"></i>
+                    <th data-column-index="4" class="sortable">
                       Plating Color
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
+                      <i class="fa fa-sort-asc sort-asc" aria-hidden="true" style="display:none;"></i>
+                      <i class="fa fa-sort-desc sort-desc" aria-hidden="true" style="display:none;"></i>
                     </th>
-                    <th>
+                    <th data-column-index="5" class="sortable">
                       Polish Finish
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
+                      <i class="fa fa-sort-asc sort-asc" aria-hidden="true" style="display:none;"></i>
+                      <i class="fa fa-sort-desc sort-desc" aria-hidden="true" style="display:none;"></i>
                     </th>
 
-                    <th>
+                    <th data-column-index="6" class="sortable">
                       Source - Location
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
+                      <i class="fa fa-sort-asc sort-asc" aria-hidden="true" style="display:none;"></i>
+                      <i class="fa fa-sort-desc sort-desc" aria-hidden="true" style="display:none;"></i>
                     </th>
-                    <th>
+                    <th data-column-index="7" class="sortable">
                       Tray Cate- <br> Capacity
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
+                      <i class="fa fa-sort-asc sort-asc" aria-hidden="true" style="display:none;"></i>
+                      <i class="fa fa-sort-desc sort-desc" aria-hidden="true" style="display:none;"></i>
                     </th>
-                    <th>
-                      No of <br> Trays <i class="fa fa-filter" aria-hidden="true"></i>
+                    <th data-column-index="8" class="sortable">
+                      No of <br> Trays 
+                      <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
+                      <i class="fa fa-sort-asc sort-asc" aria-hidden="true" style="display:none;"></i>
+                      <i class="fa fa-sort-desc sort-desc" aria-hidden="true" style="display:none;"></i>
                     </th>
-                    <th>
+                    <th data-column-index="9" class="sortable">
                       Lot Qty
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
+                      <i class="fa fa-sort-asc sort-asc" aria-hidden="true" style="display:none;"></i>
+                      <i class="fa fa-sort-desc sort-desc" aria-hidden="true" style="display:none;"></i>
                     </th>
-                    <th>
+                    <th data-column-index="10" class="sortable">
                       Physical <br> Qty
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
+                      <i class="fa fa-sort-asc sort-asc" aria-hidden="true" style="display:none;"></i>
+                      <i class="fa fa-sort-desc sort-desc" aria-hidden="true" style="display:none;"></i>
                     </th>
-                    <th>
+                    <th data-column-index="11" class="sortable">
                       Accept Qty
-                      <i class="fa fa-filter" aria-hidden="true"></i>
-                      </th>
-                    <th>
-                      Reject Qty<i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
+                      <i class="fa fa-sort-asc sort-asc" aria-hidden="true" style="display:none;"></i>
+                      <i class="fa fa-sort-desc sort-desc" aria-hidden="true" style="display:none;"></i>
                     </th>
-                    <th>
+                    <th data-column-index="12" class="sortable">
+                      Reject Qty
+                      <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
+                      <i class="fa fa-sort-asc sort-asc" aria-hidden="true" style="display:none;"></i>
+                      <i class="fa fa-sort-desc sort-desc" aria-hidden="true" style="display:none;"></i>
+                    </th>
+                    <th data-column-index="13" class="sortable">
                       Process Status
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
+                      <i class="fa fa-sort-asc sort-asc" aria-hidden="true" style="display:none;"></i>
+                      <i class="fa fa-sort-desc sort-desc" aria-hidden="true" style="display:none;"></i>
                     </th>
                     <th>
-                      Action <i class="fa fa-filter" aria-hidden="true"></i>
+                      Action
                     </th>
-                    <th>
+                    <th data-column-index="14" class="sortable">
                       Batch Status
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
+                      <i class="fa fa-sort-asc sort-asc" aria-hidden="true" style="display:none;"></i>
+                      <i class="fa fa-sort-desc sort-desc" aria-hidden="true" style="display:none;"></i>
                     </th>
-                    <th> 
+                    <th data-column-index="15" class="sortable"> 
                       Current <br> Location
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
+                      <i class="fa fa-sort-asc sort-asc" aria-hidden="true" style="display:none;"></i>
+                      <i class="fa fa-sort-desc sort-desc" aria-hidden="true" style="display:none;"></i>
                     </th>
-                    <th>
-                      Remarks <i class="fa fa-filter" aria-hidden="true"></i>
+                    <th data-column-index="16" class="sortable">
+                      Remarks 
+                      <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
+                      <i class="fa fa-sort-asc sort-asc" aria-hidden="true" style="display:none;"></i>
+                      <i class="fa fa-sort-desc sort-desc" aria-hidden="true" style="display:none;"></i>
                     </th>
                    
                   </tr>
@@ -825,7 +891,7 @@
                       <div class="d-flex">
                         <!-- Q: Green if iqf_accepted_qty_verified, else gray -->
                         <div
-                          title="Tray Scan"
+                          data-bs-toggle="tooltip" data-placement="right" data-bs-original-title="Quantity"
                           class="d-flex align-items-center justify-content-center rounded-circle ms-1"
                           style="
                             width: 20px;
@@ -843,7 +909,7 @@
                         </div>
                         <!-- QC: Green if iqf_rejection or iqf_acceptance, else gray -->
                         <div
-                          title="Tray Scan"
+                          data-bs-toggle="tooltip" data-placement="right" data-bs-original-title="Quality Check"
                           class="d-flex align-items-center justify-content-center rounded-circle ms-1"
                           style="
                             width: 20px;
@@ -1900,21 +1966,19 @@ document.addEventListener("DOMContentLoaded", function () {
     
           // ✅ UPDATED: Build modal content - ONLY show rejected trays
 // ✅ UPDATED: Build modal content - Show both ACCEPTED and REJECTED sections like the first script
-function buildTableHTML(showValidationColumn = false) {
-  let html = `
-    <table class="table table-bordered table-sm" style="width:100%; margin-bottom:0;">
-      <thead>
-        <tr>
-          <th style="width:50px;">S.no</th>
-          <th>Tray ID</th>
-          <th>Tray Qty</th>
-          ${showValidationColumn ? '<th>Tray Validation Status</th>' : ''}
-        </tr>
-      </thead>
-      <tbody>
-  `;
-
-  let rowCounter = 1;
+          function buildTableHTML(showValidationColumn = false) {
+            let html = `
+              <table class="table table-bordered table-sm" style="width:100%; margin-bottom:0;">
+                <thead>
+                  <tr>
+                    <th style="width:50px;">S.no</th>
+                    <th>Tray ID</th>
+                    <th>Tray Qty</th>
+                    ${showValidationColumn ? '<th>Tray Validation Status</th>' : ''}
+                  </tr>
+                </thead>
+                <tbody>
+            `;  let rowCounter = 1;
   let topTrayShown = false;
 
   // ✅ SECTION 1: ACCEPTED TRAYS ONLY - Only show if there are accepted trays
@@ -1931,15 +1995,48 @@ function buildTableHTML(showValidationColumn = false) {
         </tr>
       `;
       
-      acceptedTrays.forEach((tray) => {
-        let displaySNo;
-        if (!topTrayShown && (tray.ip_top_tray || tray.top_tray)) {
-          displaySNo = `${rowCounter} (Top Tray)`;
-          topTrayShown = true;
+      // Find top tray and render it first (like Brass QC pattern)
+      const topTray = acceptedTrays.find(tray => tray.ip_top_tray || tray.top_tray);
+      
+      if (topTray) {
+        let displayQuantity;
+        if (brassQcAccptance && topTray.top_tray) {
+          displayQuantity = topTray.tray_quantity;
+        } else if (topTray.ip_top_tray && topTray.ip_top_tray_qty !== null) {
+          displayQuantity = topTray.ip_top_tray_qty;
         } else {
-          displaySNo = rowCounter;
+          displayQuantity = topTray.tray_quantity;
         }
         
+        html += `
+          <tr class="top-tray-row" style="background:#e3f2fd;">
+            <td>${rowCounter} (Top Tray)</td>
+            <td>
+              <input type="text" class="form-control" value="${topTray.tray_id || ''}" readonly style="width: 100%;" />
+              <span style="background: #4caf50; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">ACCEPTED</span>
+            </td>
+            <td>
+              <input type="number" class="form-control" value="${displayQuantity || ''}" readonly style="width: 100%;" />
+            </td>
+            ${showValidationColumn ? `
+              <td>
+                <div class="validation-status">
+                  <div class="status-icon fail">
+                    <img src="{% static 'assets/icons/fail.png' %}" alt="Fail" title="Fail" style="width:18px; height:18px;" />
+                  </div>
+                  <div class="status-icon pass">
+                    <img src="{% static 'assets/icons/pass.png' %}" alt="Pass" title="Pass" style="width:18px; height:18px;" />
+                  </div>
+                </div>
+              </td>
+            ` : ''}
+          </tr>
+        `;
+        rowCounter++;
+      }
+      
+      // Render other accepted trays (excluding top tray)
+      acceptedTrays.filter(tray => !(tray.ip_top_tray || tray.top_tray)).forEach((tray) => {
         let displayQuantity;
         if (brassQcAccptance && tray.top_tray) {
           displayQuantity = tray.tray_quantity;
@@ -1949,11 +2046,9 @@ function buildTableHTML(showValidationColumn = false) {
           displayQuantity = tray.tray_quantity;
         }
 
-        const rowClass = (tray.ip_top_tray || tray.top_tray) ? 'top-tray-row' : '';
-        
         html += `
-          <tr class="${rowClass}">
-            <td>${displaySNo}</td>
+          <tr>
+            <td>${rowCounter}</td>
             <td>
               <input type="text" class="form-control" value="${tray.tray_id || ''}" readonly style="width: 100%;" />
               <span style="background: #4caf50; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">ACCEPTED</span>
@@ -2047,7 +2142,6 @@ function buildTableHTML(showValidationColumn = false) {
       
       // Add top tray first if it exists
       if (topTray) {
-        let displaySNo = `${rowCounter} (Top Tray)`;
         let displayQuantity = topTray.ip_top_tray && topTray.ip_top_tray_qty !== null ? 
                              topTray.ip_top_tray_qty : topTray.tray_quantity;
 
@@ -2059,8 +2153,8 @@ function buildTableHTML(showValidationColumn = false) {
         }
 
         html += `
-          <tr class="top-tray-row">
-            <td>${displaySNo}</td>
+          <tr class="top-tray-row" style="background:#e3f2fd;">
+            <td>${rowCounter} (Top Tray)</td>
             <td>
               <input type="text" class="form-control" value="${topTray.tray_id || ''}" readonly style="width: 100%;" />
               ${statusTag}
@@ -2131,7 +2225,7 @@ function buildTableHTML(showValidationColumn = false) {
           .then(res => res.json())
           .then(data => {
             if (data.success && data.shortage_rejections.length > 0) {
-              data.shortage_rejections.forEach(shortage => {
+              data.shortage_rejections.forEach((shortage) => {
                 html += `
                   <tr class="shortage-row">
                     <td>${rowCounter}</td>
@@ -2966,4 +3060,79 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 });
 </script>
+
+<!-- IQF Completed Table Sorting JavaScript -->
+<script nonce="{{ csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function() {
+    // Column mapping for sorting
+    const columnMapping = {
+        '0': 'lot_id',
+        '1': 'date_time',
+        '2': 'model_no',
+        '3': 'polishing_stk_no',
+        '4': 'plating_color',
+        '5': 'polish_finish',
+        '6': 'vendor_location',
+        '7': 'tray_type',
+        '8': 'no_of_trays',
+        '9': 'lot_qty',
+        '10': 'physical_qty',
+        '11': 'accept_qty',
+        '12': 'reject_qty',
+        '13': 'process_status',
+        '14': 'batch_status',
+        '15': 'current_location',
+        '16': 'remarks'
+    };
+
+    // Get current sort parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const currentSort = urlParams.get('sort');
+    const currentDirection = urlParams.get('direction');
+
+    // Update header icons based on current sort
+    if (currentSort && currentDirection) {
+        const sortedColumn = Object.keys(columnMapping).find(key => columnMapping[key] === currentSort);
+        if (sortedColumn) {
+            const header = document.querySelector(`[data-column-index="${sortedColumn}"]`);
+            if (header) {
+                header.classList.add('sorted');
+                header.querySelector('.sort-icon').style.display = 'none';
+                
+                if (currentDirection === 'asc') {
+                    header.querySelector('.sort-asc').style.display = 'inline';
+                } else {
+                    header.querySelector('.sort-desc').style.display = 'inline';
+                }
+            }
+        }
+    }
+
+    // Add click handlers for sorting
+    document.querySelectorAll('.sortable').forEach(function(header) {
+        header.addEventListener('click', function() {
+            const columnIndex = this.getAttribute('data-column-index');
+            const sortField = columnMapping[columnIndex];
+            
+            if (!sortField) return;
+
+            const url = new URL(window.location);
+            const currentSort = url.searchParams.get('sort');
+            const currentDirection = url.searchParams.get('direction');
+            
+            let newDirection = 'asc';
+            if (currentSort === sortField && currentDirection === 'asc') {
+                newDirection = 'desc';
+            }
+            
+            url.searchParams.set('sort', sortField);
+            url.searchParams.set('direction', newDirection);
+            url.searchParams.set('page', '1');
+            
+            window.location.href = url.toString();
+        });
+    });
+});
+</script>
+
 {% endblock %} {% endblock content %}

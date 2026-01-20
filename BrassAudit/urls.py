@@ -26,7 +26,7 @@ urlpatterns = [
     path('brass_audit_tray_validate/', BrassAudit_TrayValidateAPIView.as_view(), name='brass_audit_tray_validate'),
     path('brass_audit_save_single_top_tray_scan/', brass_audit_save_single_top_tray_scan, name='brass_audit_save_single_top_tray_scan'),
     path('brass_audit_reject_check_tray_id_simple/', brass_audit_reject_check_tray_id_simple, name='brass_audit_reject_check_tray_id_simple'),
-    
+     
     path('brass_audit_get_delink_tray_data/', brass_audit_get_delink_tray_data, name='brass_audit_get_delink_tray_data'),
     path('brass_audit_delink_check_tray_id/', brass_audit_delink_check_tray_id, name='brass_audit_delink_check_tray_id'),
     
@@ -36,6 +36,7 @@ urlpatterns = [
     # Draft functionality endpoints
     path('brass_audit_batch_rejection_draft/', BrassAuditBatchRejectionDraftAPIView.as_view(), name='brass_audit_batch_rejection_draft'),
     path('brass_audit_tray_rejection_draft/', BrassTrayRejectionDraftAPIView.as_view(), name='brass_audit_tray_rejection_draft'),
+    path('brass_audit_auto_save_rejection/', BrassAuditAutoSaveRejectionAPIView.as_view(), name='brass_audit_auto_save_rejection'),
     path('brass_get_draft_data/', brass_get_draft_data, name='brass_get_draft_data'),
     path('brass_clear_draft/', BrassClearDraftAPIView.as_view(), name='brass_clear_draft'),
     path('brass_get_all_drafts/', brass_get_all_drafts, name='brass_get_all_drafts'),
@@ -60,9 +61,7 @@ urlpatterns = [
 
     # Barcode scanner API endpoint
     path('get_lot_id_for_tray/', get_lot_id_for_tray, name='get_lot_id_for_tray'),
-    path('brass_audit_set_manual_draft/', BrassAuditSetManualDraftAPIView.as_view(), name='brass_audit_set_manual_draft'),
-    
-    
-    
+
+    path('get_tray_details_for_modal/', get_brass_audit_tray_details_for_modal, name='get_brass_audit_tray_details_for_modal'),
 
 ]

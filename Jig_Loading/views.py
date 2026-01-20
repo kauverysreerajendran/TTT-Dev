@@ -1,6 +1,6 @@
 from django.views.generic import *
 from modelmasterapp.models import *
-from .models import Jig, JigLoadingMaster, JigLoadTrayId, JigDetails, JigLoadingManualDraft, JigCompleted
+from .models import Jig, JigLoadingMaster, JigLoadTrayId, JigLoadingManualDraft, JigCompleted
 from rest_framework.decorators import *
 from django.http import JsonResponse
 import logging
@@ -15,7 +15,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.contrib.auth.decorators import login_required
 import logging
-import json
+import re
 import json
 
 
@@ -706,8 +706,6 @@ class JigAddModalDataView(TemplateView):
         
         validation['overall_valid'] = all([
             validation['jig_capacity_valid'],
-            validation['loaded_cases_valid'],
-            validation['hooks_balance_valid'],
             validation['broken_hooks_valid'],
             validation['nickel_bath_valid'],
             validation['empty_hooks_zero'],
@@ -1272,6 +1270,7 @@ class JigLoadingManualDraftAPIView(APIView):
         # Get jig capacity
         jig_capacity = 0
         jig_id = draft_data.get('jig_id')
+        plating_stock_num = ''
         if jig_id:
             try:
                 jig = Jig.objects.get(jig_qr_id=jig_id)
@@ -1280,6 +1279,8 @@ class JigLoadingManualDraftAPIView(APIView):
                 jig_master = JigLoadingMaster.objects.filter(model_stock_no=batch.model_stock_no).first()
                 if jig_master:
                     jig_capacity = jig_master.jig_capacity
+                # Get plating stock number
+                plating_stock_num = batch.plating_stk_no if batch.plating_stk_no else (batch.model_stock_no.plating_stk_no if batch.model_stock_no else '')
             except (Jig.DoesNotExist, ModelMasterCreation.DoesNotExist):
                 pass
 
@@ -1337,6 +1338,7 @@ class JigLoadingManualDraftAPIView(APIView):
                 'jig_capacity': jig_capacity,
                 'broken_hooks': broken_hooks,
                 'loaded_cases_qty': loaded_cases_qty,
+                'plating_stock_num': plating_stock_num,
             }
         )
         
@@ -1569,7 +1571,7 @@ class JigSubmitAPIView(APIView):
                 # Trays are already created during scanning, no need to create again
                 
             else:
-                # Splitting required - keep existing logic but remove JigDetails
+                # Splitting required - update stock for remaining quantity
                 logger.info(f"🔀 Splitting: original_lot_qty ({original_lot_qty}) > jig_capacity ({jig_capacity})")
                 
                 # Apply broken hooks logic to the complete table portion
@@ -1595,41 +1597,11 @@ class JigSubmitAPIView(APIView):
                         total_cases += cases_to_take
                     complete_half_filled_tray_info = []
                 
-                # Create new lot for partial (remaining cases after jig_capacity)
-                new_lot_id = f"LID{timezone.now().strftime('%d%m%Y%H%M%S')}{updated_lot_qty:04d}"
-                new_stock = TotalStockModel.objects.create(
-                    batch_id=stock.batch_id,
-                    model_stock_no=stock.model_stock_no,
-                    version=stock.version,
-                    total_stock=updated_lot_qty,
-                    polish_finish=stock.polish_finish,
-                    plating_color=stock.plating_color,
-                    lot_id=new_lot_id,
-                    parent_lot_id=lot_id,
-                    created_at=timezone.now(),
-                    Jig_Load_completed=False,
-                    jig_draft=True,
-                    brass_audit_accptance=True,
-                    brass_audit_last_process_date_time=timezone.now(),
-                    last_process_date_time=timezone.now(),
-                    last_process_module="Jig Loading",
-                )
-                # Create JigLoadTrayId for remaining trays in new lot
-                remaining_trays = JigLoadTrayId.objects.filter(lot_id=lot_id, batch_id=batch).order_by('id')
-                total_assigned = sum(t['cases'] for t in complete_delink_tray_info)
-                for tray in remaining_trays:
-                    if total_assigned >= jig_capacity:
-                        # Move remaining to new lot
-                        JigLoadTrayId.objects.create(
-                            lot_id=new_lot_id,
-                            tray_id=tray.tray_id,
-                            tray_quantity=tray.tray_quantity,
-                            batch_id=batch,
-                            user=user,
-                            date=timezone.now()
-                        )
+                # Update delink_tray_info and half_filled_tray_info for the response
+                delink_tray_info = complete_delink_tray_info
+                half_filled_tray_info = complete_half_filled_tray_info
                 
-                # Create JigLoadTrayId for delink_tray_info
+                # Create JigLoadTrayId for delink_tray_info (update existing or create)
                 for tray in complete_delink_tray_info:
                     jig_tray, created = JigLoadTrayId.objects.get_or_create(
                         lot_id=lot_id,
@@ -1706,6 +1678,9 @@ class JigSubmitAPIView(APIView):
                     complete_delink_tray_info = complete_delink_tray_info
                     complete_half_filled_tray_info = complete_half_filled_tray_info
 
+                # Get plating stock number
+                plating_stock_num = batch.plating_stk_no if batch.plating_stk_no else (batch.model_stock_no.plating_stk_no if batch.model_stock_no else '')
+
                 # Create JigCompleted entry
                 JigCompleted.objects.create(
                     batch_id=batch_id,
@@ -1723,11 +1698,41 @@ class JigSubmitAPIView(APIView):
                     jig_capacity=jig_capacity,
                     broken_hooks=broken_hooks,
                     loaded_cases_qty=effective_lot_qty,
-                    draft_status='submitted'
+                    plating_stock_num=plating_stock_num,
+                    draft_status='submitted',
+                    hold_status='normal',  # Added missing field
+                    is_multi_model=data.get('is_multi_model', False)  # Added missing field
                 )
                 logger.info(f"✅ JigCompleted record created for lot_id={lot_id} with effective_qty={effective_lot_qty}")
+
+                # Update stock for remaining quantity if splitting
+                if original_lot_qty > jig_capacity:
+                    loaded_cases_qty = effective_lot_qty
+                    print(f"Before update: stock.total_stock = {stock.total_stock}")
+                    stock.total_stock -= loaded_cases_qty
+                    stock.save()
+                    print(f"After update: stock.total_stock = {stock.total_stock}")
+                    print(f"JigCompleted data: batch_id={batch_id}, lot_id={lot_id}, loaded_cases_qty={loaded_cases_qty}")
+                    remaining_trays = JigLoadTrayId.objects.filter(lot_id=lot_id, batch_id=batch)
+                    print(f"Remaining JigLoadTrayId for lot {lot_id}: {[(t.tray_id, t.tray_quantity) for t in remaining_trays]}")
+
+                # Update Jig only after successful JigCompleted creation
+                jig.is_loaded = True
+                jig.batch_id = batch_id
+                jig.lot_id = lot_id
+                jig.current_user = None
+                jig.locked_at = None
+                jig.drafted = False
+                jig.save()
+
+                # Update original stock
+                stock.Jig_Load_completed = True
+                stock.jig_draft = False
+                stock.save()
+
             except Exception as e:
                 logger.error(f"❌ Failed to create JigCompleted record: {e}")
+                return Response({'success': False, 'message': f'Failed to save completion record: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
             logger.info(f"🎉 SUBMIT COMPLETED SUCCESSFULLY for batch_id={batch_id}, lot_id={lot_id}")
             return Response({'success': True, 'message': 'Jig submitted successfully'}, status=status.HTTP_200_OK)
@@ -1736,15 +1741,14 @@ class JigSubmitAPIView(APIView):
             logger.error(f"💥 Error submitting jig: {e}")
             return Response({'success': False, 'message': f'Internal server error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
-
+# In validate_lock_jig_id, move capacity check before is_loaded check to show capacity mismatch for all jigs
 @api_view(['POST'])
 def validate_lock_jig_id(request):
     logger = logging.getLogger(__name__)
     try:
         # Check authentication first
         if not request.user.is_authenticated:
-            logger.warning("❌ User not authenticated")
-            return JsonResponse({'valid': False, 'message': 'Authentication required'}, status=401)
+            return JsonResponse({'valid': False, 'message': 'User not authenticated'}, status=401)
         
         logger.info(f"🚀 API CALLED - validate_lock_jig_id by user: {request.user.username}")
         
@@ -1757,10 +1761,40 @@ def validate_lock_jig_id(request):
 
         # Basic validation - check if jig_id is provided
         if not jig_id or len(jig_id) > 9:
-            logger.info("⚠️ Basic validation failed: length check")
-            return JsonResponse({'valid': False, 'message': 'Jig ID must be <= 9 characters.'}, status=200)
+            return JsonResponse({'valid': False, 'message': 'Invalid Jig ID format'}, status=200)
 
-        # FIRST: Check for existing drafted jigs before format validation
+        # Check if jig_id exists in database
+        try:
+            jig = Jig.objects.get(jig_qr_id=jig_id)
+        except Jig.DoesNotExist:
+            return JsonResponse({'valid': False, 'message': 'Invalid Jig ID format'}, status=200)
+
+        # Get expected jig capacity for this batch/lot
+        expected_capacity = None
+        try:
+            stock = TotalStockModel.objects.get(batch_id__batch_id=batch_id, lot_id=lot_id)
+            batch = stock.batch_id
+            model_master = batch.model_stock_no if batch else stock.model_stock_no
+            if model_master:
+                jig_master = JigLoadingMaster.objects.filter(model_stock_no=model_master).first()
+                if jig_master:
+                    expected_capacity = jig_master.jig_capacity
+        except (TotalStockModel.DoesNotExist, AttributeError) as e:
+            logger.warning(f"⚠️ Could not determine expected capacity: {e}")
+
+        # Check if jig ID prefix matches expected capacity (if available) - do this for all existing jigs
+        if expected_capacity is not None:
+            match = re.match(r'J(\d+)-', jig_id)
+            if match:
+                jig_prefix_capacity = int(match.group(1))
+                if jig_prefix_capacity != expected_capacity:
+                    return JsonResponse({'valid': False, 'message': f'Jig ID capacity ({jig_prefix_capacity}) does not match expected ({expected_capacity})'}, status=200)
+
+        # Check if jig is already submitted (loaded)
+        if jig.is_loaded:
+            return JsonResponse({'valid': False, 'message': 'Jig ID has been submitted and cannot be reused'}, status=200)
+
+        # FIRST: Check for existing drafted jigs for current batch
         drafted_jig_current_batch = Jig.objects.filter(
             jig_qr_id=jig_id, drafted=True, batch_id=batch_id
         ).first()
@@ -1768,16 +1802,10 @@ def validate_lock_jig_id(request):
         logger.info(f"🔍 Drafted jig current batch query result: {drafted_jig_current_batch}")
 
         if drafted_jig_current_batch:
-            # Only allow if same user, same batch, and same lot
-            if (
-                drafted_jig_current_batch.current_user == user and
-                getattr(drafted_jig_current_batch, 'lot_id', None) == lot_id
-            ):
-                logger.info("✅ Same user, same batch, same lot - allowing")
-                return JsonResponse({'valid': True, 'message': 'Jig ID is valid'}, status=200)
+            if drafted_jig_current_batch.current_user == user:
+                return JsonResponse({'valid': True, 'message': 'Jig ID is drafted by you for this batch.'}, status=200)
             else:
-                logger.info(f"❌ Jig ID in use for another row or user: {drafted_jig_current_batch.current_user.username}")
-                return JsonResponse({'valid': False, 'message': f'Jig ID is being used by {drafted_jig_current_batch.current_user.username}.'}, status=200)
+                return JsonResponse({'valid': False, 'message': 'Jig ID is drafted by another user for this batch.'}, status=200)
 
         # If not drafted for this batch, check if drafted for any other batch
         drafted_jig_other_batch = Jig.objects.filter(
@@ -1787,58 +1815,16 @@ def validate_lock_jig_id(request):
         logger.info(f"🔍 Drafted jig other batch query result: {drafted_jig_other_batch}")
 
         if drafted_jig_other_batch:
-            # If same user but different batch, restrict with correct message
-            if drafted_jig_other_batch.current_user == user:
-                logger.info(f"🎯 FOUND: Same user ({user.username}) but different batch - returning 'Already drafted for another batch'")
-                return JsonResponse({'valid': False, 'message': 'Already drafted for another batch'}, status=200)
-            # If different user, restrict
-            else:
-                logger.info(f"❌ Different user for different batch: {drafted_jig_other_batch.current_user.username}")
-                return JsonResponse({'valid': False, 'message': f'Jig ID is being used by {drafted_jig_other_batch.current_user.username}.'}, status=200)
+            return JsonResponse({'valid': False, 'message': 'Jig ID is drafted for another batch.'}, status=200)
 
-        # Check if jig_id exists in database
-        try:
-            jig = Jig.objects.get(jig_qr_id=jig_id)
-        except Jig.DoesNotExist:
-            return JsonResponse({'valid': False, 'message': 'Jig ID not found in database.'}, status=200)
-
-        # Get expected jig capacity for this batch/lot
-        expected_capacity = None
-        try:
-            stock = TotalStockModel.objects.get(lot_id=lot_id)
-            batch = stock.batch_id
-            
-            # Resolve plating_stk_no same as modal
-            plating_stk_no = ''
-            if batch and batch.plating_stk_no:
-                plating_stk_no = batch.plating_stk_no
-            elif batch and batch.model_stock_no and batch.model_stock_no.plating_stk_no:
-                plating_stk_no = batch.model_stock_no.plating_stk_no
-            
-            if plating_stk_no:
-                jig_master = JigLoadingMaster.objects.filter(model_stock_no__plating_stk_no=plating_stk_no).first()
-                if jig_master:
-                    expected_capacity = jig_master.jig_capacity
-                else:
-                    logger.warning(f"JigLoadingMaster not found for plating_stk_no {plating_stk_no}")
-            else:
-                logger.warning(f"Plating stock number not found for batch {batch_id}, lot {lot_id}")
-        except TotalStockModel.DoesNotExist as e:
-            logger.warning(f"TotalStockModel not found for lot {lot_id}: {e}. Skipping capacity validation.")
-
-        # Check if jig ID prefix matches expected capacity (if available)
-        if expected_capacity is not None:
-            expected_prefix = f"J{expected_capacity:03d}"
-            if not jig_id.startswith(expected_prefix):
-                return JsonResponse({'valid': False, 'message': f'Invalid jig ID for this capacity. Expected prefix: {expected_prefix}'}, status=200)
-
-        # If not drafted/locked, show available message
+        # If not drafted/locked and capacity matches, show available message
         logger.info("✅ Jig ID is available")
         return JsonResponse({'valid': True, 'message': 'Jig ID is available to use'}, status=200)
         
     except Exception as e:
         logger.error(f"💥 Exception in validate_lock_jig_id: {e}")
         return JsonResponse({'valid': False, 'message': 'Internal server error'}, status=200)
+
 
 
 
@@ -1966,3 +1952,52 @@ class JigCompletedTable(TemplateView):
             })
         context['jig_details'] = completed_data
         return context
+
+
+class JigCompletedDataAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        batch_id = request.GET.get('batch_id')
+        lot_id = request.GET.get('lot_id')
+        
+        if not batch_id or not lot_id:
+            return Response({'error': 'batch_id and lot_id are required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            jig_completed = JigCompleted.objects.filter(
+                batch_id=batch_id,
+                lot_id=lot_id
+            ).first()
+            
+            if not jig_completed:
+                return Response({'error': 'No data found for the given batch_id and lot_id'}, status=status.HTTP_404_NOT_FOUND)
+            
+            data = {
+                'id': jig_completed.id,
+                'batch_id': jig_completed.batch_id,
+                'lot_id': jig_completed.lot_id,
+                'user': jig_completed.user.username,
+                'draft_data': jig_completed.draft_data,
+                'updated_at': jig_completed.updated_at,
+                'jig_cases_remaining_count': jig_completed.jig_cases_remaining_count,
+                'updated_lot_qty': jig_completed.updated_lot_qty,
+                'original_lot_qty': jig_completed.original_lot_qty,
+                'jig_id': jig_completed.jig_id,
+                'delink_tray_info': jig_completed.delink_tray_info,
+                'delink_tray_qty': jig_completed.delink_tray_qty,
+                'delink_tray_count': jig_completed.delink_tray_count,
+                'half_filled_tray_info': jig_completed.half_filled_tray_info,
+                'half_filled_tray_qty': jig_completed.half_filled_tray_qty,
+                'jig_capacity': jig_completed.jig_capacity,
+                'broken_hooks': jig_completed.broken_hooks,
+                'loaded_cases_qty': jig_completed.loaded_cases_qty,
+                'draft_status': jig_completed.draft_status,
+                'hold_status': jig_completed.hold_status,
+                'is_multi_model': jig_completed.is_multi_model,
+            }
+            
+            return Response(data, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

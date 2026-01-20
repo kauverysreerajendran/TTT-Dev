@@ -1,6 +1,205 @@
 {% extends "base.html" %} {% load static %} {% block content %}
 {% load stock_filters %} 
 <style>
+
+   /* ===== SORTING STYLES ===== */
+   .table th {
+       position: relative;
+       padding-right: 30px;
+       cursor: pointer;
+       white-space: nowrap;
+   }
+
+   .table th .fa-filter,
+   .table th .fa-sort,
+   .table th .fa-sort-up,
+   .table th .fa-sort-down {
+       position: absolute;
+       right: 8px;
+       top: 50%;
+       transform: translateY(-50%);
+       color: white;
+       font-size: 12px;
+   }
+
+   .table th .fa-sort-up {
+       color: #ffd700 !important; /* Active sort ascending - yellow */
+   }
+
+   .table th .fa-sort-down {
+       color: #ffd700 !important; /* Active sort descending - yellow */
+   }
+
+   .table th:hover .fa-filter,
+   .table th:hover .fa-sort {
+       color: #ffd700 !important;
+   }
+
+   .table th.sortable {
+       cursor: pointer;
+   }
+
+   .table th.sortable:hover {
+       background-color: rgba(255, 255, 255, 0.1);
+   }
+   /* ===== END SORTING STYLES ===== */
+
+   /* ✅ NEW: Tray View Modal Styles for Brass QC Completed */
+   .tray-scan-modal-BrassCompleted {
+      display: none;
+      position: fixed;
+      z-index: 10001;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+   }
+
+   .tray-scan-modal-content-BrassCompleted {
+      background-color: #fefefe;
+      margin: 5% auto;
+      padding: 0;
+      border: none;
+      width: 90%;
+      max-width: 700px;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      animation: slideDown 0.3s ease-out;
+   }
+
+   .tray-scan-modal-header-BrassCompleted {
+      background: linear-gradient(135deg, #028084 0%, #026b6f 100%);
+      color: white;
+      padding: 20px 25px;
+      border-radius: 12px 12px 0 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+   }
+
+   .tray-scan-modal-header-BrassCompleted h4 {
+      margin: 0;
+      font-weight: 600;
+      font-size: 1.3rem;
+   }
+
+   .tray-scan-modal-close-BrassCompleted {
+      color: white;
+      font-size: 28px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: opacity 0.2s ease;
+   }
+
+   .tray-scan-modal-close-BrassCompleted:hover {
+      opacity: 0.7;
+   }
+
+   .tray-scan-modal-body-BrassCompleted {
+      padding: 25px;
+      max-height: 70vh;
+      overflow-y: auto;
+   }
+
+   .modal-info-section {
+      background: #f8f9fa;
+      border: 1px solid #e9ecef;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+   }
+
+   .modal-info-section p {
+      margin: 8px 0;
+      display: flex;
+      align-items: center;
+   }
+
+   .modal-info-section strong {
+      min-width: 140px;
+      color: #2c3e50;
+   }
+
+   .tray-details-section h5 {
+      color: #2c3e50;
+      margin-bottom: 15px;
+      font-weight: 600;
+      border-bottom: 2px solid #028084;
+      padding-bottom: 8px;
+   }
+
+   #trayScanDetails_BrassCompleted.table-grid {
+      display: grid;
+      grid-template-columns: 80px 1fr 120px 150px;
+      gap: 0;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+   }
+
+   #trayScanDetails_BrassCompleted.table-grid > div {
+      padding: 12px 15px;
+      border-right: 1px solid #ddd;
+      border-bottom: 1px solid #ddd;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+   }
+
+   #trayScanDetails_BrassCompleted.table-grid > div:nth-child(4n) {
+      border-right: none;
+   }
+
+   .tray-status-accepted {
+      background-color: #d4edda !important;
+      color: #155724 !important;
+      border-left: 4px solid #28a745 !important;
+      font-weight: 600;
+   }
+
+   .tray-status-rejected {
+      background-color: #f8d7da !important;
+      color: #721c24 !important;
+      border-left: 4px solid #dc3545 !important;
+      font-weight: 600;
+   }
+
+   .tray-status-partial {
+      background-color: #fff3cd !important;
+      color: #856404 !important;
+      border-left: 4px solid #ffc107 !important;
+      font-weight: 600;
+   }
+
+   @keyframes slideDown {
+      from {
+         opacity: 0;
+         transform: translateY(-50px);
+      }
+      to {
+         opacity: 1;
+         transform: translateY(0);
+      }
+   }
+
+   /* Responsive design for modal */
+   @media (max-width: 768px) {
+      .tray-scan-modal-content-BrassCompleted {
+         width: 95%;
+         margin: 10% auto;
+      }
+      
+      #trayScanDetails_BrassCompleted.table-grid {
+         grid-template-columns: 60px 1fr 90px 120px;
+      }
+      
+      .modal-info-section strong {
+         min-width: 120px;
+      }
+   }
+
    /* Rejection remark circle base styling (added) */
    .remark-circle {
    width: 20px;
@@ -454,6 +653,34 @@
    #order-listing th .fa-filter:hover {
    opacity: 1;
    }
+
+   /* Enhanced Column Sorting Styles - Same as Input Screening */
+   .sort-icon, .sort-asc, .sort-desc {
+   color: white !important;
+   font-size: 12px !important;
+   margin-left: 5px;
+   cursor: pointer;
+   }
+
+   .sortable:hover .sort-icon,
+   .sortable:hover .sort-asc, 
+   .sortable:hover .sort-desc {
+   color: #FFD700 !important;
+   }
+
+   .sorted .sort-asc,
+   .sorted .sort-desc {
+   color: #FFD700 !important;
+   }
+
+   .sortable {
+   cursor: pointer;
+   user-select: none;
+   }
+
+   .sortable:hover {
+   background-color: rgba(255, 215, 0, 0.1) !important;
+   }
    #order-listing th:last-child,
    #order-listing td:last-child {
    border-right: none;
@@ -722,85 +949,125 @@
                </div>
                <input type="hidden" id="from-date-hidden-brass" value="{{ from_date }}" />
                <input type="hidden" id="to-date-hidden-brass" value="{{ to_date }}" />
-               <!-- 🔥 END: Date Filter Section -->
+               <!--  END: Date Filter Section -->
                <!-- Table Section -->
                <div class="table-responsive">
                   <table id="order-listing" class="table">
                      <thead>
                         <tr>
                            <th>
-                              S.No <i class="fa fa-filter" aria-hidden="true"></i>
+                              S.No
                            </th>
-                           <th>
+                           <th data-column-index="1" class="sortable">
                               Last<br>Updated
-                              <i class="fa fa-filter" aria-hidden="true"></i>
+                              <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
+                              <i class="fa fa-sort-up sort-asc" style="display: none;" aria-hidden="true"></i>
+                              <i class="fa fa-sort-down sort-desc" style="display: none;" aria-hidden="true"></i>
                            </th>
-                           <th>
+                           <th data-column-index="2" class="sortable">
                               Plating <br> Stk No
-                              <i class="fa fa-filter" aria-hidden="true"></i>
+                              <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
+                              <i class="fa fa-sort-up sort-asc" style="display: none;" aria-hidden="true"></i>
+                              <i class="fa fa-sort-down sort-desc" style="display: none;" aria-hidden="true"></i>
                            </th>
-                           <th>
+                           <th data-column-index="3" class="sortable">
                               Polishing Stk No
-                              <i class="fa fa-filter" aria-hidden="true"></i>
+                              <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
+                              <i class="fa fa-sort-up sort-asc" style="display: none;" aria-hidden="true"></i>
+                              <i class="fa fa-sort-down sort-desc" style="display: none;" aria-hidden="true"></i>
                            </th>
-                           <th>
+                           <th data-column-index="4" class="sortable">
                               Plating Color
-                              <i class="fa fa-filter" aria-hidden="true"></i>
+                              <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
+                              <i class="fa fa-sort-up sort-asc" style="display: none;" aria-hidden="true"></i>
+                              <i class="fa fa-sort-down sort-desc" style="display: none;" aria-hidden="true"></i>
                            </th>
-                           <th>
+                           <th data-column-index="5" class="sortable">
                               Category
-                              <i class="fa fa-filter" aria-hidden="true"></i>
+                              <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
+                              <i class="fa fa-sort-up sort-asc" style="display: none;" aria-hidden="true"></i>
+                              <i class="fa fa-sort-down sort-desc" style="display: none;" aria-hidden="true"></i>
                            </th>
-                           <th>
+                           <th data-column-index="6" class="sortable">
                               Polish Finish
-                              <i class="fa fa-filter" aria-hidden="true"></i>
+                              <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
+                              <i class="fa fa-sort-up sort-asc" style="display: none;" aria-hidden="true"></i>
+                              <i class="fa fa-sort-down sort-desc" style="display: none;" aria-hidden="true"></i>
                            </th>
-                           <th>
+                           <th data-column-index="7" class="sortable">
                               Tray Cate- <br> Capacity
-                              <i class="fa fa-filter" aria-hidden="true"></i>
+                              <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
+                              <i class="fa fa-sort-up sort-asc" style="display: none;" aria-hidden="true"></i>
+                              <i class="fa fa-sort-down sort-desc" style="display: none;" aria-hidden="true"></i>
                            </th>
-                           <th>
+                           <th data-column-index="8" class="sortable">
                               Input Source
-                              <i class="fa fa-filter" aria-hidden="true"></i>
+                              <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
+                              <i class="fa fa-sort-up sort-asc" style="display: none;" aria-hidden="true"></i>
+                              <i class="fa fa-sort-down sort-desc" style="display: none;" aria-hidden="true"></i>
                            </th>
-                           <th>
-                              No of Trays <i class="fa fa-filter" aria-hidden="true"></i>
+                           <th data-column-index="9" class="sortable">
+                              No of Trays
+                              <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
+                              <i class="fa fa-sort-up sort-asc" style="display: none;" aria-hidden="true"></i>
+                              <i class="fa fa-sort-down sort-desc" style="display: none;" aria-hidden="true"></i>
                            </th>
-                           <th>
+                           <th data-column-index="10" class="sortable">
                               Lot Qty
-                              <i class="fa fa-filter" aria-hidden="true"></i>
+                              <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
+                              <i class="fa fa-sort-up sort-asc" style="display: none;" aria-hidden="true"></i>
+                              <i class="fa fa-sort-down sort-desc" style="display: none;" aria-hidden="true"></i>
                            </th>
-                           <th>
+                           <th data-column-index="11" class="sortable">
                               Physical <br> Qty
-                              <i class="fa fa-filter" aria-hidden="true"></i>
+                              <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
+                              <i class="fa fa-sort-up sort-asc" style="display: none;" aria-hidden="true"></i>
+                              <i class="fa fa-sort-down sort-desc" style="display: none;" aria-hidden="true"></i>
                            </th>
-                           <th>
+                           <th data-column-index="12" class="sortable">
                               Accept Qty
-                              <i class="fa fa-filter" aria-hidden="true"></i>
+                              <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
+                              <i class="fa fa-sort-up sort-asc" style="display: none;" aria-hidden="true"></i>
+                              <i class="fa fa-sort-down sort-desc" style="display: none;" aria-hidden="true"></i>
                            </th>
-                           <th>
-                              Reject Qty<i class="fa fa-filter" aria-hidden="true"></i>
+                           <th data-column-index="13" class="sortable">
+                              Reject Qty
+                              <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
+                              <i class="fa fa-sort-up sort-asc" style="display: none;" aria-hidden="true"></i>
+                              <i class="fa fa-sort-down sort-desc" style="display: none;" aria-hidden="true"></i>
                            </th>
-                           <th>
+                           <th data-column-index="14" class="sortable">
                               Process Status
-                              <i class="fa fa-filter" aria-hidden="true"></i>
+                              <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
+                              <i class="fa fa-sort-up sort-asc" style="display: none;" aria-hidden="true"></i>
+                              <i class="fa fa-sort-down sort-desc" style="display: none;" aria-hidden="true"></i>
                            </th>
                            <th>
-                              Action <i class="fa fa-filter" aria-hidden="true"></i>
+                              Action
                            </th>
-                           <th>
+                           <th data-column-index="16" class="sortable">
                               Lot Status
-                              <i class="fa fa-filter" aria-hidden="true"></i>
+                              <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
+                              <i class="fa fa-sort-up sort-asc" style="display: none;" aria-hidden="true"></i>
+                              <i class="fa fa-sort-down sort-desc" style="display: none;" aria-hidden="true"></i>
                            </th>
-                           <th>
+                           <th data-column-index="17" class="sortable">
                               Current Stage
-                              <i class="fa fa-filter" aria-hidden="true"></i>
+                              <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
+                              <i class="fa fa-sort-up sort-asc" style="display: none;" aria-hidden="true"></i>
+                              <i class="fa fa-sort-down sort-desc" style="display: none;" aria-hidden="true"></i>
                            </th>
-                           <th style= "max-width: 100px !important; min-width: 100px !important;">
-                              Remarks <i class="fa fa-filter" aria-hidden="true"></i>
+                           <th data-column-index="18" class="sortable" style= "max-width: 100px !important; min-width: 100px !important;">
+                              Remarks
+                              <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
+                              <i class="fa fa-sort-up sort-asc" style="display: none;" aria-hidden="true"></i>
+                              <i class="fa fa-sort-down sort-desc" style="display: none;" aria-hidden="true"></i>
                            </th>
-                           <th>
-                              Rejection Remarks <i class="fa fa-filter" aria-hidden="true"></i>
+                           <th data-column-index="19" class="sortable">
+                              Rejection Remarks
+                              <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
+                              <i class="fa fa-sort-up sort-asc" style="display: none;" aria-hidden="true"></i>
+                              <i class="fa fa-sort-down sort-desc" style="display: none;" aria-hidden="true"></i>
                            </th>
                         </tr>
                      </thead>
@@ -816,14 +1083,16 @@
                            data-brass-qc-accptance="{{ data.brass_qc_accptance|default:'false' }}"
                            data-brass-qc-rejection="{{ data.brass_qc_rejection|default:'false' }}"
                            data-brass-qc-few-cases-accptance="{{ data.brass_qc_few_cases_accptance|default:'false' }}">
-                           <td {% if data.brass_hold_lot %} class="row-inactive-blur"{% endif %}>
-                           <span style="display:flex; align-items:center; gap:3px;">
-                           <span class="sno-value">{{ page_obj.start_index|add:forloop.counter0 }}</span>
-                           </span>
-                           {% if data.iqf_acceptance or data.send_brass_qc %}
-                           <i class="fa fa-info-circle" style="color: #028084; font-size:13px;" data-bs-toggle="tooltip" data-placement="right" data-bs-original-title="IQF"></i>
-                           {% endif %}
-                           </td>  
+                            <td {% if data.brass_hold_lot %} class="row-inactive-blur"{% endif %}>
+                              <span style="display:flex; align-items:center; gap:3px;">
+                              <span class="sno-value">{{ page_obj.start_index|add:forloop.counter0 }}</span>
+                              </span>
+                              {% if data.send_brass_audit_to_qc %}
+                              <i class="fa fa-info-circle" style="color: #f39c12; font-size:13px;" data-bs-toggle="tooltip" data-placement="right" data-bs-original-title="Audit"></i>
+                              {% elif data.iqf_acceptance %}
+                                <i class="fa fa-info-circle" style="color: #028084; font-size:13px;" data-bs-toggle="tooltip" data-placement="right" data-bs-original-title="IQF"></i>
+                              {% endif %}
+                            </td>  
                            <td style="white-space:normal;word-break:break-all;">
                               {{ data.bq_last_process_date_time|date:"d-M-y"  }}<br>
                               <span style="display:inline-block; margin-top:4px;word-break: break-all;">{{ data.bq_last_process_date_time|date:"h:i A" }}</span>
@@ -857,10 +1126,10 @@
                            <td >{{ data.polishing_stk_no|default:"N/A"|highlight_polish_finish|safe_html }}</td>
                            <td >{{ data.plating_color }}</td>
                            <td >{{ data.category }}</td>
-                           <td >{{data.polish_finish}}</td>
-                           <td >{{data.tray_type}}-{{data.tray_capacity}}</td>
-                           <td >{{data.location__location_name}}</td>
-                           <td >{{data.no_of_trays}}</td>
+                           <td >{{ data.polish_finish }}</td>
+                           <td >{{ data.tray_type }}-{{ data.tray_capacity }}</td>
+                           <td >{{ data.location__location_name }}</td>
+                           <td >{{ data.no_of_trays }}</td>
                            <td>
                               <span class="lot-qty" style="min-width: 30px; text-align: right">{{ data.display_accepted_qty }}</span>
                               <span style="display: inline-flex; align-items: center; gap: 4px;">
@@ -876,7 +1145,7 @@
                               {% if data.brass_qc_accepted_qty_verified %}disabled{% endif %} />
                               </span>
                            </td>
-                           <td>{{data.brass_physical_qty}}</td>
+                           <td>{{ data.brass_physical_qty }}</td>
                            <td >
                               {{ data.brass_qc_accepted_qty|default:0 }}    
                            </td>
@@ -888,7 +1157,7 @@
                               <div class="d-flex">
                                  <!-- Q: Green if brass_qc_accepted_qty_verified, else gray -->
                                  <div
-                                    title="Tray Scan"
+                                    data-bs-toggle="tooltip" data-placement="right" data-bs-original-title="Quantity"
                                     class="d-flex align-items-center justify-content-center rounded-circle ms-1"
                                     style="
                                     width: 25px;
@@ -905,7 +1174,7 @@
                                  </div>
                                  <!-- QC: Green if brass_qc_rejection or brass_qc_accptance, else gray -->
                                  <div
-                                    title="Tray Scan"
+                                    data-bs-toggle="tooltip" data-placement="right" data-bs-original-title="Quality Check"
                                     class="d-flex align-items-center justify-content-center rounded-circle ms-1"
                                     style="
                                     width: 25px;
@@ -984,9 +1253,9 @@
                                  data-moved-to-d-picker="{{ data.Moved_to_D_Picker }}"
                                  data-model-image="{{ data.model_images.0|default:'' }}"
                                  data-tray-qty-list="{{ data.tray_qty_list|default:'[]'|safe }}"
-                                 data-brass-qc-accptance="{{ data.brass_qc_accptance|default:'false' }}"
-                                 data-brass-qc-rejection="{{ data.brass_qc_rejection|default:'false' }}"
-                                 data-brass-qc-few-cases-accptance="{{ data.brass_qc_few_cases_accptance|default:'false' }}"
+                                 data-brass-qc-accptance="{{ data.brass_qc_accptance|yesno:'true,false' }}"
+                                 data-brass-qc-rejection="{{ data.brass_qc_rejection|yesno:'true,false' }}"
+                                 data-brass-qc-few-cases-accptance="{{ data.brass_qc_few_cases_accptance|yesno:'true,false' }}"
                                  data-total-batch-quantity="{{ data.brass_physical_qty }}"
                                  data-missing-qty="{{ data.brass_missing_qty|default:'' }}"
                                  data-physical-qty="{{ data.brass_physical_qty|default:'' }}">
@@ -995,125 +1264,123 @@
                                  style="width: 20px; margin-right: 8px; height: auto; cursor:pointer;" />
                               </a>
                            </td>
-                           <td>
-                              {% if data.brass_audit_accepted_qty_verified or data.iqf_accepted_qty_verified %}
-                              <div class="d-inline-block px-3 fw-semibold text-center rounded-pill"
-                                 style="border: 1px solid #0d5d17; background-color: #c5f9c2; color: #2f801b; font-size: 13px; white-space: nowrap; padding: 5px;">
-                                 Released
-                              </div>
-                              {% else %}
-                              <div class="d-inline-block px-3 fw-semibold text-center rounded-pill"
-                                 style="border: 1px solid #0d5d17; background-color: #F0F5B7; color: #727c08; font-size: 13px; white-space: nowrap; padding: 5px;">
-                                 Yet to release
-                              </div>
-                              {% endif %}
-                           </td>
-                           <td >
+                            <td>
+                                {% if data.brass_audit_accepted_qty_verified or data.iqf_accepted_qty_verified %}
+                                <div class="d-inline-block px-3 fw-semibold text-center rounded-pill"
+                                  style="border: 1px solid #0d5d17; background-color: #c5f9c2; color: #2f801b; font-size: 13px; white-space: nowrap; padding: 5px;">
+                                  Released
+                                </div>
+                                {% else %}
+                                <div class="d-inline-block px-3 fw-semibold text-center rounded-pill"
+                                  style="border: 1px solid #0d5d17; background-color: #F0F5B7; color: #727c08; font-size: 13px; white-space: nowrap; padding: 5px;">
+                                  Yet to release
+                                </div>
+                                {% endif %}
+                            </td>
+                            <td >
                               <div class="d-inline-block px-3 fw-semibold text-center rounded-pill"
                                  style="border: 1px solid #d1edf3; background-color: #d1edf3; color: #033b5d; font-size: 13px; white-space: nowrap; padding: 5px;">
                                  {{ data.last_process_module|default:"N/A" }}
                               </div>
-                           </td>
-                          <!-- VoiceRec & Chat with tooltip (audio remark) -->
-                           <td>
-                              {% if not data.brass_qc_accptance and not data.brass_qc_rejection and not data.brass_accepted_tray_scan_status and not data.brass_qc_few_cases_accptance %}
-                                <a href="#" title="Add Audio Remark" class="remark-tooltip-trigger" style="display: inline-flex; align-items: center; height: 28px; margin-left: 0; position: relative; cursor: pointer;">
-                                  <img src="{% static 'assets/icons/rec.png' %}" alt="VoiceRec" style="width: 20px; height: 20px"/>
-                                  <div class="remark-tooltip" style="position: absolute; top: 110%; left: 50%; transform: translateX(-50%); width: 300px; background: #fff; border: 1px solid #ccc; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0.3s ease; padding: 15px; z-index: 1000;">
-                                    <!-- Audio recording UI placeholder -->
-                                    <div style="display: flex; align-items: center; gap: 10px;">
-                                      <button type="button" style="background: #28a745; color: #fff; border: none; border-radius: 50%; width: 40px; height: 40px; font-size: 20px; display: flex; align-items: center; justify-content: center;">
-                                        <i class="fa fa-microphone"></i>
-                                      </button>
-                                      <span style="font-size: 14px; color: #333;">Hold to record audio</span>
-                                    </div>
-                                    <div style="text-align: right; margin-top: 10px;">
-                                      <button type="button" style="background-color: #007bff; color: #fff; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 14px;">
-                                        <i class="fa fa-send"></i>
-                                      </button>
-                                    </div>
-                                  </div>
-                                </a>
-
-                       
-                                <!-- Display remark text as tooltip on hover and green icon if exists -->
-                                {% if data.Bq_pick_remarks %}
-                                  <span style="margin-left:8px;">
-                                    <img src="{% static 'assets/icons/chat_icon.png' %}"
-                                         alt="Chat"
-                                         style="width: 20px; height: 20px; background-color:#28a745; border-radius:4px; cursor:pointer;"
-                                         title="{{ data.Bq_pick_remarks|escape }}"
-                                         onmouseenter="showLotRemarkTooltip(this, '{{ data.Bq_pick_remarks|escapejs }}')"
-                                         onmouseleave="hideLotRemarkTooltip(this)" />
-                                  </span>
-                                {% else %}
-                                  <span style="margin-left:8px;">
-                                    <img src="{% static 'assets/icons/chat_icon.png' %}"
-                                         alt="Chat"
-                                         style="width: 20px; height: 20px; filter: grayscale(1) opacity(0.5); cursor:default;"
-                                         title="No remarks" />
-                                  </span>
-                                {% endif %}
-                              {% else %}
-                                <!-- Audio Remark Icon (disabled) -->
-                                <span title="Disabled after moved" style="display: inline-flex; align-items: center; height: 28px; margin-left: 0; opacity: 0.5; pointer-events: none;">
-                                  <img src="{% static 'assets/icons/rec.png' %}" alt="VoiceRec Disabled" style="width: 20px; height: 20px; filter: grayscale(1) opacity(0.5);" />
-                                </span>
-{% if data.Bq_pick_remarks %}
-  <span style="margin-left:8px;">
-    <img src="{% static 'assets/icons/chat_icon.png' %}"
-         alt="Chat"
-         style="width: 20px; height: 20px; filter: invert(37%) sepia(87%) saturate(469%) hue-rotate(89deg) brightness(95%) contrast(92%); border-radius:4px; cursor:pointer; margin-bottom: 5px;"
-         title="{{ data.Bq_pick_remarks|escape }}"
-         onmouseenter="showLotRemarkTooltip(this, '{{ data.Bq_pick_remarks|escapejs }}')"
-         onmouseleave="hideLotRemarkTooltip(this)" />
-  </span>
-{% else %}
-  <span style="margin-left:8px;">
-    <img src="{% static 'assets/icons/chat_icon.png' %}"
-         alt="Chat"
-         style="width: 20px; height: 20px; filter: grayscale(1) opacity(0.5); border-radius:4px; cursor:default; margin-bottom: 5px;"
-         title="No remarks" />
-  </span>
-{% endif %}
-                              {% endif %}
                             </td>
+                            <!-- VoiceRec & Chat with tooltip (audio remark) -->
+                            <td>
+                                {% if not data.brass_qc_accptance and not data.brass_qc_rejection and not data.brass_accepted_tray_scan_status and not data.brass_qc_few_cases_accptance %}
+                                  <a href="#" title="Add Audio Remark" class="remark-tooltip-trigger" style="display: inline-flex; align-items: center; height: 28px; margin-left: 0; position: relative; cursor: pointer;">
+                                    <img src="{% static 'assets/icons/rec.png' %}" alt="VoiceRec" style="width: 20px; height: 20px"/>
+                                    <div class="remark-tooltip" style="position: absolute; top: 110%; left: 50%; transform: translateX(-50%); width: 300px; background: #fff; border: 1px solid #ccc; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0.3s ease; padding: 15px; z-index: 1000;">
+                                      <!-- Audio recording UI placeholder -->
+                                      <div style="display: flex; align-items: center; gap: 10px;">
+                                        <button type="button" style="background: #28a745; color: #fff; border: none; border-radius: 50%; width: 40px; height: 40px; font-size: 20px; display: flex; align-items: center; justify-content: center;">
+                                          <i class="fa fa-microphone"></i>
+                                        </button>
+                                        <span style="font-size: 14px; color: #333;">Hold to record audio</span>
+                                      </div>
+                                      <div style="text-align: right; margin-top: 10px;">
+                                        <button type="button" style="background-color: #007bff; color: #fff; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 14px;">
+                                          <i class="fa fa-send"></i>
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </a>
 
-
-                           <!-- Rejection Remarks Column -->
-                           <td>
-                              {% if data.rejection_remarks_list %}
-                              <div class="rejection-remarks-container">
-                                 <!-- Show first 3 circles (first letter of each reason) -->
-                                 {% for remark in data.rejection_remarks_list|slice:":3" %}
-                                 <div class="remark-circle"
-                                    title="{{ remark.reason }}: {{ remark.qty }}"
-                                    data-reason="{{ remark.reason|default:''|escapejs }}"
-                                    data-lot-id="{{ data.stock_lot_id }}"
-                                    data-index="{{ forloop.counter0 }}">
-                                    {{ remark.reason|default:"?"|slice:":1"|upper }}
-                                 </div>
-                                 {% endfor %}
-                                 {% if data.rejection_remarks_list|length > 3 %}
-                                 <div class="expand-rejection-remarks"
-                                    data-lot-id="{{ data.stock_lot_id }}"
-                                    title="View all {{ data.rejection_remarks_list|length }} rejection remarks">
-                                    <i class="fa fa-chevron-right" aria-hidden="true"></i>
-                                 </div>
-                                 {% endif %}
-                              </div>
-                              {% else %}
-                              <span style="color: #7f8c8d; font-size: 12px; font-weight: 500;">No Rejections Remarks</span>
-                              {% endif %}
-                              <!-- Lot Remarks below (always shown as second line in this cell) -->
-                              <div style="margin-top: 4px; font-size: 12px; color: #007bff;">
-                                 {% if data.lot_remarks %}
-                                 <span style="word-break: break-word;">{{ data.lot_remarks|truncatechars:50 }}</span>
-                                 {% else %}
-                                 <span style="color: #7f8c8d; font-weight: 500;">No Lot Remarks</span>
-                                 {% endif %}
-                              </div>
-                           </td>
+                        
+                                  <!-- Display remark text as tooltip on hover and green icon if exists -->
+                                  {% if data.Bq_pick_remarks %}
+                                    <span style="margin-left:8px;">
+                                      <img src="{% static 'assets/icons/chat_icon.png' %}"
+                                          alt="Chat"
+                                          style="width: 20px; height: 20px; background-color:#28a745; border-radius:4px; cursor:pointer;"
+                                          title="{{ data.Bq_pick_remarks|escape }}"
+                                          onmouseenter="showLotRemarkTooltip(this, '{{ data.Bq_pick_remarks|escapejs }}')"
+                                          onmouseleave="hideLotRemarkTooltip(this)" />
+                                    </span>
+                                  {% else %}
+                                    <span style="margin-left:8px;">
+                                      <img src="{% static 'assets/icons/chat_icon.png' %}"
+                                          alt="Chat"
+                                          style="width: 20px; height: 20px; filter: grayscale(1) opacity(0.5); cursor:default;"
+                                          title="No remarks" />
+                                    </span>
+                                  {% endif %}
+                                {% else %}
+                                  <!-- Audio Remark Icon (disabled) -->
+                                  <span title="Disabled after moved" style="display: inline-flex; align-items: center; height: 28px; margin-left: 0; opacity: 0.5; pointer-events: none;">
+                                    <img src="{% static 'assets/icons/rec.png' %}" alt="VoiceRec Disabled" style="width: 20px; height: 20px; filter: grayscale(1) opacity(0.5);" />
+                                  </span>
+                                  {% if data.Bq_pick_remarks %}
+                                    <span style="margin-left:8px;">
+                                      <img src="{% static 'assets/icons/chat_icon.png' %}"
+                                          alt="Chat"
+                                          style="width: 20px; height: 20px; filter: invert(37%) sepia(87%) saturate(469%) hue-rotate(89deg) brightness(95%) contrast(92%); border-radius:4px; cursor:pointer; margin-bottom: 5px;"
+                                          title="{{ data.Bq_pick_remarks|escape }}"
+                                          onmouseenter="showLotRemarkTooltip(this, '{{ data.Bq_pick_remarks|escapejs }}')"
+                                          onmouseleave="hideLotRemarkTooltip(this)" />
+                                    </span>
+                                    {% else %}
+                                    <span style="margin-left:8px;">
+                                      <img src="{% static 'assets/icons/chat_icon.png' %}"
+                                          alt="Chat"
+                                          style="width: 20px; height: 20px; filter: grayscale(1) opacity(0.5); border-radius:4px; cursor:default; margin-bottom: 5px;"
+                                          title="No remarks" />
+                                    </span>
+                                  {% endif %}
+                                {% endif %}
+                            </td>
+                            <!-- Rejection Remarks Column -->
+                            <td>
+                                {% if data.rejection_remarks_list %}
+                                <div class="rejection-remarks-container">
+                                  <!-- Show first 3 circles (first letter of each reason) -->
+                                  {% for remark in data.rejection_remarks_list|slice:":3" %}
+                                  <div class="remark-circle"
+                                      title="{{ remark.reason }}: {{ remark.qty }}"
+                                      data-reason="{{ remark.reason|default:''|escapejs }}"
+                                      data-lot-id="{{ data.stock_lot_id }}"
+                                      data-index="{{ forloop.counter0 }}">
+                                      {{ remark.reason|default:"?"|slice:":1"|upper }}
+                                  </div>
+                                  {% endfor %}
+                                  {% if data.rejection_remarks_list|length > 3 %}
+                                  <div class="expand-rejection-remarks"
+                                      data-lot-id="{{ data.stock_lot_id }}"
+                                      title="View all {{ data.rejection_remarks_list|length }} rejection remarks">
+                                      <i class="fa fa-chevron-right" aria-hidden="true"></i>
+                                  </div>
+                                  {% endif %}
+                                </div>
+                                {% else %}
+                                <span style="color: #7f8c8d; font-size: 12px; font-weight: 500;">No Rejections Remarks</span>
+                                {% endif %}
+                                <!-- Lot Remarks below (always shown as second line in this cell) -->
+                                <div style="margin-top: 4px; font-size: 12px; color: #007bff;">
+                                  {% if data.lot_remarks %}
+                                  <span style="word-break: break-word;">{{ data.lot_remarks|truncatechars:50 }}</span>
+                                  {% else %}
+                                  <span style="color: #7f8c8d; font-weight: 500;">No Lot Remarks</span>
+                                  {% endif %}
+                                </div>
+                            </td>
                         </tr>
                         {% endfor%}
                      </tbody>
@@ -1121,25 +1388,25 @@
                   <div id="trayScanModal_DayPlanning" class="tray-scan-modal-DayPlanning"style="display:none">
                      <div class="tray-scan-modal-DayPlanning-content">
                         <span id="closeTrayScanModal_DayPlanning" class="tray-scan-close-readonly">&times;</span>
-                        <div class="modal-top-header" style="display: flex; align-items: center; gap: 20px; padding-bottom: 10px;">
-                           <div class="user-profile" style="display: flex; align-items: center; gap: 8px">
+                          <div class="modal-top-header" style="display: flex; align-items: center; gap: 20px; padding-bottom: 10px;">
+                            <div class="user-profile" style="display: flex; align-items: center; gap: 8px">
                               <img src="/static/assets/images/imagePlaceholder.png" alt="User Profile" style="border-radius: 50%; width: 50px; height: 50px; object-fit: cover;" />
                               <!-- Model No and Lot Qty in same line -->
-                              <div style="display: flex; flex-direction: column; gap: 2px;">
-                                 <div style="display: flex; align-items: center; gap: 15px;">
+                                <div style="display: flex; flex-direction: column; gap: 2px;">
+                                  <div style="display: flex; align-items: center; gap: 15px;">
                                     <div style="display: flex; align-items: center; gap: 8px;">
                                        <span style="font-weight: bold; color: #666;">Model No:</span>
                                        <h6 id="modalModelNo_DayPlanning" style="margin: 0; color: #028084; font-weight: bold;">(Fetch Dynamically)</h6>
                                     </div>
-                                 </div>
-                                 <p style="margin: 0 0 0 2px;">
+                                  </div>
+                                  <p style="margin: 0 0 0 2px;">
                                     Lot Qty: <span id="modalLotQty_DayPlanning" style="font-weight:bold; color:#e67e22;"></span> /
                                     Missing Qty: <span id="modalMissingQty_DayPlanning" style="font-weight:bold; color:#d32f2f;"></span> /
                                     Physical Qty: <span id="modalPhysicalQty_DayPlanning" style="font-weight:bold; color:#388e3c;"></span>
-                                 </p>
-                              </div>
-                           </div>
-                        </div>
+                                  </p>
+                                </div>
+                            </div>
+                          </div>
                         <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
                            <h5 style="text-align: center; margin: 0; flex: 1; font-weight: 600; color:#595959">
                               Brass QC - Tray Scan 
@@ -1286,10 +1553,10 @@
    </div>
 </div>
 {% block script %}
-<!-- 🔥 NEW: Date Filter JavaScript for Brass Table -->
+<!-- 🔥 NEW: Enhanced Date Filter JavaScript for Brass QC Completed Table with Future Date Validation -->
 <script nonce="{{ csp_nonce }}">
    document.addEventListener("DOMContentLoaded", function() {
-     console.log('🔄 Initializing HTML5 date filtering for Brass QC Completed Table...');
+     console.log('🔄 Initializing enhanced date filtering with future date validation for Brass QC Completed Table...');
      
      // ✅ Use Brass-specific IDs
      const fromInput = document.getElementById('from-date-brass');
@@ -1305,6 +1572,131 @@
      console.log('- Clear button:', clearBtn);
      console.log('- Filter indicator:', filterIndicatorBrass);
      
+     // Get today's date in YYYY-MM-DD format
+     const today = new Date();
+     const todayString = today.getFullYear() + '-' + 
+                         String(today.getMonth() + 1).padStart(2, '0') + '-' + 
+                         String(today.getDate()).padStart(2, '0');
+     
+     console.log('📅 Today:', todayString);
+     
+     // ✅ Set max attribute to today's date for both inputs
+     if (fromInput) {
+       fromInput.max = todayString;
+       console.log('📅 Set max date for from input:', fromInput.max);
+     }
+     if (toInput) {
+       toInput.max = todayString;
+       console.log('📅 Set max date for to input:', toInput.max);
+     }
+     
+     // ✅ Enhanced validation function
+     function validateDateInput(input, inputName) {
+       const selectedDate = input.value;
+       const selectedDateObj = new Date(selectedDate);
+       const todayObj = new Date(todayString);
+       
+       console.log(`🔍 Validating ${inputName}:`, selectedDate);
+       console.log(`🔍 Selected date object:`, selectedDateObj);
+       console.log(`🔍 Today object:`, todayObj);
+       
+       // Reset styles first
+       input.style.backgroundColor = '';
+       input.style.borderColor = '';
+       input.style.color = '';
+       
+       if (selectedDate && selectedDateObj > todayObj) {
+         console.log(`❌ ${inputName} is in the future!`);
+         
+         // Apply red styling
+         input.style.backgroundColor = '#ffebee';
+         input.style.borderColor = '#f44336';
+         input.style.color = '#d32f2f';
+         
+         // Show notification
+         if (typeof Swal !== 'undefined') {
+           Swal.fire({
+             icon: 'error',
+             title: 'Invalid Date Selection',
+             text: `${inputName} cannot be a future date. Please select today or an earlier date.`,
+             timer: 3000,
+             showConfirmButton: false,
+             toast: true,
+             position: 'top-end'
+           });
+         } else {
+           // Fallback notification
+           showNotification(`${inputName} cannot be a future date!`, 'error');
+         }
+         
+         // Reset to today's date
+         input.value = todayString;
+         
+         // Remove red styling after reset
+         setTimeout(() => {
+           input.style.backgroundColor = '';
+           input.style.borderColor = '#028084';
+           input.style.color = '#028084';
+         }, 100);
+         
+         return false;
+       }
+       
+       // Valid date - apply success styling
+       if (selectedDate) {
+         input.style.backgroundColor = '#e8f5e8';
+         input.style.borderColor = '#28a745';
+         input.style.color = '#155724';
+         
+         // Remove success styling after 2 seconds
+         setTimeout(() => {
+           input.style.backgroundColor = '';
+           input.style.borderColor = '#028084';
+           input.style.color = '#028084';
+         }, 2000);
+       }
+       
+       return true;
+     }
+     
+     // ✅ Fallback notification function
+     function showNotification(message, type) {
+       // Create notification element
+       const notification = document.createElement('div');
+       notification.style.cssText = `
+         position: fixed;
+         top: 20px;
+         right: 20px;
+         background: ${type === 'error' ? '#f44336' : '#4caf50'};
+         color: white;
+         padding: 12px 20px;
+         border-radius: 6px;
+         z-index: 10000;
+         font-weight: 600;
+         box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+         animation: slideIn 0.3s ease;
+       `;
+       notification.textContent = message;
+       
+       // Add animation
+       const style = document.createElement('style');
+       style.textContent = `
+         @keyframes slideIn {
+           from { transform: translateX(100%); opacity: 0; }
+           to { transform: translateX(0); opacity: 1; }
+         }
+       `;
+       document.head.appendChild(style);
+       
+       document.body.appendChild(notification);
+       
+       // Remove after 3 seconds
+       setTimeout(() => {
+         notification.remove();
+         style.remove();
+       }, 3000);
+     }
+
      // Check if we're in filter mode by looking at URL parameters
      const urlParams = new URLSearchParams(window.location.search);
      const hasFromDateParam = urlParams.has('from_date') && urlParams.get('from_date');
@@ -1322,56 +1714,90 @@
        console.log('No filter mode for Brass table - hiding indicator');
      }
      
-     // ✅ Set default dates if not provided by Django
-     function setDefaultDates() {
-       const today = new Date();
+     // ✅ Set dates based on URL parameters or defaults
+     function setDatesFromUrlOrDefaults() {
        const twoDaysAgo = new Date();
-       twoDaysAgo.setDate(today.getDate() - 2);
+       twoDaysAgo.setDate(today.getDate() - 1);
        
-       // Format dates as YYYY-MM-DD for HTML5 date inputs
        const formatDate = (date) => {
          return date.getFullYear() + '-' + 
                 String(date.getMonth() + 1).padStart(2, '0') + '-' + 
                 String(date.getDate()).padStart(2, '0');
        };
        
-       // Only set defaults if inputs are completely empty and we're not in filter mode
-       if (fromInput && !fromInput.value && !isFilterMode) {
-         fromInput.value = formatDate(twoDaysAgo);
-         console.log('📅 Set default from date:', fromInput.value);
-       }
-       
-       if (toInput && !toInput.value && !isFilterMode) {
-         toInput.value = formatDate(today);
-         console.log('📅 Set default to date:', toInput.value);
+       // If in filter mode, populate inputs with URL parameter values
+       if (isFilterMode) {
+         const fromDateParam = urlParams.get('from_date');
+         const toDateParam = urlParams.get('to_date');
+         
+         if (fromInput && fromDateParam) {
+           fromInput.value = fromDateParam;
+           validateDateInput(fromInput, 'From Date');
+           console.log('📅 Set from date from URL:', fromInput.value);
+         }
+         
+         if (toInput && toDateParam) {
+           toInput.value = toDateParam;
+           validateDateInput(toInput, 'To Date');
+           console.log('📅 Set to date from URL:', toInput.value);
+         }
+       } else {
+         // Set defaults only if not in filter mode and inputs are empty
+         if (fromInput && !fromInput.value) {
+           fromInput.value = formatDate(twoDaysAgo);
+           console.log('📅 Set default from date:', fromInput.value);
+         }
+         
+         if (toInput && !toInput.value) {
+           toInput.value = formatDate(today);
+           console.log('📅 Set default to date:', toInput.value);
+         }
        }
      }
      
-     // Call the function to set default dates
-     if (!isFilterMode) {
-       setDefaultDates();
-     }
+     // Call the function to set dates
+     setDatesFromUrlOrDefaults();
      
-     // ✅ Date validation
+     // ✅ Enhanced date validation with future date checking
      if (fromInput && toInput) {
+       // Add event listeners for real-time validation
        fromInput.addEventListener('change', function() {
          console.log('📅 From date changed:', fromInput.value);
-         if (toInput.value && fromInput.value > toInput.value) {
-           toInput.value = fromInput.value;
+         
+         // Validate future date
+         if (validateDateInput(fromInput, 'From Date')) {
+           // If valid, continue with range validation
+           if (toInput.value && fromInput.value > toInput.value) {
+             toInput.value = fromInput.value;
+           }
+           toInput.min = fromInput.value;
          }
-         toInput.min = fromInput.value;
        });
        
        toInput.addEventListener('change', function() {
          console.log('📅 To date changed:', toInput.value);
-         if (fromInput.value && toInput.value < fromInput.value) {
-           fromInput.value = toInput.value;
+         
+         // Validate future date
+         if (validateDateInput(toInput, 'To Date')) {
+           // If valid, continue with range validation
+           if (fromInput.value && toInput.value < fromInput.value) {
+             fromInput.value = toInput.value;
+           }
+           fromInput.max = toInput.value;
          }
-         fromInput.max = toInput.value;
+       });
+       
+       // Also add input event listeners for immediate feedback
+       fromInput.addEventListener('input', function() {
+         validateDateInput(fromInput, 'From Date');
+       });
+       
+       toInput.addEventListener('input', function() {
+         validateDateInput(toInput, 'To Date');
        });
      }
      
-     // ✅ Search functionality
+     // ✅ Enhanced search functionality with future date validation
      if (searchBtn) {
        searchBtn.addEventListener('click', function(e) {
          e.preventDefault();
@@ -1393,6 +1819,15 @@
            } else {
              alert('Please select both start and end dates.');
            }
+           return;
+         }
+         
+         // Validate both dates are not in the future
+         const fromDateValid = validateDateInput(fromInput, 'From Date');
+         const toDateValid = validateDateInput(toInput, 'To Date');
+         
+         if (!fromDateValid || !toDateValid) {
+           console.log('❌ Search blocked due to future date(s)');
            return;
          }
          
@@ -1436,7 +1871,7 @@
        console.error('❌ Brass Clear button not found with ID: clear-date-filter-brass');
      }
      
-     console.log('✅ HTML5 date filtering initialization complete for Brass QC Completed Table');
+     console.log('✅ Enhanced date filtering with future date validation initialization complete for Brass QC Completed Table');
    });
 </script>
 <script nonce="{{ csp_nonce }}">
@@ -1952,23 +2387,17 @@
            // ✅ UPDATED: Use correct endpoint name
            const resp = await fetch(`/brass_qc/AfterCheck_pick_CompleteTable_tray_id_list/?${params}`);
            const result = await resp.json();
-           console.log('🔍 [API Response] Full result:', result);
            if (result.success) {
              traysData = result.trays || [];
              rejectionSummary = result.rejection_summary || {};
              console.log('✅ Fetched trays with rejection data:', traysData);
              console.log('📊 Rejection summary:', rejectionSummary);
-           } else {
-             console.error('❌ API returned success=false:', result);
            }
          } catch (e) {
            console.error('❌ Error fetching tray data:', e);
          }
    
    function buildTableHTML(showValidationColumn = false) {
-   console.log('🔍 [buildTableHTML] Starting with traysData:', traysData);
-   console.log('🔍 [buildTableHTML] traysData length:', traysData.length);
-   
    let html = `
    <table class="table table-bordered table-sm" style="width:100%; margin-bottom:0;">
      <thead>
@@ -1986,8 +2415,6 @@
    
    // --- ACCEPTED TRAYS ---
    const acceptedTrays = traysData.filter(tray => !tray.rejected_tray && !tray.delink_tray);
-   console.log('🔍 [buildTableHTML] Accepted trays:', acceptedTrays.length);
-   console.log('🔍 [buildTableHTML] Accepted trays data:', acceptedTrays);
    
    if (acceptedTrays.length > 0) {
    html += `
@@ -1998,11 +2425,11 @@
      </tr>
    `;
    
-   // Find top tray and render other accepted trays...
-   const topTray = acceptedTrays.find(tray => tray.ip_top_tray || tray.top_tray);
+   // Find top tray (prefer server flag `is_top_tray` if present)
+   const topTray = acceptedTrays.find(t => t.is_top_tray) || acceptedTrays.find(t => t.ip_top_tray) || acceptedTrays.find(t => t.top_tray);
    
    if (topTray) {
-     let displayQuantity = topTray.ip_top_tray_qty ?? topTray.tray_quantity;
+     let displayQuantity = (topTray.ip_top_tray_qty ?? topTray.top_tray_qty ?? topTray.tray_quantity);
      html += `
        <tr class="top-tray-row" style="background:#e3f2fd;">
          <td>${rowCounter} (Top Tray)</td>
@@ -2019,7 +2446,7 @@
      rowCounter++;
    }
    
-   acceptedTrays.filter(tray => !(tray.ip_top_tray || tray.top_tray)).forEach(tray => {
+   acceptedTrays.filter(tray => !(tray.is_top_tray || tray.ip_top_tray || tray.top_tray)).forEach(tray => {
      let displayQuantity = tray.ip_top_tray_qty ?? tray.tray_quantity;
      html += `
        <tr>
@@ -2039,15 +2466,15 @@
    }
    
    // --- REJECTED TRAYS ---
-   const rejectedTrays = traysData.filter(tray => tray.rejected_tray && !tray.delink_tray && !tray.is_reused_tray);
-   
+   const rejectedTrays = traysData.filter(tray => tray.rejected_tray && !tray.delink_tray);
+
    // ✅ Sort by tray quantity ascending
    const sortedRejectedTrays = rejectedTrays.slice().sort((a, b) => {
    const qtyA = a.ip_top_tray_qty ?? a.tray_quantity ?? 0;
    const qtyB = b.ip_top_tray_qty ?? b.tray_quantity ?? 0;
    return qtyA - qtyB;
    });
-   
+
    if (sortedRejectedTrays.length > 0) {
    html += `
      <tr style="background-color: #ffebee; font-weight: bold;">
@@ -2056,13 +2483,17 @@
        </td>
      </tr>
    `;
-   sortedRejectedTrays.forEach(tray => {
-     let displayQuantity = tray.ip_top_tray_qty ?? tray.tray_quantity;
+
+   // Find top tray (prefer server flag `is_top_tray` if present)
+   const topRejectedTray = sortedRejectedTrays.find(t => t.is_top_tray) || sortedRejectedTrays.find(t => t.ip_top_tray) || sortedRejectedTrays.find(t => t.top_tray);
+
+   if (topRejectedTray) {
+     let displayQuantity = (topRejectedTray.ip_top_tray_qty ?? topRejectedTray.top_tray_qty ?? topRejectedTray.tray_quantity);
      html += `
-       <tr>
-         <td>${rowCounter}</td>
+       <tr class="top-tray-row" style="background:#ffebee;">
+         <td>${rowCounter} (Top Tray)</td>
          <td>
-           <input type="text" class="form-control" value="${tray.tray_id || ''}" readonly style="width: 100%;" />
+           <input type="text" class="form-control" value="${topRejectedTray.tray_id || ''}" readonly style="width: 100%;" />
            <span style="background: #f44336; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">REJECTED</span>
          </td>
          <td>
@@ -2072,35 +2503,16 @@
        </tr>
      `;
      rowCounter++;
-   });
    }
-   
-   // --- RE-USED TRAYS ---
-   const reusedTrays = traysData.filter(tray => tray.is_reused_tray && !tray.delink_tray);
-   
-   // ✅ Sort by tray quantity ascending
-   const sortedReusedTrays = reusedTrays.slice().sort((a, b) => {
-   const qtyA = a.ip_top_tray_qty ?? a.tray_quantity ?? 0;
-   const qtyB = b.ip_top_tray_qty ?? b.tray_quantity ?? 0;
-   return qtyA - qtyB;
-   });
-   
-   if (sortedReusedTrays.length > 0) {
-   html += `
-     <tr style="background-color: #e8f5e8; font-weight: bold;">
-       <td colspan="${showValidationColumn ? '4' : '3'}" style="text-align: center; color: #2e7d32; padding: 8px;">
-         🔄 RE-USED TRAYS
-       </td>
-     </tr>
-   `;
-   sortedReusedTrays.forEach(tray => {
+
+   sortedRejectedTrays.filter(tray => !(tray.is_top_tray || tray.ip_top_tray || tray.top_tray)).forEach(tray => {
      let displayQuantity = tray.ip_top_tray_qty ?? tray.tray_quantity;
      html += `
        <tr>
          <td>${rowCounter}</td>
          <td>
            <input type="text" class="form-control" value="${tray.tray_id || ''}" readonly style="width: 100%;" />
-           <span style="background: #4caf50; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">RE-USED</span>
+           <span style="background: #f44336; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 5px;">REJECTED</span>
          </td>
          <td>
            <input type="number" class="form-control" value="${displayQuantity || ''}" readonly style="width: 100%;" />
@@ -2162,6 +2574,7 @@
      const closeBtn = document.getElementById("closeTrayScanModal_DayPlanning");
      if (closeBtn) {
        closeBtn.addEventListener("click", function () {
+          window.location.reload();
          const modal = document.getElementById("trayScanModal_DayPlanning");
          if (modal) {
            modal.classList.remove("open");
@@ -2493,217 +2906,220 @@
 </script>
 <!-- Plating Stk - Image hover - fixed position while hitting the Plating Stk No -->
 <script nonce="{{ csp_nonce }}">
-   document.addEventListener("DOMContentLoaded", function () {
-     let openTooltip = null;
-   
-     // Helper function to completely close a tooltip
-     function closeTooltip(tooltip, trigger) {
-       if (tooltip) {
-         console.log('🔴 Closing tooltip completely');
-         
-         // Remove pinned class
-         tooltip.classList.remove("pinned");
-         
-         // Hide the entire tooltip completely
-         tooltip.style.opacity = "0";
-         tooltip.style.pointerEvents = "none";
-         tooltip.style.visibility = "hidden";
-         tooltip.style.display = "none"; // ✅ ADDED: Force display none
-         
-         // Hide buttons
-         const infoBtn = tooltip.querySelector('.info-btn');
-         const closeBtn = tooltip.querySelector('.close-btn');
-         if (infoBtn) infoBtn.style.display = 'none';
-         if (closeBtn) closeBtn.style.display = 'none';
-         
-         // Remove visual indicator from trigger
-         if (trigger) {
-           trigger.style.backgroundColor = '';
-           trigger.style.borderRadius = '';
-         }
-         
-         // Clear global reference
-         openTooltip = null;
-         
-         console.log('✅ Tooltip completely closed');
-       }
-     }
-   
-     // Tooltip show/hide logic
-     document.querySelectorAll(".model-hover-trigger").forEach(function (trigger) {
-       const tooltip = trigger.querySelector(".model-image-tooltip");
-   
-       trigger.addEventListener("mouseenter", function () {
-         if (tooltip && !tooltip.classList.contains("pinned")) {
-           tooltip.style.display = "flex"; // ✅ ADDED: Reset display
-           tooltip.style.visibility = "visible"; // ✅ ADDED: Reset visibility
-           tooltip.style.opacity = "1";
-           tooltip.style.pointerEvents = "auto";
-           
-           // Show Info and Close buttons on hover
-           const infoBtn = tooltip.querySelector('.info-btn');
-           const closeBtn = tooltip.querySelector('.close-btn');
-           if (infoBtn) infoBtn.style.display = 'block';
-           if (closeBtn) closeBtn.style.display = 'block';
-         }
-       });
-   
-       trigger.addEventListener("mouseleave", function () {
-         if (tooltip && !tooltip.classList.contains("pinned")) {
-           tooltip.style.opacity = "0";
-           tooltip.style.pointerEvents = "none";
-           
-           // Hide Info and Close buttons when not hovering and not pinned
-           const infoBtn = tooltip.querySelector('.info-btn');
-           const closeBtn = tooltip.querySelector('.close-btn');
-           if (infoBtn) infoBtn.style.display = 'none';
-           if (closeBtn) closeBtn.style.display = 'none';
-         }
-       });
-   
-       // Keep tooltip visible when hovering over it
-       if (tooltip) {
-         tooltip.addEventListener("mouseenter", function () {
-           if (!tooltip.classList.contains("pinned")) {
-             tooltip.style.display = "flex"; // ✅ ADDED: Reset display
-             tooltip.style.visibility = "visible"; // ✅ ADDED: Reset visibility
-           }
-           tooltip.style.opacity = "1";
-           tooltip.style.pointerEvents = "auto";
-           
-           // Keep buttons visible when hovering over tooltip
-           const infoBtn = tooltip.querySelector('.info-btn');
-           const closeBtn = tooltip.querySelector('.close-btn');
-           if (infoBtn) infoBtn.style.display = 'block';
-           if (closeBtn) closeBtn.style.display = 'block';
-         });
-   
-         tooltip.addEventListener("mouseleave", function () {
-           if (!tooltip.classList.contains("pinned")) {
-             tooltip.style.opacity = "0";
-             tooltip.style.pointerEvents = "none";
-             
-             // Hide buttons when leaving tooltip and not pinned
-             const infoBtn = tooltip.querySelector('.info-btn');
-             const closeBtn = tooltip.querySelector('.close-btn');
-             if (infoBtn) infoBtn.style.display = 'none';
-             if (closeBtn) closeBtn.style.display = 'none';
-           }
-         });
-       }
-   
-       trigger.addEventListener("click", function (e) {
-         e.stopPropagation();
-   
-         if (tooltip) {
-           // Close any previously opened tooltip
-           if (openTooltip && openTooltip !== tooltip) {
-             const prevTrigger = openTooltip.closest('.model-hover-trigger');
-             closeTooltip(openTooltip, prevTrigger);
-           }
-   
-           tooltip.classList.add("pinned");
-           tooltip.style.display = "flex"; // ✅ ADDED: Ensure display
-           tooltip.style.visibility = "visible"; // ✅ ADDED: Ensure visibility
-           tooltip.style.opacity = "1";
-           tooltip.style.pointerEvents = "auto";
-           openTooltip = tooltip;
-           
-           // Keep buttons visible when pinned
-           const infoBtn = tooltip.querySelector('.info-btn');
-           const closeBtn = tooltip.querySelector('.close-btn');
-           if (infoBtn) infoBtn.style.display = 'block';
-           if (closeBtn) closeBtn.style.display = 'block';
-   
-           // Add visual indicator that tooltip is pinned
-           trigger.style.backgroundColor = '#e3f2fd';
-           trigger.style.borderRadius = '4px';
-         }
-       });
-   
-       // ✅ Handle Info button click
-       const infoBtn = tooltip?.querySelector('.info-btn');
-       if (infoBtn) {
-         // Initially hide the button
-         infoBtn.style.display = 'none';
-         
-         infoBtn.addEventListener('click', function(e) {
-           e.stopPropagation();
-           const modelNo = trigger.textContent.trim();
-           
-           if (typeof Swal !== 'undefined') {
-             Swal.fire({
-               title: 'Model Information',
-               html: `<strong>Plating Stk No:</strong> ${modelNo}`,
-               icon: 'info',
-               confirmButtonText: 'OK',
-               confirmButtonColor: '#007bff'
-             });
-           } else {
-             alert('Model Information:\nPlating Stk No: ' + modelNo);
-           }
-         });
-       }
-   
-       // ✅ FIXED: Handle Close button click - Complete tooltip closure
-       const closeBtn = tooltip?.querySelector('.close-btn');
-       if (closeBtn) {
-         // Initially hide the button
-         closeBtn.style.display = 'none';
-         
-         closeBtn.addEventListener('click', function(e) {
-           e.stopPropagation();
-           console.log('🔴 Close button clicked');
-           
-           // Use the helper function to completely close tooltip
-           closeTooltip(tooltip, trigger);
-           
-           // Feedback animation for close button
-           closeBtn.style.transform = 'scale(0.9)';
-           setTimeout(() => {
-             if (closeBtn.style) {
-               closeBtn.style.transform = 'scale(1)';
-             }
-           }, 150);
-         });
-         
-         // ✅ Add hover effect for close button
-         closeBtn.addEventListener('mouseenter', function() {
-           closeBtn.style.backgroundColor = '#c82333';
-           closeBtn.style.transform = 'scale(1.05)';
-         });
-         
-         closeBtn.addEventListener('mouseleave', function() {
-           closeBtn.style.backgroundColor = '#dc3545';
-           closeBtn.style.transform = 'scale(1)';
-         });
-       }
-     });
-   
-     // ✅ ENHANCED: Close tooltip when clicking outside
-     document.addEventListener("click", function (e) {
-       if (openTooltip && !e.target.closest('.model-image-tooltip') && !e.target.closest('.model-hover-trigger')) {
-         const openTrigger = openTooltip.closest('.model-hover-trigger');
-         closeTooltip(openTooltip, openTrigger);
-       }
-     });
-   
-     // ✅ Close tooltip with ESC key
-     document.addEventListener("keydown", function (e) {
-       if (e.key === "Escape" && openTooltip) {
-         const openTrigger = openTooltip.closest('.model-hover-trigger');
-         closeTooltip(openTooltip, openTrigger);
-         console.log('✅ Tooltip closed with ESC key');
-       }
-     });
-   
-     // Prevent tooltip from closing when clicking inside it
-     document.querySelectorAll(".model-image-tooltip").forEach(function (tooltip) {
-       tooltip.addEventListener("click", function (e) {
-         e.stopPropagation();
-       });
-     });
-   });
+document.addEventListener("DOMContentLoaded", function () {
+  let openTooltip = null;
+
+  // Helper function to completely close a tooltip
+  function closeTooltip(tooltip, trigger) {
+    if (tooltip) {
+      console.log('🔴 Closing tooltip completely');
+      
+      // Remove pinned class
+      tooltip.classList.remove("pinned");
+      
+      // Hide the entire tooltip completely
+      tooltip.style.opacity = "0";
+      tooltip.style.pointerEvents = "none";
+      tooltip.style.visibility = "hidden";
+      tooltip.style.display = "none"; // ✅ ADDED: Force display none
+      
+      // Hide buttons
+      const infoBtn = tooltip.querySelector('.info-btn');
+      const closeBtn = tooltip.querySelector('.close-btn');
+      if (infoBtn) infoBtn.style.display = 'none';
+      if (closeBtn) closeBtn.style.display = 'none';
+      
+      // Remove visual indicator from trigger
+      if (trigger) {
+        trigger.style.backgroundColor = '';
+        trigger.style.borderRadius = '';
+      }
+      
+      // Clear global reference
+      openTooltip = null;
+      
+      console.log('✅ Tooltip completely closed');
+    }
+  }
+
+  // Tooltip show/hide logic
+  document.querySelectorAll(".model-hover-trigger").forEach(function (trigger) {
+    const tooltip = trigger.querySelector(".model-image-tooltip");
+
+    document.querySelectorAll(".model-image-tooltip .info-btn").forEach(function(btn) {
+  btn.addEventListener("click", function(e) {
+    e.stopPropagation();
+    // Find the closest row
+    const row = btn.closest('tr');
+    let lotId = null; 
+    let batchId = null;
+    if (row) {
+      lotId = row.getAttribute('data-lot-id');
+      batchId = row.getAttribute('data-batch-id');
+    }
+    // Build the URL with lot_id and batch_id if found
+    let url = "/adminportal/dp_visualaid/";
+    if (lotId) {
+      url += encodeURIComponent(lotId) + "/";
+    }
+    if (batchId) {
+      url += "?batch_id=" + encodeURIComponent(batchId);
+    }
+    window.location.href = url;
+  });
+});
+  
+
+
+    trigger.addEventListener("mouseenter", function () {
+      if (tooltip && !tooltip.classList.contains("pinned")) {
+        tooltip.style.display = "flex"; // ✅ ADDED: Reset display
+        tooltip.style.visibility = "visible"; // ✅ ADDED: Reset visibility
+        tooltip.style.opacity = "1";
+        tooltip.style.pointerEvents = "auto";
+        
+        // Show Info and Close buttons on hover
+        const infoBtn = tooltip.querySelector('.info-btn');
+        const closeBtn = tooltip.querySelector('.close-btn');
+        if (infoBtn) infoBtn.style.display = 'block';
+        if (closeBtn) closeBtn.style.display = 'block';
+      }
+    });
+
+    trigger.addEventListener("mouseleave", function () {
+      if (tooltip && !tooltip.classList.contains("pinned")) {
+        tooltip.style.opacity = "0";
+        tooltip.style.pointerEvents = "none";
+        
+        // Hide Info and Close buttons when not hovering and not pinned
+        const infoBtn = tooltip.querySelector('.info-btn');
+        const closeBtn = tooltip.querySelector('.close-btn');
+        if (infoBtn) infoBtn.style.display = 'none';
+        if (closeBtn) closeBtn.style.display = 'none';
+      }
+    });
+
+    // Keep tooltip visible when hovering over it
+    if (tooltip) {
+      tooltip.addEventListener("mouseenter", function () {
+        if (!tooltip.classList.contains("pinned")) {
+          tooltip.style.display = "flex"; // ✅ ADDED: Reset display
+          tooltip.style.visibility = "visible"; // ✅ ADDED: Reset visibility
+        }
+        tooltip.style.opacity = "1";
+        tooltip.style.pointerEvents = "auto";
+        
+        // Keep buttons visible when hovering over tooltip
+        const infoBtn = tooltip.querySelector('.info-btn');
+        const closeBtn = tooltip.querySelector('.close-btn');
+        if (infoBtn) infoBtn.style.display = 'block';
+        if (closeBtn) closeBtn.style.display = 'block';
+      });
+
+      tooltip.addEventListener("mouseleave", function () {
+        if (!tooltip.classList.contains("pinned")) {
+          tooltip.style.opacity = "0";
+          tooltip.style.pointerEvents = "none";
+          
+          // Hide buttons when leaving tooltip and not pinned
+          const infoBtn = tooltip.querySelector('.info-btn');
+          const closeBtn = tooltip.querySelector('.close-btn');
+          if (infoBtn) infoBtn.style.display = 'none';
+          if (closeBtn) closeBtn.style.display = 'none';
+        }
+      });
+    }
+
+    trigger.addEventListener("click", function (e) {
+      e.stopPropagation();
+
+      if (tooltip) {
+        // Close any previously opened tooltip
+        if (openTooltip && openTooltip !== tooltip) {
+          const prevTrigger = openTooltip.closest('.model-hover-trigger');
+          closeTooltip(openTooltip, prevTrigger);
+        }
+
+        tooltip.classList.add("pinned");
+        tooltip.style.display = "flex"; // ✅ ADDED: Ensure display
+        tooltip.style.visibility = "visible"; // ✅ ADDED: Ensure visibility
+        tooltip.style.opacity = "1";
+        tooltip.style.pointerEvents = "auto";
+        openTooltip = tooltip;
+        
+        // Keep buttons visible when pinned
+        const infoBtn = tooltip.querySelector('.info-btn');
+        const closeBtn = tooltip.querySelector('.close-btn');
+        if (infoBtn) infoBtn.style.display = 'block';
+        if (closeBtn) closeBtn.style.display = 'block';
+
+        // Add visual indicator that tooltip is pinned
+        trigger.style.backgroundColor = '#e3f2fd';
+        trigger.style.borderRadius = '4px';
+      }
+    });
+
+
+
+    // ✅ FIXED: Handle Close button click - Complete tooltip closure
+    const closeBtn = tooltip?.querySelector('.close-btn');
+    if (closeBtn) {
+      // Initially hide the button
+      closeBtn.style.display = 'none';
+      
+      closeBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        console.log('🔴 Close button clicked');
+        
+        // Use the helper function to completely close tooltip
+        closeTooltip(tooltip, trigger);
+        
+        // Feedback animation for close button
+        closeBtn.style.transform = 'scale(0.9)';
+        setTimeout(() => {
+          if (closeBtn.style) {
+            closeBtn.style.transform = 'scale(1)';
+          }
+        }, 150);
+      });
+      
+      // ✅ Add hover effect for close button
+      closeBtn.addEventListener('mouseenter', function() {
+        closeBtn.style.backgroundColor = '#c82333';
+        closeBtn.style.transform = 'scale(1.05)';
+      });
+      
+      closeBtn.addEventListener('mouseleave', function() {
+        closeBtn.style.backgroundColor = '#dc3545';
+        closeBtn.style.transform = 'scale(1)';
+      });
+    }
+  });
+
+  // ✅ ENHANCED: Close tooltip when clicking outside
+  document.addEventListener("click", function (e) {
+    if (openTooltip && !e.target.closest('.model-image-tooltip') && !e.target.closest('.model-hover-trigger')) {
+      const openTrigger = openTooltip.closest('.model-hover-trigger');
+      closeTooltip(openTooltip, openTrigger);
+    }
+  });
+
+  // ✅ Close tooltip with ESC key
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && openTooltip) {
+      const openTrigger = openTooltip.closest('.model-hover-trigger');
+      closeTooltip(openTooltip, openTrigger);
+      console.log('✅ Tooltip closed with ESC key');
+    }
+  });
+
+  // Prevent tooltip from closing when clicking inside it
+  document.querySelectorAll(".model-image-tooltip").forEach(function (tooltip) {
+    tooltip.addEventListener("click", function (e) {
+      e.stopPropagation();
+    });
+  });
+});
 </script>
 <!-- Script for restricting pointer events when modals are open -->
 <script nonce="{{ csp_nonce }}">
@@ -3208,4 +3624,417 @@
      }
    }
 </script>
+
+<!-- Sorting JavaScript -->
+<script nonce="{{ csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function() {
+    // Column mapping for Brass QC Completed Table sorting - matches backend sort_field_mapping
+    const columnMapping = {
+        1: 'serial_number',          // S.No 
+        2: 'date_time',              // Last Updated
+        3: 'plating_stk_no',         // Plating Stk No
+        4: 'polishing_stk_no',       // Polishing Stk No
+        5: 'plating_color',          // Plating Color
+        6: 'category',               // Category
+        7: 'polish_finish',          // Polish Finish
+        8: 'tray_capacity',          // Tray Cate-Capacity
+        9: 'vendor_location',        // Input Source
+        10: 'no_of_trays',           // No of Trays
+        11: 'total_ip_accepted_qty', // Lot Qty
+        12: 'physical_qty',          // Physical Qty
+        13: 'accepted_qty',          // Accept Qty
+        14: 'rejected_qty',          // Reject Qty
+        15: 'process_status',        // Process Status
+        16: 'action',                // Action (non-sortable)
+        17: 'lot_status',            // Lot Status
+        18: 'current_stage',         // Current Stage
+        19: 'remarks',               // Remarks
+        20: 'rejection_remarks'      // Rejection Remarks
+    };
+
+    // Get current sort parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const currentSort = urlParams.get('sort');
+    const currentOrder = urlParams.get('order');
+
+    // Update header icons based on current sort
+    if (currentSort && currentOrder) {
+        const sortedColumn = Object.keys(columnMapping).find(key => columnMapping[key] === currentSort);
+        if (sortedColumn) {
+            const header = document.querySelector(`[data-column-index="${sortedColumn}"]`);
+            if (header) {
+                header.classList.add('sorted');
+                header.querySelector('.sort-icon').style.display = 'none';
+                
+                if (currentOrder === 'asc') {
+                    header.querySelector('.sort-asc').style.display = 'inline';
+                } else {
+                    header.querySelector('.sort-desc').style.display = 'inline';
+                }
+            }
+        }
+    }
+
+    // Add click handlers for sorting
+    document.querySelectorAll('.sortable').forEach(function(header) {
+        header.addEventListener('click', function() {
+            const columnIndex = this.getAttribute('data-column-index');
+            const sortField = columnMapping[columnIndex];
+            
+            if (!sortField) return;
+
+            const url = new URL(window.location);
+            const currentSort = url.searchParams.get('sort');
+            const currentOrder = url.searchParams.get('order');
+            
+            let newOrder = 'asc';
+            if (currentSort === sortField && currentOrder === 'asc') {
+                newOrder = 'desc';
+            }
+            
+            url.searchParams.set('sort', sortField);
+            url.searchParams.set('order', newOrder);
+            url.searchParams.set('page', '1');
+            
+            window.location.href = url.toString();
+        });
+    });
+});
+</script>
+
+<!-- ✅ UPDATED: Tray View Modal JavaScript for Brass QC Completed -->
+<script nonce="{{ csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🔄 Initializing Brass QC Completed Tray View functionality');
+
+    // Handle view icon clicks
+    document.querySelectorAll('.tray-scan-btn-BQ-view').forEach(function(viewBtn) {
+        viewBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            console.log('🔍 Tray view button clicked');
+
+            // Extract data from the clicked element
+            const lotId = this.getAttribute('data-stock-lot-id');
+            const batchId = this.getAttribute('data-batch-id');
+            const modelNo = this.getAttribute('data-model-no');
+            const trayCapacity = this.getAttribute('data-tray-capacity') || '0';
+            const brassQcAccptance = this.getAttribute('data-brass-qc-accptance') === 'true';
+            const brassQcRejection = this.getAttribute('data-brass-qc-rejection') === 'true';
+            const brassQcFewCasesAccptance = this.getAttribute('data-brass-qc-few-cases-accptance') === 'true';
+            const totalBatchQuantity = this.getAttribute('data-total-batch-quantity') || '0';
+            const missingQty = this.getAttribute('data-missing-qty') || '0';
+            const physicalQty = this.getAttribute('data-physical-qty') || '0';
+
+            console.log('📊 Modal data:', {
+                lotId, batchId, modelNo, trayCapacity,
+                brassQcAccptance, brassQcRejection, brassQcFewCasesAccptance
+            });
+
+            if (!lotId) {
+                console.error('❌ Missing lot_id');
+                return;
+            }
+
+            // Use existing trayScanModal_DayPlanning modal
+            const modal = document.getElementById('trayScanModal_DayPlanning');
+            const closeBtn = document.getElementById('closeTrayScanModal_DayPlanning');
+            const trayDetailsDiv = document.getElementById('trayScanDetails_DayPlanning');
+
+            // Update modal header information
+            document.getElementById('modalModelNo_DayPlanning').textContent = modelNo || '-';
+            document.getElementById('modalLotQty_DayPlanning').textContent = totalBatchQuantity || '0';
+            document.getElementById('modalMissingQty_DayPlanning').textContent = missingQty || '0';
+            document.getElementById('modalPhysicalQty_DayPlanning').textContent = physicalQty || '0';
+
+            // Hide validation controls for completed records
+            const trayValidateBtn = document.getElementById('trayValidateBtn');
+            const trayValidateInput = document.getElementById('trayValidateInput');
+            const trayScanRedoBtn = document.getElementById('trayScanRedoBtn');
+
+            if (trayValidateBtn) trayValidateBtn.style.display = 'none';
+            if (trayValidateInput) trayValidateInput.style.display = 'none';
+            if (trayScanRedoBtn) trayScanRedoBtn.style.display = 'none';
+
+            // Fetch tray details from API
+            fetchTrayDetails(lotId, trayDetailsDiv);
+
+            // Show modal
+            if (modal) {
+                modal.style.display = 'block';
+                modal.classList.add('open');
+            }
+        });
+    });
+
+    // Close modal functionality (reuse existing)
+    const closeBtn = document.getElementById('closeTrayScanModal_DayPlanning');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', function() {
+            const modal = document.getElementById('trayScanModal_DayPlanning');
+
+            // Show validation controls again when closing
+            const trayValidateBtn = document.getElementById('trayValidateBtn');
+            const trayValidateInput = document.getElementById('trayValidateInput');
+            const trayScanRedoBtn = document.getElementById('trayScanRedoBtn');
+
+            if (trayValidateBtn) trayValidateBtn.style.display = 'flex';
+            if (trayValidateInput) trayValidateInput.style.display = 'none'; // Keep hidden
+            if (trayScanRedoBtn) trayScanRedoBtn.style.display = 'inline-block';
+
+            if (modal) {
+                modal.classList.remove('open');
+                modal.style.display = 'none';
+            }
+        });
+    }
+
+    // Function to fetch tray details from API
+    function fetchTrayDetails(lotId, trayDetailsDiv, retryCount = 0) {
+        console.log('🌐 Fetching tray details for lot_id:', lotId, 'retry:', retryCount);
+
+        // Show loading state
+        trayDetailsDiv.innerHTML = `
+            <div style="text-align: center; padding: 20px; color: #666;">
+                <i class="fa fa-spinner fa-spin"></i> Loading tray details...
+            </div>
+        `;
+
+        // Make API call with increased timeout and better retry logic
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+        fetch(`/brass_qc/brass_view_tray_list/?lot_id=${encodeURIComponent(lotId)}`, {
+            signal: controller.signal
+        })
+            .then(response => {
+                clearTimeout(timeoutId);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('✅ Tray details fetched:', data);
+                
+                // Check if data is valid
+                if (!data || typeof data !== 'object') {
+                    throw new Error('Invalid response format');
+                }
+                
+                // Check if we got an empty array when we expected data
+                if (data.success && (!data.trays || data.trays.length === 0)) {
+                    // For rejected lots, empty data might mean the backend hasn't synced yet
+                    if (retryCount < 3) {
+                        console.log('⚠️ Empty tray data, retrying in 1 second...');
+                        setTimeout(() => {
+                            fetchTrayDetails(lotId, trayDetailsDiv, retryCount + 1);
+                        }, 1000); // Increased retry delay
+                        return;
+                    }
+                }
+                
+                if (data.success) {
+                    // Always build the HTML, even if trays array is empty
+                    buildTrayDetailsHTML(data, trayDetailsDiv);
+                } else {
+                    showError(data.error || 'Failed to fetch tray details', trayDetailsDiv, lotId, retryCount);
+                }
+            })
+            .catch(error => {
+                clearTimeout(timeoutId);
+                console.error('❌ Error fetching tray details:', error);
+                
+                // Retry logic for network errors
+                if (retryCount < 3) {
+                    console.log(`⚠️ Fetch error (${error.message}), retrying in 1 second...`);
+                    setTimeout(() => {
+                        fetchTrayDetails(lotId, trayDetailsDiv, retryCount + 1);
+                    }, 1000); // Increased retry delay
+                } else {
+                    showError('Failed to load tray details after multiple attempts. Please try again.', trayDetailsDiv, lotId, retryCount);
+                }
+            });
+    }
+
+    // Function to build tray details HTML
+    function buildTrayDetailsHTML(data, trayDetailsDiv) {
+        console.log('🔧 Building tray details HTML', 'Total trays:', data.trays ? data.trays.length : 0);
+
+        let html = `
+            <table class="table table-bordered table-sm" style="width:100%; margin-bottom:0;">
+                <thead>
+                    <tr>
+                        <th style="width:50px;">S.no</th>
+                        <th>Tray ID</th>
+                        <th>Tray Qty</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        if (data.trays && data.trays.length > 0) {
+            let rowCounter = 1;
+
+            // Separate rejected and accepted trays
+            const rejectedTrays = data.trays.filter(tray => tray.is_rejected || tray.tray_qty === 'REJECTED' || tray.rejected_status === 'REJECTED');
+            const acceptedTrays = data.trays.filter(tray => !tray.is_rejected && tray.tray_qty !== 'REJECTED' && tray.rejected_status !== 'REJECTED');
+
+            console.log(`📊 Tray breakdown: ${rejectedTrays.length} rejected, ${acceptedTrays.length} accepted`);
+
+            // If there are rejected trays, show rejected section
+            if (rejectedTrays.length > 0) {
+                html += `
+                    <tr style="background-color: #ffebee; font-weight: bold;">
+                        <td colspan="3" style="text-align: center; color: #c62828; padding: 8px;">
+                            ❌ REJECTED TRAYS
+                        </td>
+                    </tr>
+                `;
+
+                // Find top tray among rejected (if any)
+                const topRejectedTray = rejectedTrays.find(tray => {
+                    return tray.brass_top_tray || tray.ip_top_tray || tray.top_tray;
+                });
+
+                if (topRejectedTray) {
+                    // Display actual quantity for top tray
+                    const displayQty = topRejectedTray.tray_qty;
+                    console.log(`🔝 Found top rejected tray: ${topRejectedTray.tray_id} (qty: ${displayQty})`);
+                    html += `
+                        <tr class="top-tray-row" style="background:#ffcdd2;">
+                            <td>${rowCounter} (Top Tray)</td>
+                            <td>
+                                <input type="text" class="form-control" value="${topRejectedTray.tray_id || ''}" readonly style="width: 100%;" />
+                            </td>
+                            <td>
+                                <input type="number" class="form-control" value="${displayQty}" readonly style="width: 100%;" />
+                            </td>
+                        </tr>
+                    `;
+                    rowCounter++;
+                }
+
+                // Add regular rejected trays (non-top trays)
+                const regularRejectedTrays = rejectedTrays.filter(tray => {
+                    return !(tray.brass_top_tray || tray.ip_top_tray || tray.top_tray);
+                });
+
+                regularRejectedTrays.forEach((tray) => {
+                    // Display actual quantity for regular trays
+                    const displayQty = tray.tray_qty;
+                    console.log(`  - Rejected tray ${rowCounter}: ${tray.tray_id} (qty: ${displayQty})`);
+                    html += `
+                        <tr>
+                            <td>${rowCounter}</td>
+                            <td>
+                                <input type="text" class="form-control" value="${tray.tray_id || ''}" readonly style="width: 100%;" />
+                            </td>
+                            <td>
+                                <input type="number" class="form-control" value="${displayQty}" readonly style="width: 100%;" />
+                            </td>
+                        </tr>
+                    `;
+                    rowCounter++;
+                });
+            }
+            
+            // Show accepted section (can coexist with rejected section)
+            if (acceptedTrays.length > 0) {
+                console.log(`✅ Adding ${acceptedTrays.length} accepted trays to display`);
+                html += `
+                    <tr style="background-color: #e8f5e8; font-weight: bold;">
+                        <td colspan="3" style="text-align: center; color: #2e7d32; padding: 8px;">
+                            ✅ ACCEPTED TRAYS
+                        </td>
+                    </tr>
+                `;
+
+                // Find top tray among accepted
+                const topTray = acceptedTrays.find(tray => {
+                    return tray.brass_top_tray || tray.ip_top_tray || tray.top_tray;
+                });
+
+                if (topTray) {
+                    let displayQuantity = topTray.tray_qty;
+                    if (topTray.ip_top_tray_qty !== null && topTray.ip_top_tray_qty !== undefined) {
+                        displayQuantity = topTray.ip_top_tray_qty;
+                    } else if (topTray.brass_top_tray_qty !== null && topTray.brass_top_tray_qty !== undefined) {
+                        displayQuantity = topTray.brass_top_tray_qty;
+                    }
+
+                    console.log(`🔝 Found top accepted tray: ${topTray.tray_id} (qty: ${displayQuantity})`);
+
+                    html += `
+                        <tr class="top-tray-row" style="background:#e3f2fd;">
+                            <td>${rowCounter} (Top Tray)</td>
+                            <td>
+                                <input type="text" class="form-control" value="${topTray.tray_id || ''}" readonly style="width: 100%;" />
+                            </td>
+                            <td>
+                                <input type="number" class="form-control" value="${displayQuantity || ''}" readonly style="width: 100%;" />
+                            </td>
+                        </tr>
+                    `;
+                    rowCounter++;
+                }
+
+                // Add regular accepted trays
+                const regularAcceptedTrays = acceptedTrays.filter(tray => {
+                    return !(tray.brass_top_tray || tray.ip_top_tray || tray.top_tray);
+                });
+
+                regularAcceptedTrays.sort((a, b) => {
+                    const trayIdA = a.tray_id || '';
+                    const trayIdB = b.tray_id || '';
+                    return trayIdA.localeCompare(trayIdB);
+                });
+
+                regularAcceptedTrays.forEach((tray) => {
+                    console.log(`  - Accepted tray ${rowCounter}: ${tray.tray_id} (qty: ${tray.tray_qty || 0})`);
+                    html += `
+                        <tr>
+                            <td>${rowCounter}</td>
+                            <td>
+                                <input type="text" class="form-control" value="${tray.tray_id || ''}" readonly style="width: 100%;" />
+                            </td>
+                            <td>
+                                <input type="number" class="form-control" value="${tray.tray_qty || 0}" readonly style="width: 100%;" />
+                            </td>
+                        </tr>
+                    `;
+                    rowCounter++;
+                });
+            }
+        } else {
+            html += `
+                <tr>
+                    <td colspan="3" style="text-align: center; padding: 20px; color: #666; font-style: italic;">
+                        No tray data available
+                    </td>
+                </tr>
+            `;
+        }
+
+        html += '</tbody></table>';
+        trayDetailsDiv.innerHTML = html;
+    }
+
+    // Function to show error message with retry option
+    function showError(message, trayDetailsDiv, lotId, retryCount) {
+        console.error(`❌ Error displaying tray details for lot_id: ${lotId}, retry: ${retryCount}, message: ${message}`);
+        trayDetailsDiv.innerHTML = `
+            <div style="text-align: center; padding: 20px; color: #e74c3c;">
+                <i class="fa fa-exclamation-triangle" style="font-size: 24px; margin-bottom: 10px;"></i>
+                <div style="margin: 10px 0;">${message}</div>
+                <button class="btn btn-sm btn-primary" onclick="location.reload();" style="margin-top: 10px;">
+                    <i class="fa fa-refresh"></i> Refresh Page
+                </button>
+            </div>
+        `;
+    }
+
+    console.log('✅ Brass QC Completed Tray View functionality initialized');
+});
+</script>
+
 {% endblock %} {% endblock content %}

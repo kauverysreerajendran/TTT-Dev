@@ -27,6 +27,7 @@ urlpatterns = [
     
     path('brass_get_delink_tray_data/', brass_get_delink_tray_data, name='brass_get_delink_tray_data'),
     path('brass_delink_check_tray_id/', brass_delink_check_tray_id, name='brass_delink_check_tray_id'),
+    path('brass_top_tray_check_tray_id/', brass_top_tray_check_tray_id, name='brass_top_tray_check_tray_id'),
     
     path('brass_CompleteTable_tray_id_list/', BrassTrayIdList_Complete_APIView.as_view(), name='brass_CompleteTable_tray_id_list'),
     path('brass_complete_tray_validate/', BrassTrayValidate_Complete_APIView.as_view(), name='brass_complete_tray_validate'),
@@ -47,6 +48,8 @@ urlpatterns = [
     #After tray validation  check
     path('AfterCheck_complete_tray_validate/', AfterCheckTrayValidate_Complete_APIView.as_view(), name='AfterCheck_complete_tray_validate'),
     path('AfterCheck_pick_CompleteTable_tray_id_list/', AfterCheckPickTrayIdList_Complete_APIView.as_view(), name='AfterCheck_pick_CompleteTable_tray_id_list'),
+
+    path('get_tray_details_for_modal/', get_brass_qc_tray_details_for_modal, name='get_brass_qc_tray_details_for_modal'),
     
     path('brass_tray_delink_top_tray_calc/', BrassTrayDelinkTopTrayCalcAPIView.as_view(), name='brass_tray_delink_calc'),
     path('brass_validate_tray_id/',BrassValidateTrayIdAPIView.as_view(), name='brass_validate_tray_id'),

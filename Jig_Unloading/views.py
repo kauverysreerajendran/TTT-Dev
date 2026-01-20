@@ -3,7 +3,8 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from modelmasterapp.models import *
-from django.db.models import OuterRef, Subquery, Exists, F
+from django.db.models import OuterRef, Subquery, Exists, F, TextField
+from django.db.models.functions import Cast
 from django.core.paginator import Paginator
 import math
 import json
@@ -144,21 +145,68 @@ class Jig_Unloading_MainTable(TemplateView):
         
         print(f"🔍 Zone 1 - Allowed colors: {list(allowed_colors)}")
 
-        jig_unload = JigDetails.objects.select_related('bath_numbers').filter(
-            remarks__isnull=False,
-            bath_numbers__isnull=False,
-            plating_color__in=allowed_colors
-        ).exclude(
-            unload_over=True
-        ).order_by('-IP_loaded_date_time')
+        # Get all plating colors and strip "IP-" prefix from stored values for matching
+        allowed_colors_list = list(allowed_colors)
         
+        # Build list of patterns to match (handle both "IPS" and "IP-IPS" formats)
+        plating_patterns = allowed_colors_list + [f"IP-{color}" for color in allowed_colors_list]
+        
+        # Create polish_finish subquery for annotation
         polish_finish_subquery = TotalStockModel.objects.filter(
             lot_id=OuterRef('lot_id')
         ).values('polish_finish__polish_finish')[:1]
-
-        jig_unload = jig_unload.annotate(
+        
+        jig_unload = JigCompleted.objects.select_related('bath_numbers').annotate(
+            plating_color_cast=Cast('draft_data__plating_color', TextField()),
             polish_finish_name=Subquery(polish_finish_subquery)
-        )
+        ).filter(
+            plating_color_cast__in=plating_patterns
+        ).order_by('-IP_loaded_date_time')
+        
+        # ENHANCED FILTER: Also get jigs where plating_color is not in draft_data 
+        # but can be determined from TotalStockModel or RecoveryStockModel
+        jigs_without_plating_in_draft = JigCompleted.objects.select_related('bath_numbers').annotate(
+            plating_color_cast=Cast('draft_data__plating_color', TextField()),
+            polish_finish_name=Subquery(polish_finish_subquery)
+        ).filter(
+            plating_color_cast__isnull=True  # draft_data has no plating_color
+        ).order_by('-IP_loaded_date_time')
+        
+        # Get lot_ids from jigs without plating color in draft_data
+        lot_ids_without_plating = list(jigs_without_plating_in_draft.values_list('lot_id', flat=True))
+        
+        if lot_ids_without_plating:
+            # Get plating colors from TotalStockModel for these lot_ids
+            total_stock_colors = TotalStockModel.objects.filter(
+                lot_id__in=lot_ids_without_plating,
+                plating_color__plating_color__in=allowed_colors_list
+            ).values_list('lot_id', 'plating_color__plating_color')
+            
+            # Get plating colors from RecoveryStockModel for these lot_ids
+            try:
+                from Recovery_DP.models import RecoveryStockModel
+                recovery_stock_colors = RecoveryStockModel.objects.filter(
+                    lot_id__in=lot_ids_without_plating,
+                    plating_color__plating_color__in=allowed_colors_list
+                ).values_list('lot_id', 'plating_color__plating_color')
+            except:
+                recovery_stock_colors = []
+            
+            # Combine all valid lot_ids that have matching plating colors
+            valid_lot_ids_for_zone1 = set()
+            for lot_id, color in total_stock_colors:
+                if color in allowed_colors_list:
+                    valid_lot_ids_for_zone1.add(lot_id)
+                    
+            for lot_id, color in recovery_stock_colors:
+                if color in allowed_colors_list:
+                    valid_lot_ids_for_zone1.add(lot_id)
+            
+            # Get additional jigs that match by lot_id even if draft_data lacks plating_color
+            additional_jigs = jigs_without_plating_in_draft.filter(lot_id__in=valid_lot_ids_for_zone1)
+            
+            # Combine both sets: jigs with plating_color in draft_data + jigs with valid colors from TotalStock/Recovery
+            jig_unload = jig_unload.union(additional_jigs, all=False)
         
         # 🧠 SMART FILTER: Remove jigs with ALL lot_ids unloaded
         jig_unload = self.filter_fully_unloaded_jigs(jig_unload)
@@ -416,7 +464,7 @@ class Jig_Unloading_MainTable(TemplateView):
                     model_images_map[original_model] = {'images': [], 'first_image': None}
                     print(f"❌ No images found for {original_model} (clean: {clean_model})")
         
-        # Process each JigDetails to attach all information
+        # Process each JigCompleted to attach all information
         for jig_detail in jig_unload:
             # Check if this lot_id already has unload data
             jig_detail.is_unloaded = JigUnload_TrayId.objects.filter(lot_id=jig_detail.lot_id).exists()
@@ -758,16 +806,16 @@ class Jig_Unloading_MainTable(TemplateView):
                     # Debug log for 1805 models
                     has_1805 = any('1805' in str(k) for k in jig_model_images.keys())
                     if has_1805:
-                        print(f"🎯 JIG {jig_detail.jig_lot_id} - Final model_images with 1805:")
+                        print(f"🎯 JIG {jig_detail.lot_id} - Final model_images with 1805:")
                         for model_key, image_data in jig_model_images.items():
                             if '1805' in str(model_key):
                                 print(f"   {model_key}: {len(image_data['images'])} images, first: {image_data['first_image']}")
                     
                     # Basic debug info
-                    print(f"📊 JIG {jig_detail.jig_lot_id} - Total models: {len(jig_model_images)}, Colors: {len(jig_model_colors)}")
+                    print(f"📊 JIG {jig_detail.jig_id} - Total models: {len(jig_model_images)}, Colors: {len(jig_model_colors)}")
 
                     # 🎨 ENHANCED DEBUG: Print color assignments for this jig
-                    print(f"🎨 FINAL COLOR ASSIGNMENTS for {jig_detail.jig_lot_id}:")
+                    print(f"🎨 FINAL COLOR ASSIGNMENTS for {jig_detail.lot_id}:")
                     print(f"   🎯 model_colors dict: {jig_detail.model_colors}")
                     print(f"   📋 no_of_model_cases list: {jig_detail.no_of_model_cases}")
                     for model_no in (jig_detail.no_of_model_cases or []):
@@ -861,7 +909,7 @@ class Jig_Unloading_MainTable(TemplateView):
                     jig_detail.colored_quantities = []
                 
                 # 🎨 DEBUG: Print color assignments for this jig
-                print(f"🎨 FINAL COLOR ASSIGNMENTS for {jig_detail.jig_lot_id}:")
+                print(f"🎨 FINAL COLOR ASSIGNMENTS for {jig_detail.lot_id}:")
                 print(f"   🎯 model_colors: {jig_detail.model_colors}")
                 print(f"   📋 no_of_model_cases: {jig_detail.no_of_model_cases}")
                 for model_no in (jig_detail.no_of_model_cases or []):
@@ -885,7 +933,7 @@ class Jig_Unloading_MainTable(TemplateView):
                 jig_detail.unique_plating_colors = sorted(list(set(jig_detail.all_plating_colors)))
                 
                 # ✅ ENHANCED DEBUG: Print both all and unique values
-                print(f"🎊 FINAL RESULTS for {getattr(jig_detail, 'jig_lot_id', jig_detail.lot_id)}:")
+                print(f"🎊 FINAL RESULTS for {jig_detail.lot_id}:")
                 print(f"   📋 ALL plating_stk_nos ({len(jig_detail.all_plating_stk_nos)}): {jig_detail.all_plating_stk_nos}")
                 print(f"   📋 ALL polishing_stk_nos ({len(jig_detail.all_polishing_stk_nos)}): {jig_detail.all_polishing_stk_nos}")
                 print(f"   📋 ALL versions ({len(jig_detail.all_versions)}): {jig_detail.all_versions}")
@@ -931,6 +979,95 @@ class Jig_Unloading_MainTable(TemplateView):
                 
         # This converts the QuerySet to a list, so it MUST be last
         jig_unload = self.check_draft_status_for_jigs(jig_unload)
+        
+        # Ensure required fields are set for template compatibility
+        for jig_detail in jig_unload:
+            # Set jig_qr_id for template (use jig_id or fallback to lot_id)
+            jig_detail.jig_qr_id = getattr(jig_detail, 'jig_id', None) or jig_detail.lot_id
+            
+            # Parse draft_data if needed
+            draft_data = {}
+            if hasattr(jig_detail, 'draft_data') and jig_detail.draft_data:
+                if isinstance(jig_detail.draft_data, str):
+                    try:
+                        import json
+                        draft_data = json.loads(jig_detail.draft_data)
+                    except:
+                        draft_data = {}
+                elif isinstance(jig_detail.draft_data, dict):
+                    draft_data = jig_detail.draft_data
+            
+            # Set plating_color from draft_data or fetch from models
+            plating_color = draft_data.get('plating_color')
+            if not plating_color:
+                # Try to get plating color from stock models
+                stock_model, is_recovery, batch_model_class = self.get_stock_model_data(jig_detail.lot_id)
+                if stock_model and hasattr(stock_model, 'plating_color') and stock_model.plating_color:
+                    plating_color = stock_model.plating_color.plating_color
+            jig_detail.plating_color = plating_color or 'N/A'
+            
+            # Set tray info from draft_data or fetch from models
+            tray_type = draft_data.get('tray_type')
+            tray_capacity = draft_data.get('tray_capacity')
+            if not tray_type or not tray_capacity:
+                # Try to get tray info from model data
+                lot_data = self.get_lot_specific_data(jig_detail.lot_id, None)
+                if lot_data:
+                    if not tray_type:
+                        tray_type = lot_data.get('tray_type')
+                    if not tray_capacity:
+                        tray_capacity = lot_data.get('tray_capacity')
+            jig_detail.tray_type = tray_type
+            jig_detail.tray_capacity = tray_capacity
+            
+            # Set lot_id_quantities from draft_data or create from stock data
+            lot_id_quantities = draft_data.get('lot_id_quantities', {})
+            if not lot_id_quantities:
+                # Use delink_tray_qty as primary source for processed quantity
+                delink_qty = getattr(jig_detail, 'delink_tray_qty', 0)
+                if delink_qty and delink_qty > 0:
+                    lot_id_quantities = {jig_detail.lot_id: delink_qty}
+                else:
+                    # Try to get quantity from stock models as fallback
+                    stock_model, is_recovery, batch_model_class = self.get_stock_model_data(jig_detail.lot_id)
+                    if stock_model and hasattr(stock_model, 'total_stock'):
+                        lot_id_quantities = {jig_detail.lot_id: stock_model.total_stock}
+                    else:
+                        lot_id_quantities = {jig_detail.lot_id: getattr(jig_detail, 'updated_lot_qty', 0)}
+            jig_detail.lot_id_quantities = lot_id_quantities
+            
+            # Ensure no_of_model_cases is a list
+            model_cases = draft_data.get('no_of_model_cases', getattr(jig_detail, 'no_of_model_cases', None))
+            if model_cases is None:
+                # Try to get model info from stock models
+                stock_model, is_recovery, batch_model_class = self.get_stock_model_data(jig_detail.lot_id)
+                if stock_model and hasattr(stock_model, 'model_stock_no') and stock_model.model_stock_no:
+                    model_cases = [stock_model.model_stock_no.model_no]
+                else:
+                    model_cases = []
+            if isinstance(model_cases, str):
+                try:
+                    jig_detail.no_of_model_cases = json.loads(model_cases)
+                except:
+                    jig_detail.no_of_model_cases = [model_cases] if model_cases else []
+            elif isinstance(model_cases, list):
+                jig_detail.no_of_model_cases = model_cases
+            else:
+                jig_detail.no_of_model_cases = []
+            
+            # Ensure other list fields are lists
+            for field in ['all_versions', 'all_vendors', 'all_locations', 'all_plating_stk_nos', 'all_polishing_stk_nos', 'all_plating_colors']:
+                if not hasattr(jig_detail, field) or getattr(jig_detail, field) is None:
+                    setattr(jig_detail, field, [])
+            
+            # If we don't have polishing stock numbers, try to fetch them
+            if not jig_detail.all_polishing_stk_nos and jig_detail.no_of_model_cases:
+                polishing_stk_nos = []
+                for model_no in jig_detail.no_of_model_cases:
+                    lot_data = self.get_lot_specific_data(jig_detail.lot_id, model_no)
+                    if lot_data and lot_data.get('polishing_stk_no') and lot_data['polishing_stk_no'] != 'No Polishing Stock No':
+                        polishing_stk_nos.append(lot_data['polishing_stk_no'])
+                jig_detail.all_polishing_stk_nos = polishing_stk_nos
         
         # Add pagination with consistent logic as Inprocess Inspection
         page_number = self.request.GET.get('page', 1)
@@ -982,13 +1119,13 @@ class Jig_Unloading_MainTable(TemplateView):
                 continue
                 
             jig_lot_ids = set(jig.lot_id_quantities.keys())
-            unloaded_lot_ids = unload_map.get(jig.jig_lot_id, set()) | (jig_lot_ids & direct_unloads)
+            unloaded_lot_ids = unload_map.get(jig.lot_id, set()) | (jig_lot_ids & direct_unloads)
             
             # Keep jig if ANY lot_id is NOT unloaded
             if not jig_lot_ids.issubset(unloaded_lot_ids):
                 filtered_jigs.append(jig)
             else:
-                print(f"🚫 Hiding fully unloaded jig: {jig.jig_lot_id}")
+                print(f"🚫 Hiding fully unloaded jig: {jig.lot_id}")
         
         return filtered_jigs
 
@@ -1007,7 +1144,7 @@ class Jig_Unloading_MainTable(TemplateView):
         for jig_detail in jig_list:
             has_draft = False
             
-            print(f"🔍 Checking jig {jig_detail.jig_lot_id}:")
+            print(f"🔍 Checking jig {jig_detail.lot_id}:")
             
             # Check new_lot_ids array field
             if hasattr(jig_detail, 'new_lot_ids') and jig_detail.new_lot_ids:
@@ -1039,9 +1176,9 @@ class Jig_Unloading_MainTable(TemplateView):
             jig_detail.jig_unload_draft = has_draft
             
             if has_draft:
-                print(f"🎯 JIG {jig_detail.jig_lot_id} MARKED AS DRAFT")
+                print(f"🎯 JIG {jig_detail.lot_id} MARKED AS DRAFT")
             else:
-                print(f"❌ JIG {jig_detail.jig_lot_id} NO DRAFT")
+                print(f"❌ JIG {jig_detail.lot_id} NO DRAFT")
         
         print(f"🔍 Draft check complete for {len(jig_list)} jigs")
         return jig_list  # Return the list, not queryset
@@ -1123,13 +1260,12 @@ def get_model_details(request):
             plating_color_name = plating_color.plating_color
             print(f"[DEBUG] Zone 1 - Found plating_color in TotalStockModel: {plating_color_name}")
         else:
-            # Try to get plating color from JigDetails if not in other sources
-            print(f"[DEBUG] Zone 1 - No plating_color in ModelMasterCreation/TotalStockModel, checking JigDetails...")
-            from Jig_Loading.models import JigDetails
-            jig_detail = JigDetails.objects.filter(lot_id=lot_id).first()
+            # Try to get plating color from JigCompleted if not in other sources
+            print(f"[DEBUG] Zone 1 - No plating_color in ModelMasterCreation/TotalStockModel, checking JigCompleted...")
+            jig_detail = JigCompleted.objects.filter(lot_id=lot_id).first()
             if jig_detail and jig_detail.plating_color:
                 plating_color_name = jig_detail.plating_color
-                print(f"[DEBUG] Zone 1 - Found plating_color in JigDetails: {plating_color_name}")
+                print(f"[DEBUG] Zone 1 - Found plating_color in JigCompleted: {plating_color_name}")
             else:
                 print(f"[DEBUG] Zone 1 - No plating_color found in any source")
         
@@ -1148,8 +1284,7 @@ def get_model_details(request):
         multiple_models = False
         if lot_id:
             # Check if there are multiple different models in the same JIG lot
-            from Jig_Loading.models import JigDetails
-            jig_detail = JigDetails.objects.filter(jig_lot_id=lot_id).first()
+            jig_detail = JigCompleted.objects.filter(jig_lot_id=lot_id).first()
             if jig_detail and jig_detail.no_of_model_cases:
                 # Count unique models in the array
                 multiple_models = len(set(jig_detail.no_of_model_cases)) > 1
@@ -1207,10 +1342,10 @@ class UnLoadSaveHoldUnholdReasonAPIView(APIView):
             if not jig_lot_id or not remark or action not in ['hold', 'unhold']:
                 return JsonResponse({'success': False, 'error': 'Missing or invalid parameters.'}, status=400)
 
-            # Only use JigDetails table
-            obj = JigDetails.objects.filter(jig_lot_id=jig_lot_id).first()
+            # Only use JigCompleted table
+            obj = JigCompleted.objects.filter(jig_lot_id=jig_lot_id).first()
             if not obj:
-                return JsonResponse({'success': False, 'error': 'JigDetails record not found.'}, status=404)
+                return JsonResponse({'success': False, 'error': 'JigCompleted record not found.'}, status=404)
 
             if action == 'hold':
                 obj.unload_holding_reason = remark
@@ -1237,9 +1372,9 @@ class UnloadJigPickRemarkAPIView(APIView):
             remark = data.get('unloading_remarks', '').strip()
             if not jig_lot_id:
                 return JsonResponse({'success': False, 'error': 'JIG Lot ID not found.'}, status=400)
-            jig_detail = JigDetails.objects.filter(jig_lot_id=jig_lot_id).first()
+            jig_detail = JigCompleted.objects.filter(jig_lot_id=jig_lot_id).first()
             if not jig_detail:
-                return JsonResponse({'success': False, 'error': 'Lot not found in JigDetails'}, status=404)
+                return JsonResponse({'success': False, 'error': 'Lot not found in JigCompleted'}, status=404)
             jig_detail.unloading_remarks = remark
             jig_detail.save(update_fields=['unloading_remarks'])
             return JsonResponse({'success': True, 'message': 'Remark saved'})
@@ -1248,7 +1383,7 @@ class UnloadJigPickRemarkAPIView(APIView):
 
 def populate_jig_unload_fields(jig_unload_instance, lot_ids, jig_lot_id=None):
     """
-    Smart helper to populate JigUnloadAfterTable fields from TotalStockModel + JigDetails
+    Smart helper to populate JigUnloadAfterTable fields from TotalStockModel + JigCompleted
     """
     if not lot_ids:
         print("[SMART POPULATE] ⚠️ No lot_ids provided")
@@ -1283,14 +1418,14 @@ def populate_jig_unload_fields(jig_unload_instance, lot_ids, jig_lot_id=None):
                 
             print(f"[SMART POPULATE] ✅ Found TotalStockModel for lot_id: {lot_id}")
             
-            # Get JigDetails data
+            # Get JigCompleted data
             jig_detail = None
             if jig_lot_id:
-                # Try to find JigDetails using jig_lot_id field
-                jig_detail = JigDetails.objects.filter(jig_lot_id=jig_lot_id).first()
+                # Try to find JigCompleted using jig_lot_id field
+                jig_detail = JigCompleted.objects.filter(jig_lot_id=jig_lot_id).first()
                 if not jig_detail:
                     # Fallback: try with lot_id_quantities
-                    jig_detail = JigDetails.objects.filter(
+                    jig_detail = JigCompleted.objects.filter(
                         lot_id_quantities__has_key=lot_id
                     ).first()
             
@@ -1345,15 +1480,15 @@ def populate_jig_unload_fields(jig_unload_instance, lot_ids, jig_lot_id=None):
                     jig_unload_instance.tray_type = total_stock.model_stock_no.tray_type.tray_type
                     jig_unload_instance.tray_capacity = total_stock.model_stock_no.tray_capacity
             
-            # 🧠 SMART: Get jig_qr_id from JigDetails
+            # 🧠 SMART: Get jig_qr_id from JigCompleted
             if jig_detail:
                 if hasattr(jig_detail, 'jig_qr_id'):
                     jig_unload_instance.jig_qr_id = jig_detail.jig_qr_id
-                    print(f"[SMART POPULATE] ✅ Got jig_qr_id: {jig_detail.jig_qr_id} from JigDetails")
+                    print(f"[SMART POPULATE] ✅ Got jig_qr_id: {jig_detail.jig_qr_id} from JigCompleted")
                 else:
-                    print(f"[SMART POPULATE] ⚠️ JigDetails found but no jig_qr_id field")
+                    print(f"[SMART POPULATE] ⚠️ JigCompleted found but no jig_qr_id field")
             else:
-                print(f"[SMART POPULATE] ⚠️ No JigDetails found for jig_lot_id: {jig_lot_id}")
+                print(f"[SMART POPULATE] ⚠️ No JigCompleted found for jig_lot_id: {jig_lot_id}")
             
             # Save to persist field changes
             print(f"[SMART POPULATE] 💾 Saving instance before checking persistence...")
@@ -1377,13 +1512,13 @@ def populate_jig_unload_fields(jig_unload_instance, lot_ids, jig_lot_id=None):
                 locations_to_set = [batch.location]
                 print(f"[SMART POPULATE] ✅ Got location from Batch: {batch.location.location_name}")
             
-            # Third try: Get from JigDetails if it has location field
+            # Third try: Get from JigCompleted if it has location field
             elif jig_detail and hasattr(jig_detail, 'location') and jig_detail.location:
                 if hasattr(jig_detail.location, 'all'):  # ManyToMany
                     locations_to_set = list(jig_detail.location.all())
                 else:  # ForeignKey
                     locations_to_set = [jig_detail.location]
-                print(f"[SMART POPULATE] ✅ Got locations from JigDetails")
+                print(f"[SMART POPULATE] ✅ Got locations from JigCompleted")
             
             # Set locations if found
             if locations_to_set:
@@ -1560,7 +1695,7 @@ def save_jig_unload_tray_ids(request):
         jig_detail = None
         if cleaned_combined_lot_ids:
             for lot_id in cleaned_combined_lot_ids:
-                jig_detail = JigDetails.objects.filter(lot_id_quantities__has_key=lot_id).first()
+                jig_detail = JigCompleted.objects.filter(draft_data__lot_id_quantities__has_key=lot_id).first()
                 if jig_detail:
                     break
             if jig_detail and jig_detail.lot_id_quantities:
@@ -1842,12 +1977,12 @@ def save_jig_unload_tray_ids(request):
                 'created': created
             })
 
-        # Update JigDetails (existing logic)
+        # Update JigCompleted (existing logic)
         if cleaned_combined_lot_ids:
             try:
                 jig_detail = None
                 for lot_id in cleaned_combined_lot_ids:
-                    potential_jig_details = JigDetails.objects.filter(lot_id_quantities__has_key=lot_id)
+                    potential_jig_details = JigCompleted.objects.filter(lot_id_quantities__has_key=lot_id)
                     if potential_jig_details.exists():
                         jig_detail = potential_jig_details.first()
                         break
@@ -1856,17 +1991,17 @@ def save_jig_unload_tray_ids(request):
                     jig_detail.combined_lot_ids = cleaned_combined_lot_ids
                     jig_detail.last_process_module = "Jig Unloading"
                     jig_detail.save()
-                    print(f"[SMART SAVE] ✅ Updated JigDetails {jig_detail.id}")
+                    print(f"[SMART SAVE] ✅ Updated JigCompleted {jig_detail.id}")
             except Exception as e:
-                logger.error(f"Error updating JigDetails: {str(e)}")
+                logger.error(f"Error updating JigCompleted: {str(e)}")
         
         # 🆕 UPDATE: Update Inprocess Inspection completed table records
-        # Update all JigDetails records that contain any of the cleaned_combined_lot_ids
+        # Update all JigCompleted records that contain any of the cleaned_combined_lot_ids
         # This ensures the "Lot Status" shows "Released" and "Current Stage" shows "Jig Unloading"
         if cleaned_combined_lot_ids:
             try:
-                # Find all JigDetails records that have any of the lot_ids in their lot_id_quantities
-                affected_jig_details = JigDetails.objects.filter(
+                # Find all JigCompleted records that have any of the lot_ids in their lot_id_quantities
+                affected_jig_details = JigCompleted.objects.filter(
                     lot_id_quantities__has_any_keys=cleaned_combined_lot_ids
                 )
                 
@@ -1932,8 +2067,8 @@ def save_jig_unload_tray_ids(request):
         # This implements the user's requirement: "unload func is to release the jig qr id and making it free to use for next cycle so once unloaded - is_loaded - will be unchecked"
         if jig_lot_id and jig_unload_fter_instance:
             try:
-                # Mark the corresponding JigDetails record as unloaded (unload_over=True)
-                jig_details_to_release = JigDetails.objects.filter(
+                # Mark the corresponding JigCompleted record as unloaded (unload_over=True)
+                jig_details_to_release = JigCompleted.objects.filter(
                     lot_id_quantities__has_any_keys=cleaned_combined_lot_ids,
                     unload_over=False
                 )
@@ -1950,7 +2085,7 @@ def save_jig_unload_tray_ids(request):
                     if jig_detail.jig_qr_id:
                         jig_qr_ids_to_release.add(jig_detail.jig_qr_id)
                     
-                    print(f"[JIG RELEASE] ✅ Set unload_over=True for JigDetails {jig_detail.id}")
+                    print(f"[JIG RELEASE] ✅ Set unload_over=True for JigCompleted {jig_detail.id}")
                 
                 # Extract JIG QR ID from jig_lot_id (remove JLOT- prefix) as primary method
                 primary_jig_qr_id = jig_lot_id
@@ -1972,14 +2107,14 @@ def save_jig_unload_tray_ids(request):
                     # Check if the jig exists but is incorrectly marked as not loaded
                     jig_obj = Jig.objects.filter(jig_qr_id=jig_qr_id).first()
                     if jig_obj and not jig_obj.is_loaded:
-                        # Check if there are corresponding active JigDetails
-                        active_jig_details = JigDetails.objects.filter(
+                        # Check if there are corresponding active JigCompleted
+                        active_jig_details = JigCompleted.objects.filter(
                             jig_qr_id=jig_qr_id, 
                             unload_over=False
                         ).exists()
                         
                         if active_jig_details:
-                            print(f"[JIG RELEASE] 🔧 Data inconsistency detected: JigDetails '{jig_qr_id}' is active but Jig is not loaded")
+                            print(f"[JIG RELEASE] 🔧 Data inconsistency detected: JigCompleted '{jig_qr_id}' is active but Jig is not loaded")
                             print(f"[JIG RELEASE] 🔧 Auto-fixing: Setting Jig '{jig_qr_id}' as loaded before release")
                             jig_obj.is_loaded = True
                             jig_obj.save(update_fields=['is_loaded'])
@@ -2000,7 +2135,7 @@ def save_jig_unload_tray_ids(request):
                     else:
                         print(f"[JIG RELEASE] ⚠️ No loaded Jig found with QR ID '{jig_qr_id}' to release")
                 
-                print(f"[JIG RELEASE] ✅ Jig release completed - {total_released_jigs_count} total jigs released, {released_jig_details_count} JigDetails marked as unloaded")
+                print(f"[JIG RELEASE] ✅ Jig release completed - {total_released_jigs_count} total jigs released, {released_jig_details_count} JigCompleted marked as unloaded")
                 
                 # Store release info for response
                 released_jigs_count = total_released_jigs_count
@@ -2309,16 +2444,16 @@ def validate_tray_id_dynamic(request):
                             determined_capacity = int(t.tray_capacity)
                             print(f"[DEBUG] Found tray_capacity from TrayId record: {determined_capacity}")
 
-                    # 2) Try JigDetails for tray_type or capacity
+                    # 2) Try JigCompleted for tray_type or capacity
                     if not determined_tray_type:
-                        jd = JigDetails.objects.filter(lot_id_quantities__has_key=lot_id_for_capacity).first()
+                        jd = JigCompleted.objects.filter(lot_id_quantities__has_key=lot_id_for_capacity).first()
                         if jd:
                             if getattr(jd, 'tray_type', None):
                                 determined_tray_type = jd.tray_type
-                                print(f"[DEBUG] Found tray_type from JigDetails: {determined_tray_type}")
+                                print(f"[DEBUG] Found tray_type from JigCompleted: {determined_tray_type}")
                             if getattr(jd, 'tray_capacity', None) and not determined_capacity:
                                 determined_capacity = int(jd.tray_capacity)
-                                print(f"[DEBUG] Found tray_capacity from JigDetails: {determined_capacity}")
+                                print(f"[DEBUG] Found tray_capacity from JigCompleted: {determined_capacity}")
 
                     # 3) Try TotalStockModel -> model_stock_no.tray_type/tray_capacity
                     try:
@@ -2503,20 +2638,20 @@ def validate_tray_id_dynamic(request):
                 search_candidates.append(raw_lot)
                 search_candidates = list(dict.fromkeys([c for c in search_candidates if c]))
 
-                print(f"[DEBUG] validate_tray_id_dynamic - searching JigDetails for candidates: {search_candidates}")
+                print(f"[DEBUG] validate_tray_id_dynamic - searching JigCompleted for candidates: {search_candidates}")
 
                 jig_details = None
                 for candidate in search_candidates:
                     try:
-                        jig_details = JigDetails.objects.filter(
+                        jig_details = JigCompleted.objects.filter(
                             lot_id__contains=candidate,
                             plating_color='IPS'  # Zone 1 handles IPS
                         ).first()
-                        print(f"[DEBUG] JigDetails lookup with candidate '{candidate}' -> {'found' if jig_details else 'not found'}")
+                        print(f"[DEBUG] JigCompleted lookup with candidate '{candidate}' -> {'found' if jig_details else 'not found'}")
                         if jig_details:
                             break
                     except Exception as e:
-                        print(f"[DEBUG] JigDetails lookup error for candidate '{candidate}': {e}")
+                        print(f"[DEBUG] JigCompleted lookup error for candidate '{candidate}': {e}")
 
                 if not jig_details:
                     return JsonResponse({
@@ -2874,11 +3009,11 @@ class JigUnloading_Completedtable(TemplateView):
             print(f"[DEBUG] Unload lot_id: {unload.lot_id}")
             print(f"[DEBUG] combine_lot_ids: {unload.combine_lot_ids}")
             
-            # Get jig_qr_id and remarks from JigDetails using jig_qr_id
+            # Get jig_qr_id and remarks from JigCompleted using jig_qr_id
             jig_qr_id = unload.jig_qr_id
             unloading_remarks = None
             if jig_qr_id:
-                jig_detail = JigDetails.objects.filter(jig_qr_id=jig_qr_id).first()
+                jig_detail = JigCompleted.objects.filter(jig_qr_id=jig_qr_id).first()
                 if jig_detail:
                     unloading_remarks = jig_detail.unloading_remarks
 
@@ -3643,7 +3778,7 @@ def clear_autosave_jig_unload(request, main_lot_id):
 @require_POST
 def delete_jig_details(request):
     """
-    Delete a jig record from JigDetails table
+    Delete a jig record from JigCompleted table
     """
     try:
         data = json.loads(request.body)
@@ -3656,7 +3791,7 @@ def delete_jig_details(request):
             })
         
         # Find the jig detail record
-        jig_detail = JigDetails.objects.filter(lot_id=lot_id).first()
+        jig_detail = JigCompleted.objects.filter(lot_id=lot_id).first()
         
         if not jig_detail:
             return JsonResponse({
@@ -3698,8 +3833,8 @@ def get_jig_for_tray(request):
         })
     
     try:
-        # Find JigDetails that contain this tray_id in their lot_id_quantities
-        jig_detail = JigDetails.objects.filter(
+        # Find JigCompleted that contain this tray_id in their lot_id_quantities
+        jig_detail = JigCompleted.objects.filter(
             lot_id_quantities__has_key=tray_id
         ).first()
         

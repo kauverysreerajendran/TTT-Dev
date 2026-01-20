@@ -2,6 +2,49 @@
 {% load stock_filters %} 
 
 <style> 
+
+/* ===== SORTING STYLES ===== */
+.table th {
+    position: relative;
+    padding-right: 30px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.table th .fa-filter,
+.table th .fa-sort,
+.table th .fa-sort-up,
+.table th .fa-sort-down {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: white;
+    font-size: 12px;
+}
+
+.table th .fa-sort-up {
+    color: #ffd700 !important; /* Active sort ascending - yellow */
+}
+
+.table th .fa-sort-down {
+    color: #ffd700 !important; /* Active sort descending - yellow */
+}
+
+.table th:hover .fa-filter,
+.table th:hover .fa-sort {
+    color: #ffd700 !important;
+}
+
+.table th.sortable {
+    cursor: pointer;
+} 
+
+.table th.sortable:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+/* ===== END SORTING STYLES ===== */
+
 /* ========== Tablet override — paste at file end (after other table styles) ========== */
 /* --- Tablet: freeze first 3 columns consistently with desktop --- */
 @media (pointer: coarse) and (min-width: 680px) and (max-width: 1400px) {
@@ -595,79 +638,79 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
               <table id="order-listing" class="table">
                 <thead>
                   <tr>
-                    <th>
-                      S.No <i class="fa fa-filter" aria-hidden="true"></i>
+                    <th class="sortable" data-column-index="1">
+                      S.No <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
-                    <th>
+                    <th class="sortable" data-column-index="2">
                       Last<br>Updated
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
-                    <th>
+                    <th class="sortable" data-column-index="3">
                       Plating Stk No
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
-                    <th>
+                    <th class="sortable" data-column-index="4">
                       Polishing Stk No
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
-                    <th>
+                    <th class="sortable" data-column-index="5">
                       Plating Color
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
-                    <th>
+                    <th class="sortable" data-column-index="6">
                       Category
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
-                    <th>
+                    <th class="sortable" data-column-index="7">
                       Polish Finish
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
                     <th style="display:none;">
-                      Version <i class="fa fa-filter" aria-hidden="true"></i>
+                      Version <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
-                     <th>
+                     <th class="sortable" data-column-index="8">
                       Tray Cate- <br> Capacity
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
-                    <th>
+                    <th class="sortable" data-column-index="9">
                       Input Source
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
-                    <th>
-                      No of Trays <i class="fa fa-filter" aria-hidden="true"></i>
+                    <th class="sortable" data-column-index="10">
+                      No of Trays <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
-                    <th>
+                    <th class="sortable" data-column-index="11">
                       Lot Qty
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
-                    <th>
+                    <th class="sortable" data-column-index="12">
                       Physical Qty
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort" aria-hidden="true"></i>
                       </th>
-                    <th>
+                    <th class="sortable" data-column-index="13">
                       Accept Qty
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort" aria-hidden="true"></i>
                       </th>
-                    <th>
-                      Reject Qty<i class="fa fa-filter" aria-hidden="true"></i>
+                    <th class="sortable" data-column-index="14">
+                      Reject Qty<i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
                     <th>
                       Process Status
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
                     <th>
-                      Action <i class="fa fa-filter" aria-hidden="true"></i>
+                      Action <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
                     <th>
                       Lot Status
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
                     <th style="cursor: pointer;min-width: 90px;max-width: 90px;">
                       Current Stage
-                      <i class="fa fa-filter" aria-hidden="true"></i>
+                      <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
                     <th>
-                      Remarks <i class="fa fa-filter" aria-hidden="true"></i>
+                      Remarks <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
                    
                   </tr>
@@ -806,7 +849,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                             &#10003;
                           </span>
                         {% endif %}
-                        <input type="text"
+                        <input type="number"
                           class="missing-qty-input"
                           value="{{ data.brass_audit_missing_qty|default_if_none:'' }}"
                           style="width: 36px; padding: 1px 3px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px;"
@@ -828,7 +871,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                       <div class="d-flex">
                         <!-- Q: Green if brass_audit_accepted_qty_verified, else gray -->
                         <div
-                          title="Tray Scan"
+                          data-bs-toggle="tooltip" data-placement="right" data-bs-original-title="Quantity"
                           class="d-flex align-items-center justify-content-center rounded-circle ms-1"
                           style="
                             width: 25px;
@@ -846,7 +889,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                         </div>
                         <!-- QC: Green if brass_audit_rejection or brass_audit_accptance, else gray -->
                         <div
-                          title="Tray Scan"
+                          data-bs-toggle="tooltip" data-placement="right" data-bs-original-title="Quality Check"
                           class="d-flex align-items-center justify-content-center rounded-circle ms-1"
                           style="
                             width: 25px;
@@ -1130,7 +1173,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
               </table>
 
 
-<div
+                                    <div
   id="trayScanModal_DayPlanning"
   class="tray-scan-modal-DayPlanning"
   style="display:none"
@@ -1989,7 +2032,7 @@ document.addEventListener("DOMContentLoaded", function () {
         let rowCounter = 1;
       
         if (traysData && traysData.length > 0) {
-          const acceptedTrays = traysData.filter(tray => {
+          let acceptedTrays = traysData.filter(tray => {
             const isBrassRejected = tray.brass_rejected_tray || false;
             const isInputRejected = tray.rejected_tray || false;
             const isDelinked = tray.delink_tray || false;
@@ -1999,21 +2042,21 @@ document.addEventListener("DOMContentLoaded", function () {
           
           console.log(`📊 [Table Building] Processing ${traysData.length} total trays, ${acceptedTrays.length} accepted`);
           
-          // Find top tray
-          const topTray = acceptedTrays.find(tray => {
-            return tray.brass_top_tray || tray.ip_top_tray || tray.top_tray;
-          });
-          
+          // Find top tray with clear priority: prefer server-side designation (`is_top_tray`) first
+          const topTray = acceptedTrays.find(t => t.is_top_tray) ||
+                          acceptedTrays.find(t => t.brass_top_tray) ||
+                          acceptedTrays.find(t => t.ip_top_tray) ||
+                          acceptedTrays.find(t => t.top_tray);
+
           if (topTray) {
-            let displayQuantity = topTray.tray_quantity;
-            if (topTray.ip_top_tray_qty !== null && topTray.ip_top_tray_qty !== undefined) {
-              displayQuantity = topTray.ip_top_tray_qty;
-            } else if (topTray.brass_top_tray_qty !== null && topTray.brass_top_tray_qty !== undefined) {
-              displayQuantity = topTray.brass_top_tray_qty;
-            }
-            
+            // Prefer explicit top-tray qty fields, fall back to tray_quantity
+            let displayQuantity = (topTray.ip_top_tray_qty ?? topTray.brass_top_tray_qty ?? topTray.top_tray_qty ?? topTray.tray_quantity);
+
             console.log(`🔝 [Top Tray] Found: ${topTray.tray_id}, Qty: ${displayQuantity}`);
-      
+
+            // Remove the chosen top tray from acceptedTrays to avoid duplicate rendering
+            acceptedTrays = acceptedTrays.filter(t => t.tray_id !== topTray.tray_id);
+
             html += `
               <tr class="top-tray-row">
                 <td>1 (Top Tray)</td>
@@ -2023,6 +2066,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 <td>
                   <input type="number" class="form-control" value="${displayQuantity || ''}" readonly style="width: 100%;" />
                 </td>
+                
                 ${showValidationColumn ? `
                   <td>
                     <div class="validation-status">
@@ -2284,7 +2328,7 @@ if (modalLotQty) {
       
         if (traysData && traysData.length > 0) {
           // ✅ Enhanced filtering logic for both data sources
-          const acceptedTrays = traysData.filter(tray => {
+          let acceptedTrays = traysData.filter(tray => {
             // For BrassTrayId: filter by brass_rejected_tray
             // For TrayId: filter by brass_rejected_tray (if exists) or rejected_tray
             const isBrassRejected = tray.brass_rejected_tray || false;
@@ -2296,21 +2340,17 @@ if (modalLotQty) {
           
           console.log(`📊 [Table Building] Processing ${traysData.length} total trays, ${acceptedTrays.length} accepted`);
           
-          // ✅ Enhanced top tray detection for both data sources
-          const topTray = acceptedTrays.find(tray => {
-            return tray.brass_top_tray || tray.ip_top_tray || tray.top_tray;
-          });
+          // ✅ Enhanced top tray detection for both data sources (prioritized and honor server-side is_top_tray flag)
+          const topTray = acceptedTrays.find(t => t.is_top_tray) || acceptedTrays.find(t => t.brass_top_tray) || acceptedTrays.find(t => t.ip_top_tray) || acceptedTrays.find(t => t.top_tray);
           
           if (topTray) {
-            // ✅ Enhanced quantity detection
-            let displayQuantity = topTray.tray_quantity;
-            if (topTray.ip_top_tray_qty !== null && topTray.ip_top_tray_qty !== undefined) {
-              displayQuantity = topTray.ip_top_tray_qty;
-            } else if (topTray.brass_top_tray_qty !== null && topTray.brass_top_tray_qty !== undefined) {
-              displayQuantity = topTray.brass_top_tray_qty;
-            }
+            // ✅ Enhanced quantity detection (prefer explicit top-tray qty fields)
+            let displayQuantity = (topTray.ip_top_tray_qty ?? topTray.brass_top_tray_qty ?? topTray.top_tray_qty ?? topTray.tray_quantity);
             
             console.log(`🔝 [Top Tray] Found: ${topTray.tray_id}, Qty: ${displayQuantity}`);
+      
+            // Remove the chosen top tray from acceptedTrays to avoid duplicate rendering
+            acceptedTrays = acceptedTrays.filter(t => t.tray_id !== topTray.tray_id);
       
             html += `
               <tr class="top-tray-row">
@@ -2607,14 +2647,13 @@ function attachHoldToggleListeners() {
   }
 }
 
-// ✅ Call on page load
 document.addEventListener("DOMContentLoaded", function () {
   attachHoldToggleListeners();
 });
 </script>
 
-<!-- Tray Scan Modal & New Popup Script -->
 <script nonce="{{ csp_nonce }}">
+  
     document.addEventListener("DOMContentLoaded", () => {
       const trayScanLinks = document.querySelectorAll(".tray-scan-btn");
       const trayModal = document.getElementById("trayScanModal");
@@ -2632,11 +2671,7 @@ document.addEventListener("DOMContentLoaded", function () {
           const batchId = link.getAttribute('data-batch-id');
           const stockLotId = link.getAttribute('data-stock-lot-id');
           const isOnHold = row.getAttribute('data-brass-onhold-picking') === 'True';
-          const isAlreadyRejected = row.getAttribute('data-brass-batch-rejection') === 'True';
-          
-          // ✅ FIXED: Check if this is a reject button vs other buttons
-          const buttonText = event.target.textContent.trim();
-          const isRejectButton = buttonText.includes('Reject') || buttonText.includes('reject');
+          const isBatchRejection = row.getAttribute('data-brass-batch-rejection') === 'True';
 
           trayModal.dataset.batchId = batchId;
           trayModal.dataset.stockLotId = stockLotId;
@@ -2652,7 +2687,7 @@ document.addEventListener("DOMContentLoaded", function () {
           const modalHeader = document.getElementById("trayScanModalHeader");
           
           
-if (isAlreadyRejected && !isRejectButton) {
+if (isBatchRejection) {
   // Always fetch accepted tray scan data to get latest is_delink_only status
   fetch(`/brass_audit/brass_audit_get_accepted_tray_scan_data/?lot_id=${encodeURIComponent(stockLotId)}`)
     .then(res => res.json())
@@ -2674,15 +2709,40 @@ if (isAlreadyRejected && !isRejectButton) {
         showAcceptedTrayModal(rescanData, stockLotId, false, false);
       }
     });
-    
-          // ✅ FIXED: Handle reject button clicks
-        } else if (isRejectButton && !isAlreadyRejected) {
-            console.log('🎯 Reject button clicked - showing rejection modal...');
+          // ✅ UPDATED: If brass_audit_onhold_picking is True, directly show accepted tray modal
+        }else if (isOnHold) {
+            console.log('🎯 "Set Top Tray" clicked - showing accepted tray modal directly...');
             
+            // Directly fetch and show accepted tray data (skip rejection details popup)
+            fetch(`/brass_audit/brass_audit_get_accepted_tray_scan_data/?lot_id=${encodeURIComponent(stockLotId)}`)
+              .then(res => res.json())
+              .then(rescanData => {
+                if (rescanData.success) {
+                  console.log('✅ Fetched accepted tray data:', rescanData);
+                  
+                  // Check if draft exists
+                  const hasDraft = rescanData.has_draft;
+                  
+                  // Show the accepted tray modal directly
+                  showAcceptedTrayModal(rescanData, stockLotId, hasDraft);
+                  
+                  console.log('🚀 Accepted tray modal displayed directly');
+                } else {
+                  console.error('❌ Failed to fetch accepted tray data:', rescanData.error);
+                  // Fallback: show error message
+                  alert('Error loading accepted tray data: ' + (rescanData.error || 'Unknown error'));
+                }
+              })
+              .catch(error => {
+                console.error('❌ Network error fetching accepted tray data:', error);
+                // Fallback: show error message
+                alert('Network error loading accepted tray data. Please try again.');
+              });
+          } else {
+            // Show editable rejection form for normal reject button
             if (modalHeader) {
               modalHeader.innerHTML = `Brass Audit / <span id="trayScanModalHeaderModelNo" style="font-weight:bold; color:#028084;"></span> / Rejection Window`;
             }
-            
             // Extract quantities from the row data
             const lotQtyCell = row.cells[11]; // Lot Qty column (index 11)
             const physicalQtyCell = row.cells[12]; // Physical Qty column (index 12)
@@ -2725,60 +2785,9 @@ if (isAlreadyRejected && !isRejectButton) {
             document.getElementById('trayScanModalAqlLimit').textContent = row.getAttribute('data-aql-limit') || 'N/A';
             document.getElementById('trayScanModalSampleQty').textContent = row.getAttribute('data-sample-qty') || 'N/A';
 
-            // Show the rejection form and modal
+
             showEditableRejectionForm(stockLotId, batchId, detailsDiv, row);
             trayModal.classList.add("open");
-            console.log('✅ Rejection modal opened successfully');
-            
-          // ✅ UPDATED: If brass_audit_onhold_picking is True, directly show accepted tray modal
-        }else if (isOnHold) {
-            console.log('🎯 "Set Top Tray" clicked - showing accepted tray modal directly...');
-            
-            // Directly fetch and show accepted tray data (skip rejection details popup)
-            fetch(`/brass_audit/brass_audit_get_accepted_tray_scan_data/?lot_id=${encodeURIComponent(stockLotId)}`)
-              .then(res => res.json())
-              .then(rescanData => {
-                if (rescanData.success) {
-                  console.log('✅ Fetched accepted tray data:', rescanData);
-                  
-                  // Check if draft exists
-                  const hasDraft = rescanData.has_draft;
-                  
-                  // Show the accepted tray modal directly
-                  showAcceptedTrayModal(rescanData, stockLotId, hasDraft);
-                  
-                  console.log('🚀 Accepted tray modal displayed directly');
-                } else {
-                  console.error('❌ Failed to fetch accepted tray data:', rescanData.error);
-                  // Fallback: show error message
-                  alert('Error loading accepted tray data: ' + (rescanData.error || 'Unknown error'));
-                }
-              })
-              .catch(error => {
-                console.error('❌ Network error fetching accepted tray data:', error);
-                // Fallback: show error message
-                alert('Network error loading accepted tray data. Please try again.');
-              });
-          } else {
-            // ✅ FIXED: Default case - show accepted tray modal for other buttons
-            console.log('🎯 Other button clicked - showing accepted tray modal...');
-            
-            // Fetch and show accepted tray data
-            fetch(`/brass_audit/brass_audit_get_accepted_tray_scan_data/?lot_id=${encodeURIComponent(stockLotId)}`)
-              .then(res => res.json())
-              .then(rescanData => {
-                if (rescanData.success) {
-                  const hasDraft = rescanData.has_draft;
-                  showAcceptedTrayModal(rescanData, stockLotId, hasDraft);
-                } else {
-                  console.error('❌ Failed to fetch accepted tray data:', rescanData.error);
-                  alert('Error loading accepted tray data: ' + (rescanData.error || 'Unknown error'));
-                }
-              })
-              .catch(error => {
-                console.error('❌ Network error fetching accepted tray data:', error);
-                alert('Network error loading accepted tray data. Please try again.');
-              });
           }
         });
       });
@@ -5296,6 +5305,15 @@ function updateRejectionTrayTable(totalQty) {
     // ✅ Re-attach validation after creating new inputs
     addSimpleTableTrayValidation();
     
+    // ✅ NEW: Auto-focus on first tray ID input after table is rendered
+    setTimeout(() => {
+      const firstTrayInput = trayTableBody.querySelector('input.rejection-tray-id-input');
+      if (firstTrayInput) {
+        firstTrayInput.focus();
+        console.log('✅ Auto-focused on first rejection tray ID input');
+      }
+    }, 100);
+    
   } else {
     // Hide the tray section when there's no quantity
     traySection.style.display = 'none';
@@ -5687,13 +5705,16 @@ function addSimpleTableTrayValidation() {
     input._hasError = false;
     input._isValidating = false;
     
+    // ✅ NEW: Set maxlength to 9 for field limit
+    input.setAttribute('maxlength', '9');
+    
     // ✅ Use correct error div selector
     const getErrorDiv = () => {
       return input.parentElement.querySelector('.tray-id-error') || 
              input.parentElement.querySelector('.rejection-tray-error');
     };
     
-    // Input event for clearing errors
+    // ✅ ENHANCED: Input event with instant validation when 9 characters reached
     input._inputHandler = function() {
       this._hasError = false;
       const errorDiv = getErrorDiv();
@@ -5704,6 +5725,18 @@ function addSimpleTableTrayValidation() {
       // Reset input styling
       this.style.border = '';
       this.style.backgroundColor = '';
+      
+      // ✅ NEW: Auto-validate when exactly 9 characters entered
+      const trayId = this.value.trim();
+      if (trayId.length === 9) {
+        console.log('🔍 Auto-validating tray ID after 9 characters:', trayId);
+        // Trigger validation immediately
+        setTimeout(() => {
+          if (typeof this._blurHandler === 'function') {
+            this._blurHandler();
+          }
+        }, 50);
+      }
     };
     input.addEventListener('input', input._inputHandler);
     
@@ -5812,13 +5845,25 @@ function addSimpleTableTrayValidation() {
           errorDiv.style.backgroundColor = '#f8d7da';
         }
         
-        setTimeout(() => {
-          this.value = '';
-          this._hasError = false;
-          if (errorDiv) errorDiv.style.display = 'none';
-          this.style.border = '';
-          this.style.backgroundColor = '';
+        // ✅ NEW: Auto-select duplicate tray ID for quick correction (only if 9 characters)
+        if (trayId.length === 9) {
           this.focus();
+          this.select();
+          console.log('✅ Auto-selected duplicate tray ID for correction');
+        } else {
+          this.focus();
+        }
+        
+        // Auto-clear after 2 seconds if not corrected
+        setTimeout(() => {
+          if (this.value.trim() === trayId) {
+            this.value = '';
+            this._hasError = false;
+            if (errorDiv) errorDiv.style.display = 'none';
+            this.style.border = '';
+            this.style.backgroundColor = '';
+            this.focus();
+          }
         }, 2000);
         return;
       }
@@ -5852,19 +5897,21 @@ function addSimpleTableTrayValidation() {
       
       const queryParams = new URLSearchParams(rejectionContext).toString();
       
-      // Call validation endpoint
+      // Store reference for auto-advance
+      const currentInput = this;
+      
       // Call validation endpoint
       fetch(`/brass_audit/brass_audit_reject_check_tray_id_simple/?${queryParams}`)
         .then(res => res.json())
         .then(data => {
-          this._isValidating = false;
+          currentInput._isValidating = false;
       
           console.log(`🔍 [Progressive Validation Row ${idx + 1}] Response:`, data);
       
           if (errorDiv) {
             if (data.exists && data.valid_for_rejection) {
               // ✅ SUCCESS - Including new trays
-              this._hasError = false;
+              currentInput._hasError = false;
       
               let successMessage = `✅ ${data.status_message || 'Available'}`;
       
@@ -5879,17 +5926,27 @@ function addSimpleTableTrayValidation() {
               errorDiv.style.backgroundColor = '#d4edda';
       
               // ✅ FIXED: Style input as valid (green border for both existing and new trays)
-              this.style.border = '2px solid #28a745';
-              this.style.backgroundColor = '#f8fff8';
+              currentInput.style.border = '2px solid #28a745';
+              currentInput.style.backgroundColor = '#f8fff8';
       
               // Auto-hide success message
               setTimeout(() => {
                 if (errorDiv) errorDiv.style.display = 'none';
               }, 4000);
+              
+              // ✅ NEW: Auto-advance to next tray input on successful validation
+              const nextInput = trayInputs[idx + 1];
+              if (nextInput) {
+                setTimeout(() => {
+                  nextInput.focus();
+                  nextInput.select();
+                  console.log('✅ Auto-advanced to next tray input');
+                }, 200);
+              }
       
             } else {
               // ❌ ERROR
-              this._hasError = true;
+              currentInput._hasError = true;
       
               let errorMessage = `❌ ${data.status_message || 'Invalid tray ID'}`;
       
@@ -5906,18 +5963,26 @@ function addSimpleTableTrayValidation() {
               errorDiv.style.backgroundColor = '#f8d7da';
       
               // Style input as invalid
-              this.style.border = '2px solid #dc3545';
-              this.style.backgroundColor = '#ffebee';
+              currentInput.style.border = '2px solid #dc3545';
+              currentInput.style.backgroundColor = '#ffebee';
       
-              // Do NOT auto-clear, keep error and focus/select input for correction
-              this.focus();
-              this.select();
+              // ✅ NEW: Auto-select text for quick correction when exactly 9 characters
+              if (currentInput.value.trim().length === 9) {
+                setTimeout(() => {
+                  currentInput.focus();
+                  currentInput.select();
+                  console.log('✅ Auto-selected invalid tray ID for correction');
+                }, 100);
+              } else {
+                // For other errors, just focus
+                currentInput.focus();
+              }
             }
           }
         })
         .catch(error => {
-          this._isValidating = false;
-          this._hasError = true;
+          currentInput._isValidating = false;
+          currentInput._hasError = true;
           console.error(`Progressive tray validation error for row ${idx + 1}:`, error);
       
           if (errorDiv) {
@@ -5926,9 +5991,15 @@ function addSimpleTableTrayValidation() {
             errorDiv.style.color = '#721c24';
             errorDiv.style.backgroundColor = '#f8d7da';
       
-            // Do NOT auto-clear, keep error and focus/select input for correction
-            this.focus();
-            this.select();
+            // ✅ NEW: Auto-select for quick correction on connection error
+            if (currentInput.value.trim().length === 9) {
+              setTimeout(() => {
+                currentInput.focus();
+                currentInput.select();
+              }, 100);
+            } else {
+              currentInput.focus();
+            }
           }
         });
       };
@@ -6236,39 +6307,20 @@ function handleBatchRejectionDraft(batchId, stockLotId, msgDiv, draftButton) {
     msgDiv.style.color = "#007bff";
     msgDiv.textContent = 'Saving Lot Rejection as draft...';
   }
-
-  // ✅ ENHANCED: First set the global brass_audit_draft flag, then save the specific draft data
-  fetch('/brass_audit/brass_audit_set_manual_draft/', {
+  
+  fetch('/brass_audit/brass_audit_batch_rejection_draft/', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'X-CSRFToken': getCookie('csrftoken')
     },
     body: JSON.stringify({
-      lot_id: stockLotId
+      batch_id: batchId,
+      lot_id: stockLotId,
+      total_qty: totalQty,
+      lot_rejected_comment: lotRejectionRemarks,
+      is_draft: true
     })
-  })
-  .then(res => res.json())
-  .then(flagData => {
-    if (flagData.success) {
-      // Now save the specific draft data
-      return fetch('/brass_audit/brass_audit_batch_rejection_draft/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': getCookie('csrftoken')
-        },
-        body: JSON.stringify({
-          batch_id: batchId,
-          lot_id: stockLotId,
-          total_qty: totalQty,
-          lot_rejected_comment: lotRejectionRemarks,
-          is_draft: true
-        })
-      });
-    } else {
-      throw new Error(flagData.error || 'Failed to set draft flag');
-    }
   })
   .then(res => res.json())
   .then(data => {
@@ -6290,41 +6342,51 @@ function handleBatchRejectionDraft(batchId, stockLotId, msgDiv, draftButton) {
       draftButton.disabled = false;
     }
   })
-  .catch((error) => {
+  .catch(() => {
     if (msgDiv) {
       msgDiv.style.color = "#d32f2f";
-      msgDiv.textContent = error.message || "Network error while saving draft";
+      msgDiv.textContent = "Network error while saving draft";
     }
     draftButton.disabled = false;
   });
 }
 
 // Updated function to handle tray-wise rejection draft with page refresh
-// Updated function to handle tray-wise rejection draft with page refresh and modal close
-// Updated function to handle tray-wise rejection draft with page refresh and modal close
 function handleTrayWiseRejectionDraft(batchId, stockLotId, msgDiv, draftButton) {
   const rows = document.querySelectorAll("#rejection-table-body tr");
   const trayRows = document.querySelectorAll("#rejection-tray-table-body tr");
-
+  
   let tray_rejections = [];
   let rejectionReasons = [];
-
-  // Collect rejection reasons and quantities
-  rows.forEach(row => {
+  
+  // ✅ ENHANCED: Collect rejection reasons and quantities with debugging
+  rows.forEach((row, rowIndex) => {
     const qtyInput = row.querySelector('input.rejection-qty-input');
     if (qtyInput) {
-      const reason_id = row.querySelectorAll("td")[1].textContent.trim();
+      const reasonCell = row.querySelectorAll("td")[1];
+      const reason_id = reasonCell ? reasonCell.textContent.trim() : `R${rowIndex + 1}`;
       const qty = parseInt(qtyInput.value.trim()) || 0;
-
+      
+      console.log(`🔍 Manual Draft - Row ${rowIndex + 1}: ${reason_id} = ${qty}`);
+      
       if (qty > 0) {
         rejectionReasons.push({
           reason_id: reason_id,
-          quantity: qty
+          quantity: qty,
+          row_index: rowIndex + 1
         });
+        console.log(`✅ Manual Draft - Added rejection reason: ${reason_id} with quantity ${qty}`);
       }
+    } else {
+      console.log(`⚠️ Manual Draft - No quantity input found in row ${rowIndex + 1}`);
     }
   });
 
+  console.log(`📋 Manual Draft - Total rejection reasons collected: ${rejectionReasons.length}`);
+  rejectionReasons.forEach((reason, index) => {
+    console.log(`  ${index + 1}. ${reason.reason_id}: ${reason.quantity}`);
+  });
+  
   if (rejectionReasons.length === 0) {
     if (msgDiv) {
       msgDiv.style.color = "#d32f2f";
@@ -6333,82 +6395,90 @@ function handleTrayWiseRejectionDraft(batchId, stockLotId, msgDiv, draftButton) 
     draftButton.disabled = false;
     return;
   }
-
-  // Collect tray IDs (can be empty for draft)
+  
+  // ✅ ENHANCED: Collect tray IDs with debugging for manual draft
   const trayToQuantityMap = [];
   trayRows.forEach((row, index) => {
     const trayInput = row.querySelector('input.tray-id-input') || row.querySelector('input.rejection-tray-id-input');
     const trayQtyCell = row.cells[2];
-    const expectedQty = parseInt(trayQtyCell.textContent) || 0;
-
+    const expectedQty = parseInt(trayQtyCell?.textContent || '0') || 0;
+    
+    console.log(`🔍 Manual Draft - Tray ${index + 1}: Expected qty = ${expectedQty}`);
+    
     if (expectedQty > 0) {
       const trayId = trayInput ? trayInput.value.trim() : '';
-      trayToQuantityMap.push({
+      const trayData = {
         tray_id: trayId, // Can be empty for draft
         quantity: expectedQty,
         row_index: index + 1
-      });
+      };
+      trayToQuantityMap.push(trayData);
+      console.log(`✅ Manual Draft - Added tray slot ${index + 1}: ID="${trayId}" qty=${expectedQty}`);
+    } else {
+      console.log(`⏸️ Manual Draft - Skipped tray ${index + 1}: No expected quantity`);
     }
   });
 
-  // Map rejection reasons to trays
-  let trayIndex = 0;
+  console.log(`🗂️ Manual Draft - Total tray slots available: ${trayToQuantityMap.length}`);
+  trayToQuantityMap.forEach((tray, index) => {
+    console.log(`  ${index + 1}. Tray ID: "${tray.tray_id}" Qty: ${tray.quantity}`);
+  });
+  
+  // ✅ FIXED: Map rejection reasons to trays correctly for MANUAL DRAFT
+  // Each rejection reason should be distributed across available trays independently
   for (const rejection of rejectionReasons) {
     let remainingQtyToDistribute = rejection.quantity;
-
-    while (remainingQtyToDistribute > 0 && trayIndex < trayToQuantityMap.length) {
-      const currentTray = trayToQuantityMap[trayIndex];
+    let currentTrayIndex = 0; // ✅ FIXED: Reset tray index for each rejection reason
+    
+    console.log(`📊 Manual Draft - Distributing ${rejection.reason_id}: ${remainingQtyToDistribute} qty across trays`);
+    
+    while (remainingQtyToDistribute > 0 && currentTrayIndex < trayToQuantityMap.length) {
+      const currentTray = trayToQuantityMap[currentTrayIndex];
       const trayCapacity = currentTray.quantity;
-
+      
       const qtyForThisTray = Math.min(remainingQtyToDistribute, trayCapacity);
-
-      tray_rejections.push({
-        reason_id: rejection.reason_id,
-        qty: qtyForThisTray,
-        tray_id: currentTray.tray_id // Can be empty for draft
-      });
-
+      
+      if (qtyForThisTray > 0) {
+        tray_rejections.push({
+          reason_id: rejection.reason_id,
+          qty: qtyForThisTray,
+          tray_id: currentTray.tray_id // Can be empty for draft
+        });
+        
+        console.log(`✅ Manual Draft - Added ${rejection.reason_id}: ${qtyForThisTray} to tray ${currentTray.tray_id || 'empty'}`);
+      }
+      
       remainingQtyToDistribute -= qtyForThisTray;
-      trayIndex++;
+      currentTrayIndex++; // ✅ Move to next tray for this rejection reason
+    }
+    
+    if (remainingQtyToDistribute > 0) {
+      console.log(`⚠️ Manual Draft - Warning: Could not distribute all ${rejection.reason_id} quantity (${remainingQtyToDistribute} remaining)`);
     }
   }
 
+  console.log(`📦 Manual Draft - Final tray rejections to save: ${tray_rejections.length} entries`);
+  tray_rejections.forEach((rejection, index) => {
+    console.log(`  ${index + 1}. ${rejection.reason_id}: ${rejection.qty} → "${rejection.tray_id}"`);
+  });
+  
   if (msgDiv) {
     msgDiv.style.color = "#007bff";
     msgDiv.textContent = 'Saving tray rejection as draft...';
   }
-
-  // ✅ ENHANCED: First set the global brass_audit_draft flag, then save the specific draft data
-  fetch('/brass_audit/brass_audit_set_manual_draft/', {
+  
+  fetch('/brass_audit/brass_audit_tray_rejection_draft/', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'X-CSRFToken': getCookie('csrftoken')
     },
     body: JSON.stringify({
-      lot_id: stockLotId
+      lot_id: stockLotId,
+      batch_id: batchId,
+      tray_rejections: tray_rejections,
+      is_draft: true
     })
-  })
-  .then(res => res.json())
-  .then(flagData => {
-    if (flagData.success) {
-      // Now save the specific draft data
-      return fetch('/brass_audit/brass_audit_tray_rejection_draft/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': getCookie('csrftoken')
-        },
-        body: JSON.stringify({
-          lot_id: stockLotId,
-          batch_id: batchId,
-          tray_rejections: tray_rejections,
-          is_draft: true
-        })
-      });
-    } else {
-      throw new Error(flagData.error || 'Failed to set draft flag');
-    }
   })
   .then(res => res.json())
   .then(data => {
@@ -6417,9 +6487,11 @@ function handleTrayWiseRejectionDraft(batchId, stockLotId, msgDiv, draftButton) 
         msgDiv.style.color = "#388e3c";
         msgDiv.textContent = "Tray rejection draft saved successfully!";
       }
-      // ✅ SUPER: Just refresh the browser after saving draft
-      window.location.reload();
-      // ...existing code...
+      
+      // ✅ UPDATED: Refresh the entire page after 1.5 seconds
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
     } else {
       if (msgDiv) {
         msgDiv.style.color = "#d32f2f";
@@ -6428,18 +6500,14 @@ function handleTrayWiseRejectionDraft(batchId, stockLotId, msgDiv, draftButton) 
       draftButton.disabled = false;
     }
   })
-  .catch((error) => {
+  .catch(() => {
     if (msgDiv) {
       msgDiv.style.color = "#d32f2f";
-      msgDiv.textContent = error.message || "Network error while saving draft";
+      msgDiv.textContent = "Network error while saving draft";
     }
     draftButton.disabled = false;
   });
 }
-// ...existing code...
-
-
-
 
 // ✅ REMOVED: refreshModalData function is no longer needed since we're refreshing the page
 
@@ -6675,6 +6743,67 @@ function fetchDelinkCalculationForBatchRejection(lotId, missingQty) {
             <i class="fa fa-check" style="margin-right: 6px;"></i>
             Submit
           `;
+          // ✅ Initialize button state (will be updated by validation)
+          confirmBtn.disabled = true;
+          confirmBtn.style.setProperty('opacity', '0.5', 'important');
+          confirmBtn.style.setProperty('cursor', 'not-allowed', 'important');
+          confirmBtn.style.setProperty('pointer-events', 'none', 'important');
+          confirmBtn.style.setProperty('filter', 'grayscale(1)', 'important');
+          confirmBtn.style.setProperty('background', '#95a5a6', 'important');
+          confirmBtn.style.setProperty('background-color', '#95a5a6', 'important');
+          console.log('🔧 [BATCH-REJECTION] Button initialized with disabled state');
+          
+          // ✅ CRITICAL: Attach click handler AFTER button is shown
+          setTimeout(() => {
+            const btn = document.getElementById('confirmDelinkBtn');
+            if (btn) {
+              // Remove old handler
+              const newBtn = btn.cloneNode(true);
+              btn.parentNode.replaceChild(newBtn, btn);
+              
+              // Add new handler
+              newBtn.addEventListener('click', function() {
+                console.log('🖱️ [BATCH-REJECTION] Submit button clicked!');
+                if (newBtn.disabled) {
+                  console.log('⚠️ [BATCH-REJECTION] Button is disabled, ignoring click');
+                  return;
+                }
+                
+                const modal = document.getElementById('delinkModal');
+                const lotId = modal ? modal.dataset.lotId : null;
+                const batchId = modal ? modal.dataset.batchId : null;
+                const isBatchRejection = modal ? modal.dataset.isBatchRejection === 'true' : false;
+                const lotRejectionRemarks = modal ? modal.dataset.lotRejectionRemarks : '';
+                const totalQty = modal ? modal.dataset.totalQty : '0';
+                
+                console.log('🎯 [BATCH-REJECTION] Context:', { lotId, batchId, isBatchRejection, lotRejectionRemarks, totalQty });
+                
+                // Collect tray IDs
+                const delinkTrayInputs = document.querySelectorAll('.delink-tray-input');
+                const topTrayInput = document.getElementById('topTrayIdInput');
+                
+                const delinkTrayIds = Array.from(delinkTrayInputs).map(input => input.value.trim()).filter(id => id);
+                const topTrayId = topTrayInput ? topTrayInput.value.trim() : '';
+                const topTrayQtyElement = document.querySelector('#topTrayTableBody td:last-child');
+                const topTrayQty = topTrayQtyElement ? topTrayQtyElement.textContent.trim() : '';
+                
+                console.log('📦 [BATCH-REJECTION] Tray data:', { delinkTrayIds, topTrayId, topTrayQty });
+                
+                // Close modal
+                if (modal) modal.style.display = 'none';
+                
+                // Call batch rejection with delink
+                if (isBatchRejection && batchId && lotRejectionRemarks) {
+                  console.log('🚀 [BATCH-REJECTION] Calling performBatchRejectionWithDelink');
+                  performBatchRejectionWithDelink(lotId, batchId, delinkTrayIds, topTrayId, topTrayQty, lotRejectionRemarks, totalQty);
+                } else {
+                  console.log('⚠️ [BATCH-REJECTION] Missing required data for batch rejection');
+                  showAlert('Error', 'Missing required data for batch rejection', 'error');
+                }
+              });
+              console.log('✅ [BATCH-REJECTION] Click handler attached to submit button');
+            }
+          }, 200);
         }
       } else {
         showDelinkError(data.error || 'Failed to calculate delink requirements for batch rejection');
@@ -6706,10 +6835,12 @@ function populateDelinkTablesForBatchRejection(data) {
     if (delinkCountSpan) delinkCountSpan.textContent = data.delink_count || data.delink_trays.length;
     data.delink_trays.forEach((_, index) => {
       const row = document.createElement('tr');
+      // ✅ Add autofocus to first input, maxlength=9 to all inputs
+      const autoFocusAttr = index === 0 ? 'autofocus' : '';
       row.innerHTML = `
         <td style="font-weight: 600; background: #ffebee; padding: 4px; font-size: 12px; width: 40px;">${index + 1}</td>
         <td style="padding: 4px;">
-          <input type="text" class="form-control delink-tray-input" value="" placeholder="Scan Tray ID" autocomplete="off" style="width: 100%; padding: 6px; font-size: 12px; height: 28px;" />
+          <input type="text" class="form-control delink-tray-input" value="" placeholder="Scan Tray ID" autocomplete="off" maxlength="9" ${autoFocusAttr} tabindex="0" style="width: 100%; padding: 6px; font-size: 12px; height: 28px;" />
           <div class="tray-id-error" style="display: none; font-size: 10px; margin-top: 2px;"></div>
         </td>
       `;
@@ -6734,7 +6865,7 @@ function populateDelinkTablesForBatchRejection(data) {
     const row = document.createElement('tr');
     row.innerHTML = `
       <td style="padding: 4px;">
-        <input type="text" id="topTrayIdInput" class="form-control" value="" placeholder="Scan Top Tray ID" autocomplete="off" style="width: 100%; padding: 6px; font-size: 12px; height: 28px;" />
+        <input type="text" id="topTrayIdInput" class="form-control" value="" placeholder="Scan Top Tray ID" autocomplete="off" maxlength="9" tabindex="0" style="width: 100%; padding: 6px; font-size: 12px; height: 28px;" />
         <div class="tray-id-error" style="display: none; font-size: 10px; margin-top: 2px;"></div>
       </td>
       <td style="font-weight: 600; color: #2e7d32; padding: 4px; font-size: 12px; text-align: center; width: 60px;">${data.top_tray.qty}</td>
@@ -6766,6 +6897,16 @@ function populateDelinkTablesForBatchRejection(data) {
       th.style.fontSize = '11px';
     });
   });
+
+  // ✅ Auto-focus first input after modal loads (like batch accept)
+  setTimeout(() => {
+    const firstInput = document.querySelector('.delink-tray-input, #topTrayIdInput');
+    if (firstInput) {
+      firstInput.focus();
+      firstInput.select();
+      console.log('🎯 [REJECTION-AUTO-FOCUS] Focused first input field');
+    }
+  }, 150);
 
   // Attach validation to inputs
   setTimeout(() => {
@@ -6801,6 +6942,11 @@ function attachValidationToInputsForBatchRejection() {
       const newInput = input.cloneNode(true);
       input.parentNode.replaceChild(newInput, input);
       inputArray[index] = newInput;
+      
+      // ✅ Initialize validation state tracking
+      newInput._hasError = false;
+      newInput._isValidating = false;
+      newInput._validationTimer = null;
       
       // Get error div
       let errorDiv = newInput.parentElement.querySelector('.tray-id-error');
@@ -6868,11 +7014,14 @@ function attachValidationToInputsForBatchRejection() {
           errorDiv.style.color = '#dc3545';
           errorDiv.style.display = 'block';
           
-          // Stay on current input and select text
-          setTimeout(() => {
-            newInput.focus();
-            newInput.select();
-          }, 100);
+          // ✅ INSTANT AUTO-SELECT: Only for 9-character entries (like batch accept)
+          if (trayId.length >= 9) {
+            console.log('❌ Duplicate entry (≥9 chars) - auto-selecting text for correction');
+            setTimeout(() => {
+              newInput.focus();
+              newInput.select();
+            }, 100);
+          }
           
           validateAllInputsAndUpdateButtonsForBatchRejection();
           return;
@@ -6919,11 +7068,14 @@ function attachValidationToInputsForBatchRejection() {
               errorDiv.style.color = '#dc3545';
               errorDiv.style.display = 'block';
               
-              // Stay on current input
-              setTimeout(() => {
-                newInput.focus();
-                newInput.select();
-              }, 100);
+              // ✅ INSTANT AUTO-SELECT: Only for 9-character entries (like batch accept)
+              if (trayId.length >= 9) {
+                console.log('❌ Invalid entry (≥9 chars) - auto-selecting text for correction');
+                setTimeout(() => {
+                  newInput.focus();
+                  newInput.select();
+                }, 100);
+              }
             }
             
             // Update buttons
@@ -6937,6 +7089,14 @@ function attachValidationToInputsForBatchRejection() {
             errorDiv.textContent = 'Network error';
             errorDiv.style.color = '#dc3545';
             errorDiv.style.display = 'block';
+            
+            // ✅ INSTANT AUTO-SELECT: Only for 9-character entries (like batch accept)
+            const trayId = newInput.value.trim();
+            if (trayId.length >= 9) {
+              newInput.focus();
+              newInput.select();
+              console.log('🔧 [AUTO-SELECT] Network error (≥9 chars) - auto-selected for retry');
+            }
             
             validateAllInputsAndUpdateButtonsForBatchRejection();
           });
@@ -6970,8 +7130,9 @@ function attachValidationToInputsForBatchRejection() {
         validateInput(false);
       });
       
-      // INPUT EVENT (clear errors while typing)
+      // INPUT EVENT (clear errors while typing + INSTANT VALIDATION with AUTO-PROGRESSION)
       newInput.addEventListener('input', function() {
+        // Clear error state while typing
         if (this._hasError) {
           this._hasError = false;
           this.style.border = '';
@@ -6979,7 +7140,143 @@ function attachValidationToInputsForBatchRejection() {
           errorDiv.style.display = 'none';
           validateAllInputsAndUpdateButtonsForBatchRejection();
         }
+        
+        const trayId = this.value.trim();
+        
+        // Clear existing validation timer
+        if (this._validationTimer) {
+          clearTimeout(this._validationTimer);
+        }
+        
+        if (!trayId) {
+          return;
+        }
+        
+        // ✅ INSTANT VALIDATION with AUTO-PROGRESSION: Validate when tray ID reaches 3+ characters
+        if (trayId.length >= 3) {
+          // Small debounce (50ms) for instant feedback without excessive requests
+          this._validationTimer = setTimeout(() => {
+            console.log(`🎯 [REJECTION-INSTANT] Auto-validating after typing: ${trayId}`);
+            
+            // ✅ AUTO-MOVE if tray ID is complete (9 characters) and valid
+            const shouldAutoMove = trayId.length === 9;
+            console.log(`🎯 [REJECTION-INSTANT] Auto-move: ${shouldAutoMove} (length: ${trayId.length})`);
+            
+            // Perform instant validation with auto-progression for 9-char IDs
+            performInstantValidation(trayId, shouldAutoMove);
+          }, 50);
+        }
       });
+      
+      // ✅ NEW: Instant validation function for auto-progression without Enter
+      const performInstantValidation = (trayId, shouldAutoMove) => {
+        // Reset state
+        newInput._hasError = false;
+        newInput.style.border = '';
+        newInput.style.backgroundColor = '';
+        errorDiv.style.display = 'none';
+        
+        if (!trayId) {
+          return;
+        }
+        
+        // FIRST: Check for duplicates
+        if (checkForDuplicates(trayId)) {
+          console.log(`[REJECTION-INSTANT-DUPLICATE] Found duplicate: ${trayId}`);
+          newInput._hasError = true;
+          newInput.style.border = '2px solid #dc3545';
+          newInput.style.backgroundColor = '#ffebee';
+          errorDiv.textContent = `Duplicate Tray ID: "${trayId}"`;
+          errorDiv.style.color = '#dc3545';
+          errorDiv.style.display = 'block';
+          
+          // Auto-select if 9 characters
+          if (trayId.length >= 9) {
+            newInput.focus();
+            newInput.select();
+          }
+          
+          validateAllInputsAndUpdateButtonsForBatchRejection();
+          return;
+        }
+        
+        // SECOND: API validation
+        const lotId = getCurrentLotId();
+        
+        fetch(`/brass_audit/brass_audit_validate_tray_id/?tray_id=${encodeURIComponent(trayId)}&lot_id=${encodeURIComponent(lotId)}`)
+          .then(res => res.json())
+          .then(data => {
+            console.log(`[REJECTION-INSTANT-API-RESPONSE] Input ${index}:`, data);
+            
+            if (data && data.exists && data.valid_for_lot) {
+              // ✅ SUCCESS - Valid tray ID
+              newInput._hasError = false;
+              newInput.style.border = '2px solid #28a745';
+              newInput.style.backgroundColor = '#f8fff8';
+              errorDiv.textContent = '✓ Available!';
+              errorDiv.style.color = '#28a745';
+              errorDiv.style.display = 'block';
+              
+              // Auto-hide success message
+              setTimeout(() => {
+                errorDiv.style.display = 'none';
+                newInput.style.border = '2px solid #28a745';
+              }, 1500);
+              
+              // ✅ INSTANT AUTO-PROGRESSION: Move immediately if tray is complete (9 chars)
+              if (shouldAutoMove) {
+                console.log('✅ [REJECTION-INSTANT] Valid 9-char ID - instantly moving to next field');
+                const currentIndex = inputArray.indexOf(newInput);
+                const nextInput = inputArray[currentIndex + 1];
+                
+                if (nextInput) {
+                  nextInput.focus();
+                  nextInput.select();
+                } else {
+                  const submitBtn = document.getElementById('confirmDelinkBtn');
+                  if (submitBtn && !submitBtn.disabled) {
+                    submitBtn.focus();
+                  }
+                }
+              }
+              
+            } else {
+              // ❌ ERROR - Invalid tray ID
+              newInput._hasError = true;
+              newInput.style.border = '2px solid #dc3545';
+              newInput.style.backgroundColor = '#ffebee';
+              errorDiv.textContent = data.error || '✗ Invalid tray ID';
+              errorDiv.style.color = '#dc3545';
+              errorDiv.style.display = 'block';
+              
+              // Auto-select if 9 characters
+              if (trayId.length >= 9) {
+                console.log('❌ [REJECTION-INSTANT] Invalid 9-char ID - auto-selecting for correction');
+                newInput.focus();
+                newInput.select();
+              }
+            }
+            
+            validateAllInputsAndUpdateButtonsForBatchRejection();
+          })
+          .catch(error => {
+            console.error(`[REJECTION-INSTANT-API-ERROR] Input ${index}:`, error);
+            newInput._hasError = true;
+            newInput.style.border = '2px solid #dc3545';
+            newInput.style.backgroundColor = '#ffebee';
+            errorDiv.textContent = '✗ Network error';
+            errorDiv.style.color = '#dc3545';
+            errorDiv.style.display = 'block';
+            
+            // Auto-select if 9 characters
+            if (trayId.length >= 9) {
+              newInput.focus();
+              newInput.select();
+            }
+            
+            validateAllInputsAndUpdateButtonsForBatchRejection();
+          });
+      };
       
       console.log(`[READY] Input ${index} configured with Enter navigation`);
     });
@@ -6995,30 +7292,52 @@ function attachValidationToInputsForBatchRejection() {
 // ✅ NEW: Validate inputs for batch rejection
 function validateAllInputsAndUpdateButtonsForBatchRejection() {
   const confirmBtn = document.getElementById('confirmDelinkBtn');
-  if (!confirmBtn) return;
+  if (!confirmBtn) {
+    console.log('❌ [REJECTION-VALIDATION] Confirm button not found');
+    return;
+  }
   
   const allInputs = document.querySelectorAll('.delink-tray-input, #topTrayIdInput');
+  console.log(`🔍 [REJECTION-VALIDATION] Checking ${allInputs.length} inputs`);
+  
   let hasErrors = false;
   let hasEmptyInputs = false;
   
-  allInputs.forEach(input => {
-    if (input._hasError) {
+  allInputs.forEach((input, idx) => {
+    const hasError = input._hasError === true;
+    const isEmpty = !input.value.trim();
+    console.log(`  Input ${idx}: value="${input.value}", hasError=${hasError}, isEmpty=${isEmpty}`);
+    
+    if (hasError) {
       hasErrors = true;
     }
-    if (!input.value.trim()) {
+    if (isEmpty) {
       hasEmptyInputs = true;
     }
   });
   
-  // Enable/disable confirm button
+  console.log(`📊 [REJECTION-VALIDATION] Summary: hasErrors=${hasErrors}, hasEmptyInputs=${hasEmptyInputs}`);
+  
+  // Enable/disable confirm button with green styling when enabled
   if (hasErrors || hasEmptyInputs) {
+    console.log('🔴 [REJECTION-VALIDATION] Disabling button (errors or empty inputs)');
     confirmBtn.disabled = true;
-    confirmBtn.style.opacity = '0.5';
-    confirmBtn.style.cursor = 'not-allowed';
+    confirmBtn.style.setProperty('opacity', '0.5', 'important');
+    confirmBtn.style.setProperty('cursor', 'not-allowed', 'important');
+    confirmBtn.style.setProperty('pointer-events', 'none', 'important');
+    confirmBtn.style.setProperty('filter', 'grayscale(1)', 'important');
+    confirmBtn.style.setProperty('background', '#95a5a6', 'important'); // Gray when disabled
+    confirmBtn.style.setProperty('background-color', '#95a5a6', 'important');
   } else {
+    console.log('🟢 [REJECTION-VALIDATION] Enabling button (all validations passed)');
     confirmBtn.disabled = false;
-    confirmBtn.style.opacity = '1';
-    confirmBtn.style.cursor = 'pointer';
+    confirmBtn.style.setProperty('opacity', '1', 'important');
+    confirmBtn.style.setProperty('cursor', 'pointer', 'important');
+    confirmBtn.style.setProperty('pointer-events', 'auto', 'important'); // ✅ CRITICAL: Enable clicks
+    confirmBtn.style.setProperty('filter', 'none', 'important'); // ✅ CRITICAL: Remove grayscale
+    confirmBtn.style.setProperty('background', '#27ae60', 'important'); // Green when enabled
+    confirmBtn.style.setProperty('background-color', '#27ae60', 'important');
+    console.log('✅ [REJECTION-VALIDATION] Button enabled with green background');
   }
 }
 
@@ -7968,10 +8287,12 @@ function populateDelinkTables(data) {
         if (delinkCountSpan) delinkCountSpan.textContent = data.delink_count || data.delink_trays.length;
         data.delink_trays.forEach((_, index) => {
             const row = document.createElement('tr');
+            // ✅ Add autofocus to first input and maxlength=9 for all
+            const autofocusAttr = index === 0 ? 'autofocus' : '';
             row.innerHTML = `
                 <td style="font-weight: 600; background: #ffebee; padding: 4px; font-size: 12px; width: 40px;">${index + 1}</td>
                 <td style="padding: 4px;">
-                    <input type="text" class="form-control delink-tray-input" value="" placeholder="Scan Tray ID" autocomplete="off" style="width: 100%; padding: 6px; font-size: 12px; height: 28px;" />
+                    <input type="text" class="form-control delink-tray-input" value="" placeholder="Scan Tray ID" autocomplete="off" maxlength="9" ${autofocusAttr} style="width: 100%; padding: 6px; font-size: 12px; height: 28px;" />
                     <div class="tray-id-error" style="display: none; font-size: 10px; margin-top: 2px;"></div>
                 </td>
             `;
@@ -7985,9 +8306,10 @@ function populateDelinkTables(data) {
     // Compact Top Tray Section
     if (data.top_tray) {
         const row = document.createElement('tr');
+        // ✅ Add maxlength=9 to top tray input
         row.innerHTML = `
             <td style="padding: 4px;">
-                <input type="text" id="topTrayIdInput" class="form-control" value="" placeholder="Scan Top Tray ID" autocomplete="off" style="width: 100%; padding: 6px; font-size: 12px; height: 28px;" />
+                <input type="text" id="topTrayIdInput" class="form-control" value="" placeholder="Scan Top Tray ID" autocomplete="off" maxlength="9" style="width: 100%; padding: 6px; font-size: 12px; height: 28px;" />
                 <div class="tray-id-error" style="display: none; font-size: 10px; margin-top: 2px;"></div>
             </td>
             <td style="font-weight: 600; color: #2e7d32; padding: 4px; font-size: 12px; text-align: center; width: 60px;">${data.top_tray.qty}</td>
@@ -7997,6 +8319,20 @@ function populateDelinkTables(data) {
     } else {
         if (topTraySection) topTraySection.style.display = 'none';
     }
+
+    // ✅ Auto-focus on first input after modal content loads
+    setTimeout(() => {
+        const firstInput = document.querySelector('.delink-tray-input');
+        const topTrayInput = document.getElementById('topTrayIdInput');
+        
+        if (firstInput) {
+            console.log('✅ Auto-focusing on first delink tray input');
+            firstInput.focus();
+        } else if (topTrayInput) {
+            console.log('✅ Auto-focusing on top tray input (no delink trays)');
+            topTrayInput.focus();
+        }
+    }, 150);
 
     setTimeout(() => {
         attachValidationToInputs();
@@ -8017,6 +8353,11 @@ function attachValidationToInputs() {
     const newInput = input.cloneNode(true);
     input.parentNode.replaceChild(newInput, input);
     inputArray[index] = newInput;
+    
+    // ✅ Initialize validation state tracking
+    newInput._hasError = false;
+    newInput._isValidating = false;
+    newInput._validationTimer = null;
     
     // Error div setup
     let errorDiv = newInput.parentElement.querySelector('.tray-id-error');
@@ -8041,12 +8382,12 @@ function attachValidationToInputs() {
         setTimeout(() => {
           nextInput.focus();
           nextInput.select();
-        }, 100);
+        }, 50); // ✅ Faster response (like Brass QC)
       } else {
         console.log(`[ACCEPT-NAVIGATION] Last field - focusing submit button`);
         const submitBtn = document.getElementById('confirmDelinkBtn');
         if (submitBtn && !submitBtn.disabled) {
-          setTimeout(() => submitBtn.focus(), 100);
+          setTimeout(() => submitBtn.focus(), 50); // ✅ Faster response
         }
       }
     };
@@ -8118,36 +8459,50 @@ function attachValidationToInputs() {
           console.log(`[ACCEPT-API-RESPONSE] Input ${index}:`, data);
           
           if (data && data.exists && data.valid_for_lot) {
-            // SUCCESS
+            // SUCCESS - Valid tray ID
             newInput._hasError = false;
             newInput.style.border = '2px solid #28a745';
             newInput.style.backgroundColor = '#f8fff8';
-            errorDiv.textContent = 'Available!';
+            errorDiv.textContent = '✓ Available!';
             errorDiv.style.color = '#28a745';
             errorDiv.style.display = 'block';
             
-            // Auto-hide success message
-            setTimeout(() => errorDiv.style.display = 'none', 1500);
+            // Auto-hide success message after 1.5 seconds
+            setTimeout(() => {
+              errorDiv.style.display = 'none';
+              newInput.style.border = '2px solid #28a745'; // Keep green border
+            }, 1500);
             
-            // Move to next field if Enter was pressed
+            // ✅ INSTANT AUTO-PROGRESSION: Move to next field immediately (like Brass QC)
             if (shouldMoveOnSuccess) {
-              setTimeout(moveToNext, 200);
+              console.log('✅ Valid entry - instantly moving to next field');
+              const nextInput = findNextInput();
+              if (nextInput) {
+                nextInput.focus();
+                nextInput.select();
+              } else {
+                const submitBtn = document.getElementById('confirmDelinkBtn');
+                if (submitBtn && !submitBtn.disabled) {
+                  submitBtn.focus();
+                }
+              }
             }
             
           } else {
-            // ERROR
+            // ERROR - Invalid tray ID
             newInput._hasError = true;
             newInput.style.border = '2px solid #dc3545';
             newInput.style.backgroundColor = '#ffebee';
-            errorDiv.textContent = data.error || 'Invalid tray ID';
+            errorDiv.textContent = data.error || '✗ Invalid tray ID';
             errorDiv.style.color = '#dc3545';
             errorDiv.style.display = 'block';
             
-            // Stay on current field
-            setTimeout(() => {
+            // ✅ INSTANT AUTO-SELECT: Only for 9-character entries (like Brass QC)
+            if (trayId.length >= 9) {
+              console.log('❌ Invalid entry (≥9 chars) - auto-selecting text for correction');
               newInput.focus();
-              newInput.select();
-            }, 100);
+              newInput.select(); // Select all text for easy replacement
+            }
           }
           
           validateAllInputsAndUpdateButtons();
@@ -8157,9 +8512,17 @@ function attachValidationToInputs() {
           newInput._hasError = true;
           newInput.style.border = '2px solid #dc3545';
           newInput.style.backgroundColor = '#ffebee';
-          errorDiv.textContent = 'Network error';
+          errorDiv.textContent = '✗ Network error';
           errorDiv.style.color = '#dc3545';
           errorDiv.style.display = 'block';
+          
+          // ✅ INSTANT AUTO-SELECT: Only for 9-character entries (like Brass QC)
+          const trayId = newInput.value.trim();
+          if (trayId.length >= 9) {
+            newInput.focus();
+            newInput.select();
+            console.log('🔧 [AUTO-SELECT] Network error (≥9 chars) - auto-selected for retry');
+          }
           
           validateAllInputsAndUpdateButtons();
         });
@@ -8194,18 +8557,149 @@ function attachValidationToInputs() {
       validateAndMove(false);
     });
     
-    // INPUT HANDLER (clear errors while typing)
+    // INPUT HANDLER (clear errors while typing + INSTANT VALIDATION with AUTO-PROGRESSION)
     newInput.addEventListener('input', function() {
+      // Clear error state while typing
       if (this._hasError) {
         resetState();
         validateAllInputsAndUpdateButtons();
       }
+      
+      const trayId = this.value.trim();
+      
+      // Clear existing validation timer
+      if (this._validationTimer) {
+        clearTimeout(this._validationTimer);
+      }
+      
+      if (!trayId) {
+        return;
+      }
+      
+      // ✅ INSTANT VALIDATION with AUTO-PROGRESSION: Validate when tray ID reaches 3+ characters
+      if (trayId.length >= 3) {
+        // Small debounce (50ms) for instant feedback without excessive requests
+        this._validationTimer = setTimeout(() => {
+          console.log(`🎯 [INSTANT] Auto-validating after typing: ${trayId}`);
+          
+          // ✅ AUTO-MOVE if tray ID is complete (9 characters) and valid
+          const shouldAutoMove = trayId.length === 9;
+          console.log(`🎯 [INSTANT] Auto-move: ${shouldAutoMove} (length: ${trayId.length})`);
+          
+          // Perform instant validation with auto-progression for 9-char IDs
+          performInstantValidation(trayId, shouldAutoMove);
+        }, 50);
+      }
     });
     
-    console.log(`[ACCEPT-READY] Input ${index} configured with Enter navigation and duplicate prevention`);
+    // ✅ NEW: Instant validation function for auto-progression without Enter
+    const performInstantValidation = (trayId, shouldAutoMove) => {
+      resetState();
+      
+      if (!trayId) {
+        return;
+      }
+      
+      // FIRST: Check for duplicates
+      if (checkForDuplicates(trayId)) {
+        console.log(`[INSTANT-DUPLICATE] Found duplicate: ${trayId}`);
+        newInput._hasError = true;
+        newInput.style.border = '2px solid #dc3545';
+        newInput.style.backgroundColor = '#ffebee';
+        errorDiv.textContent = `Duplicate Tray ID: "${trayId}"`;
+        errorDiv.style.color = '#dc3545';
+        errorDiv.style.display = 'block';
+        
+        // Auto-select if 9 characters
+        if (trayId.length >= 9) {
+          newInput.focus();
+          newInput.select();
+        }
+        
+        validateAllInputsAndUpdateButtons();
+        return;
+      }
+      
+      // SECOND: API validation
+      const lotId = getCurrentLotId();
+      
+      fetch(`/brass_audit/brass_audit_validate_tray_id/?tray_id=${encodeURIComponent(trayId)}&lot_id=${encodeURIComponent(lotId)}`)
+        .then(res => res.json())
+        .then(data => {
+          console.log(`[INSTANT-API-RESPONSE] Input ${index}:`, data);
+          
+          if (data && data.exists && data.valid_for_lot) {
+            // ✅ SUCCESS - Valid tray ID
+            newInput._hasError = false;
+            newInput.style.border = '2px solid #28a745';
+            newInput.style.backgroundColor = '#f8fff8';
+            errorDiv.textContent = '✓ Available!';
+            errorDiv.style.color = '#28a745';
+            errorDiv.style.display = 'block';
+            
+            // Auto-hide success message
+            setTimeout(() => {
+              errorDiv.style.display = 'none';
+              newInput.style.border = '2px solid #28a745';
+            }, 1500);
+            
+            // ✅ INSTANT AUTO-PROGRESSION: Move immediately if tray is complete (9 chars)
+            if (shouldAutoMove) {
+              console.log('✅ [INSTANT] Valid 9-char ID - instantly moving to next field');
+              const nextInput = findNextInput();
+              if (nextInput) {
+                nextInput.focus();
+                nextInput.select();
+              } else {
+                const submitBtn = document.getElementById('confirmDelinkBtn');
+                if (submitBtn && !submitBtn.disabled) {
+                  submitBtn.focus();
+                }
+              }
+            }
+            
+          } else {
+            // ❌ ERROR - Invalid tray ID
+            newInput._hasError = true;
+            newInput.style.border = '2px solid #dc3545';
+            newInput.style.backgroundColor = '#ffebee';
+            errorDiv.textContent = data.error || '✗ Invalid tray ID';
+            errorDiv.style.color = '#dc3545';
+            errorDiv.style.display = 'block';
+            
+            // Auto-select if 9 characters
+            if (trayId.length >= 9) {
+              console.log('❌ [INSTANT] Invalid 9-char ID - auto-selecting for correction');
+              newInput.focus();
+              newInput.select();
+            }
+          }
+          
+          validateAllInputsAndUpdateButtons();
+        })
+        .catch(error => {
+          console.error(`[INSTANT-API-ERROR] Input ${index}:`, error);
+          newInput._hasError = true;
+          newInput.style.border = '2px solid #dc3545';
+          newInput.style.backgroundColor = '#ffebee';
+          errorDiv.textContent = '✗ Network error';
+          errorDiv.style.color = '#dc3545';
+          errorDiv.style.display = 'block';
+          
+          // Auto-select if 9 characters
+          if (trayId.length >= 9) {
+            newInput.focus();
+            newInput.select();
+          }
+          
+          validateAllInputsAndUpdateButtons();
+        });
+    };
+    
+    console.log(`[ACCEPT-READY] Input ${index} configured with Enter navigation, instant validation, and duplicate prevention`);
   });
   
-  console.log('[ACCEPT-SUCCESS] All accept button inputs ready for Enter + duplicate validation');
+  console.log('[ACCEPT-SUCCESS] All accept button inputs ready for instant validation + Enter + duplicate validation');
 }
 
 function getCurrentLotId() {
@@ -8238,29 +8732,51 @@ function getCurrentLotId() {
 
 function validateAllInputsAndUpdateButtons() {
     const confirmBtn = document.getElementById('confirmDelinkBtn');
-    if (!confirmBtn) return;
+    if (!confirmBtn) {
+        console.log('❌ [ACCEPT-VALIDATION] Confirm button not found');
+        return;
+    }
     
     const allInputs = document.querySelectorAll('.delink-tray-input, #topTrayIdInput');
+    console.log(`🔍 [ACCEPT-VALIDATION] Checking ${allInputs.length} inputs`);
+    
     let hasErrors = false;
     let hasEmptyInputs = false;
     
-    allInputs.forEach(input => {
-        if (input._hasError) {
+    allInputs.forEach((input, idx) => {
+        const hasError = input._hasError === true;
+        const isEmpty = !input.value.trim();
+        console.log(`  Input ${idx}: value="${input.value}", hasError=${hasError}, isEmpty=${isEmpty}`);
+        
+        if (hasError) {
             hasErrors = true;
         }
-        if (!input.value.trim()) {
+        if (isEmpty) {
             hasEmptyInputs = true;
         }
     });
     
+    console.log(`📊 [ACCEPT-VALIDATION] Summary: hasErrors=${hasErrors}, hasEmptyInputs=${hasEmptyInputs}`);
+    
     if (hasErrors || hasEmptyInputs) {
+        console.log('🔴 [ACCEPT-VALIDATION] Disabling button (errors or empty inputs)');
         confirmBtn.disabled = true;
-        confirmBtn.style.opacity = '0.5';
-        confirmBtn.style.cursor = 'not-allowed';
+        confirmBtn.style.setProperty('opacity', '0.5', 'important');
+        confirmBtn.style.setProperty('cursor', 'not-allowed', 'important');
+        confirmBtn.style.setProperty('pointer-events', 'none', 'important');
+        confirmBtn.style.setProperty('filter', 'grayscale(1)', 'important');
+        confirmBtn.style.setProperty('background', '#95a5a6', 'important'); // Gray when disabled
+        confirmBtn.style.setProperty('background-color', '#95a5a6', 'important');
     } else {
+        console.log('🟢 [ACCEPT-VALIDATION] Enabling button (all validations passed)');
         confirmBtn.disabled = false;
-        confirmBtn.style.opacity = '1';
-        confirmBtn.style.cursor = 'pointer';
+        confirmBtn.style.setProperty('opacity', '1', 'important');
+        confirmBtn.style.setProperty('cursor', 'pointer', 'important');
+        confirmBtn.style.setProperty('pointer-events', 'auto', 'important'); // ✅ CRITICAL: Enable clicks
+        confirmBtn.style.setProperty('filter', 'none', 'important'); // ✅ CRITICAL: Remove grayscale
+        confirmBtn.style.setProperty('background', '#27ae60', 'important'); // Green when enabled
+        confirmBtn.style.setProperty('background-color', '#27ae60', 'important');
+        console.log('✅ [ACCEPT-VALIDATION] Button enabled with green background');
     }
 }
 
@@ -8323,6 +8839,7 @@ function setupModalEventListeners() {
     if (closeDelinkModal) {
         closeDelinkModal.addEventListener('click', function() {
             console.log('❌ Close button clicked');
+                window.location.reload(); 
             if (delinkModal) delinkModal.style.display = 'none';
         });
     }
@@ -8330,6 +8847,7 @@ function setupModalEventListeners() {
     if (cancelDelinkBtn) {
         cancelDelinkBtn.addEventListener('click', function() {
             console.log('🚫 Cancel button clicked');
+                window.location.reload(); 
             if (delinkModal) delinkModal.style.display = 'none';
         });
     }
@@ -9103,11 +9621,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // ✅ FIXED: Handle Close button click - Complete tooltip closure
     const closeBtn = tooltip?.querySelector('.close-btn');
+    
     if (closeBtn) {
       // Initially hide the button
       closeBtn.style.display = 'none';
       
       closeBtn.addEventListener('click', function(e) {
+        window.location.reload();
         e.stopPropagation();
         console.log('🔴 Close button clicked');
         
@@ -9969,182 +10489,73 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }, true);
 })();
-</script>
 
+// ===== SORTING FUNCTIONALITY =====
 
-<script nonce="{{ csp_nonce }}">
+// Column mapping for sorting
+const columnMapping = {
+  1: 'serial_number',
+  2: 'brass_audit_last_process_date_time',
+  3: 'plating_stk_no',
+  4: 'polishing_stk_no',
+  5: 'plating_color',
+  6: 'category',
+  7: 'polish_finish',
+  8: 'tray_capacity',
+  9: 'vendor_location',
+  10: 'no_of_trays',
+  11: 'lot_qty',
+  12: 'brass_audit_physical_qty',
+  13: 'brass_audit_accepted_qty',
+  14: 'reject_qty'
+};
 
-// ================================
-// AUTO-SAVE AND AUTO-LOAD FOR BRASS AUDIT TRAY SCAN MODALS (UPDATED FOR CUSTOM MODALS)
-// ================================
+// Get current sort parameters from URL
+const urlParams = new URLSearchParams(window.location.search);
+const currentSort = urlParams.get('sort');
+const currentOrder = urlParams.get('order');
 
-// Function to auto-save draft on modal close (builds on existing saveTopTrayScanDraft)
-function autoSaveDraftOnModalClose(modalId, lotId) {
-    if (!lotId) {
-        console.warn('[Auto-Save] No lotId provided for draft save.');
-        return;
+// Update sort icons on page load
+if (currentSort && currentOrder) {
+  const currentColumn = Object.keys(columnMapping).find(key => columnMapping[key] === currentSort);
+  if (currentColumn) {
+    const th = document.querySelector(`th[data-column-index="${currentColumn}"]`);
+    if (th) {
+      const icon = th.querySelector('i');
+      if (icon) {
+        icon.className = currentOrder === 'asc' ? 'fa fa-sort-up' : 'fa fa-sort-down';
+      }
     }
-
-    // Collect current inputs (extend as needed for delink trays, etc.)
-    const topTrayId = $('#top_tray_id').val() || '';
-    const topTrayQty = parseInt($('#top_tray_qty').val()) || 0;
-    const delinkTrays = [];
-    $('#delink_trays_container .delink-tray-row').each(function() {
-        const trayId = $(this).find('.delink_tray_id').val();
-        const originalCapacity = parseInt($(this).find('.original_capacity').val()) || 0;
-        if (trayId) {
-            delinkTrays.push({ tray_id: trayId, original_capacity: originalCapacity });
-        }
-    });
-
-    // Determine mode (normal or delink-only)
-    const isDelinkOnly = !topTrayId && delinkTrays.length > 0;
-
-    // Prepare data for draft save (matches existing saveTopTrayScanDraft structure)
-    const draftData = {
-        lot_id: lotId,
-        tray_id: topTrayId,
-        tray_qty: topTrayQty,
-        delink_tray_ids: delinkTrays.map(d => d.tray_id),
-        delink_trays_data: { positions: delinkTrays.map((d, idx) => ({ position: idx, tray_id: d.tray_id, original_capacity: d.original_capacity })) },
-        draft_save: true,
-        is_delink_only: isDelinkOnly
-    };
-
-    // Delay save slightly to ensure inputs are finalized (avoids saving mid-edit)
-    setTimeout(() => {
-        // Use existing saveTopTrayScanDraft function if available, else fallback to AJAX
-        if (typeof saveTopTrayScanDraft === 'function') {
-            saveTopTrayScanDraft(draftData);  // Leverages your existing function
-        } else {
-            $.ajax({
-                url: '/brass_audit/brass_audit_save_single_top_tray_scan/',
-                type: 'POST',
-                data: JSON.stringify(draftData),
-                contentType: 'application/json',
-                headers: { 'X-CSRFToken': $('input[name=csrfmiddlewaretoken]').val() },
-                success: function(response) {
-                    if (response.success) {
-                        console.log('[Auto-Save] Draft saved successfully on modal close.');
-                    } else {
-                        console.error('[Auto-Save] Failed to save draft:', response.error);
-                    }
-                },
-                error: function(xhr) {
-                    console.error('[Auto-Save] AJAX error:', xhr.responseText);
-                }
-            });
-        }
-    }, 500);  // 500ms delay; adjust if needed
+  }
 }
 
-// Function to auto-load draft on modal open (enhances existing loadDelinkAndDraftData)
-function autoLoadDraftOnModalOpen(modalId, lotId) {
-    if (!lotId) {
-        console.warn('[Auto-Load] No lotId provided for draft load.');
-        return;
+// Add click event listeners to sortable headers
+document.querySelectorAll('th.sortable').forEach(function(th) {
+  th.addEventListener('click', function() {
+    const columnIndex = this.getAttribute('data-column-index');
+    const sortField = columnMapping[columnIndex];
+    
+    if (!sortField) return;
+
+    let newOrder = 'asc';
+    
+    // If clicking the same column, toggle order
+    if (currentSort === sortField) {
+      newOrder = currentOrder === 'asc' ? 'desc' : 'asc';
     }
 
-    // Use existing loadTopTrayScanDraft function if available, else fallback to AJAX
-    if (typeof loadTopTrayScanDraft === 'function') {
-        loadTopTrayScanDraft(lotId);  // Leverages your existing function
-    } else {
-        $.ajax({
-            url: '/brass_audit/brass_audit_get_top_tray_scan_draft/',
-            type: 'GET',
-            data: { lot_id: lotId },
-            success: function(response) {
-                if (response.success && response.has_draft) {
-                    const draft = response.draft_data;
-                    // Populate inputs (extend populateTopTrayDraftData logic)
-                    $('#top_tray_id').val(draft.tray_id || '');
-                    $('#top_tray_qty').val(draft.tray_qty || 0);
-                    // Handle delink trays (build on existing loadDelinkAndDraftData)
-                    if (draft.delink_tray_ids && draft.delink_tray_ids.length > 0) {
-                        // Clear existing delink rows and repopulate
-                        $('#delink_trays_container').empty();
-                        draft.delink_tray_ids.forEach((trayId, idx) => {
-                            // Add row and populate (reuse your existing addDelinkTrayRow logic if possible)
-                            const rowHtml = `<div class="delink-tray-row">...`;  // Replace with your actual row HTML
-                            $('#delink_trays_container').append(rowHtml);
-                            // Populate fields
-                            $(`#delink_tray_id_${idx}`).val(trayId);
-                            $(`#original_capacity_${idx}`).val(draft.delink_trays[idx]?.original_capacity || 0);
-                        });
-                    }
-                    console.log('[Auto-Load] Draft loaded and inputs populated.');
-                } else {
-                    console.log('[Auto-Load] No draft found; inputs remain empty.');
-                }
-            },
-            error: function(xhr) {
-                console.error('[Auto-Load] AJAX error:', xhr.responseText);
-            }
-        });
-    }
-}
-
-// UPDATED: Use MutationObserver to detect modal display changes (for custom modals)
-$(document).ready(function() {
-    const modalsToWatch = ['#trayScanModal_DayPlanning', '#newPopupModal'];  // Add more if needed
-
-    modalsToWatch.forEach(modalId => {
-        const modal = $(modalId)[0];  // Get DOM element
-        if (!modal) {
-            console.warn(`[Auto-Save/Load] Modal ${modalId} not found.`);
-            return;
-        }
-
-        // Create MutationObserver to watch for style changes (display: none/block)
-        const observer = new MutationObserver(function(mutations) {
-            mutations.forEach(function(mutation) {
-                if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
-                    const display = modal.style.display;
-                    const lotId = modal.dataset.lotId;  // Retrieve lotId from modal's data attribute
-
-                    if (display === 'block' && lotId) {
-                        // Modal opened - auto-load draft
-                        console.log(`[Auto-Load] Modal ${modalId} opened for lotId: ${lotId}`);
-                        autoLoadDraftOnModalOpen(modalId, lotId);
-                    } else if (display === 'none' && lotId) {
-                        // Modal closed - auto-save draft
-                        console.log(`[Auto-Save] Modal ${modalId} closed for lotId: ${lotId}`);
-                        autoSaveDraftOnModalClose(modalId, lotId);
-                    }
-                }
-            });
-        });
-
-        // Start observing the modal for style attribute changes
-        observer.observe(modal, { attributes: true, attributeFilter: ['style'] });
-
-        console.log(`[Auto-Save/Load] MutationObserver set up for ${modalId}`);
-    });
-
-    // Additional: Clear draft after final submission to prevent stale data
-    // Attach to your existing submit button (e.g., #submitTopTrayScan)
-    $('#submitTopTrayScan').on('click', function() {
-        // After successful submit (in your existing success callback), clear draft
-        const lotId = $('#current_lot_id').val();
-        if (lotId) {
-            $.ajax({
-                url: '/brass_clear_draft/',  // Assuming this endpoint exists from your code
-                type: 'POST',
-                data: JSON.stringify({ lot_id: lotId, draft_type: 'top_tray_scan' }),
-                contentType: 'application/json',
-                headers: { 'X-CSRFToken': $('input[name=csrfmiddlewaretoken]').val() },
-                success: function() {
-                    console.log('[Draft Clear] Draft cleared after final submission.');
-                }
-            });
-        }
-    });
+    // Build new URL with sort parameters
+    const newUrl = new URL(window.location);
+    newUrl.searchParams.set('sort', sortField);
+    newUrl.searchParams.set('order', newOrder);
+    
+    // Navigate to the new URL
+    window.location.href = newUrl.toString();
+  });
 });
 
+// ===== END SORTING FUNCTIONALITY =====
+
 </script>
-
-
-
-
 
 {% endblock %} {% endblock content %}

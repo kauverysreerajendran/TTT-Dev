@@ -40,10 +40,9 @@ class Jig(models.Model):
     
     def has_active_draft(self):
         """Check if jig has active draft that hasn't been unloaded"""
-        return JigDetails.objects.filter(
-            jig_qr_id=self.jig_qr_id,
-            draft_save=True,
-            unload_over=False
+        return JigLoadingManualDraft.objects.filter(
+            jig_id=self.jig_qr_id,
+            draft_status='active'
         ).exists()
 
 # Create your models here.
@@ -141,97 +140,6 @@ class BathNumbers(models.Model):
     def __str__(self):
         return f"{self.bath_number} ({self.bath_type})"
 
-class JigDetails(models.Model):
-    JIG_POSITION_CHOICES = [
-        ('Top', 'Top'),
-        ('Middle', 'Middle'),
-        ('Bottom', 'Bottom'),
-    ]
-    jig_qr_id = models.CharField(max_length=100)
-    faulty_slots = models.IntegerField(default=0)
-    broken_hooks = models.IntegerField(default=0, help_text="Number of broken hooks")
-    jig_type = models.CharField(max_length=50)  # New field
-    jig_capacity = models.IntegerField()        # New field
-    bath_tub = models.CharField(max_length=100, help_text="Bath Tub",blank=True, null=True)
-    plating_color = models.CharField(max_length=50)
-    empty_slots = models.IntegerField(default=0)
-    ep_bath_type = models.CharField(max_length=50)
-    total_cases_loaded = models.IntegerField()
-    
-    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, help_text="User who created this draft")
-    
-    #JIG Loading Module - Remaining cases
-    jig_cases_remaining_count=models.IntegerField(default=0,blank=True,null=True)
-    updated_lot_qty = models.IntegerField(default=0, blank=True, null=True)
-    original_lot_qty = models.IntegerField(default=0, blank=True, null=True)
-    tray_info = models.JSONField(default=list, blank=True, null=True)
-    delink_tray_info = models.JSONField(default=list, blank=True, null=True)
-    partial_tray_info = models.JSONField(default=list, blank=True, null=True)
-    half_filled_tray_info = models.JSONField(default=list, blank=True, null=True)
-    
-
-    forging = models.CharField(max_length=100)
-    no_of_model_cases = ArrayField(models.CharField(max_length=50), blank=True, default=list)  # Correct ArrayField
-    no_of_cycle=models.IntegerField(default=1)
-    lot_id = models.CharField(max_length=100)
-    new_lot_ids = ArrayField(models.CharField(max_length=50), blank=True, default=list)  # Correct ArrayField
-    electroplating_only = models.BooleanField(default=False)
-    lot_id_quantities = JSONField(blank=True, null=True)
-    draft_save = models.BooleanField(default=False, help_text="Draft Save")
-    delink_tray_data = models.JSONField(default=list, blank=True, null=True)  # Add this field
-    half_filled_tray_data = models.JSONField(default=list, blank=True, null=True)
-    date_time = models.DateTimeField(default=timezone.now)
-    bath_numbers = models.ForeignKey(
-            BathNumbers,
-            on_delete=models.SET_NULL,  
-            null=True,                  
-            blank=True,
-            help_text="Related Bath Numbers"
-        )   
-    
-    jig_position = models.CharField(
-        max_length=10,
-        choices=JIG_POSITION_CHOICES,
-        blank=True,
-        null=True,
-        default=None,
-        help_text="Jig position: Top, Middle, or Bottom"
-    )
-    remarks = models.CharField(
-        max_length=50,
-        blank=True,
-        help_text="Remarks (max 50 words)"
-    )
-    pick_remarks=models.CharField(
-        max_length=50,
-        blank=True,
-        help_text="Remarks (max 50 words)"
-    )
-     
-    jig_unload_draft = models.BooleanField(default=False)
-    combined_lot_ids = ArrayField(models.CharField(max_length=50), blank=True, default=list)  # Correct ArrayField
-    jig_loaded_date_time = models.DateTimeField(null=True, blank=True, help_text="Last Process Date/Time")
-    IP_loaded_date_time = models.DateTimeField(null=True, blank=True, help_text="Ip last Process Date/Time")
-    last_process_module = models.CharField(max_length=100, blank=True, help_text="Last Process Module")
-    unload_over=models.BooleanField(default=False)
-    Un_loaded_date_time = models.DateTimeField(null=True, blank=True, help_text="Ip last Process Date/Time")
-    jig_lot_id = models.CharField(max_length=100, unique=True, blank=True, null=True, help_text="Unique Jig Lot ID")
-
-        
-    unload_holding_reason = models.CharField(max_length=255, null=True, blank=True, help_text="Unload Reason for holding the batch")
-    unload_release_reason = models.CharField(max_length=255, null=True, blank=True, help_text="Unload Reason for releasing the batch")
-    unload_hold_lot = models.BooleanField(default=False, help_text="Indicates if the lot is on hold n Unload")
-    unload_release_lot = models.BooleanField(default=False)
-    unloading_remarks = models.CharField(max_length=100, null=True, blank=True, help_text="JIG Pick Remarks")
-
-    def __str__(self):
-        return f"{self.jig_qr_id} - {self.jig_lot_id} - {self.no_of_cycle}"
-    
-    def save(self, *args, **kwargs):
-        if not self.jig_lot_id:
-            self.jig_lot_id = f"JLOT-{uuid.uuid4().hex[:12].upper()}"
-        super().save(*args, **kwargs)
-    
 #  Auto Save Table
 class JigAutoSave(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
@@ -267,6 +175,7 @@ class JigLoadingManualDraft(models.Model):
     jig_capacity = models.IntegerField(default=0, blank=True, null=True)
     broken_hooks = models.IntegerField(default=0, blank=True, null=True)
     loaded_cases_qty = models.IntegerField(default=0, blank=True, null=True)
+    plating_stock_num = models.CharField(max_length=100, blank=True, null=True)
     draft_status = models.CharField(max_length=20, choices=[('active', 'Active'), ('submitted', 'Submitted')], default='active')
 
     class Meta:
@@ -294,7 +203,17 @@ class JigCompleted(models.Model):
     jig_capacity = models.IntegerField(default=0, blank=True, null=True)
     broken_hooks = models.IntegerField(default=0, blank=True, null=True)
     loaded_cases_qty = models.IntegerField(default=0, blank=True, null=True)
+    plating_stock_num = models.CharField(max_length=100, blank=True, null=True)
     draft_status = models.CharField(max_length=20, choices=[('active', 'Active'), ('submitted', 'Submitted')], default='active')
+    hold_status = models.CharField(max_length=20, default='normal', blank=True, null=True)
+    is_multi_model = models.BooleanField(default=False)
+    jig_position = models.CharField(max_length=100, blank=True, null=True)
+    IP_loaded_date_time = models.DateTimeField(blank=True, null=True)
+    last_process_module = models.CharField(max_length=100, blank=True, null=True)
+    remarks = models.TextField(blank=True, null=True)
+    pick_remarks = models.TextField(blank=True, null=True)
+    bath_numbers = models.ForeignKey('BathNumbers', on_delete=models.SET_NULL, blank=True, null=True)
+    no_of_model_cases = models.TextField(blank=True, null=True)
 
     class Meta:
         unique_together = ['batch_id', 'lot_id', 'user']
