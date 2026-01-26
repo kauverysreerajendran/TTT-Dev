@@ -18,10 +18,7 @@ import logging
 import re
 import json
 from django.core.paginator import Paginator
-
-
-
-# Jig Loading Pick Table - Main View (display completed batch from Brass Audit Complete table)
+from datetime import datetime
 @method_decorator(login_required, name='dispatch') 
 class JigView(TemplateView):
     template_name = "JigLoading/Jig_Picktable.html"
@@ -135,6 +132,10 @@ class JigView(TemplateView):
                 'lot_status': lot_status,
                 'lot_status_class': lot_status_class,
             })
+        
+        # Sort by Last Updated descending (newest first)
+        master_data.sort(key=lambda x: x['brass_audit_last_process_date_time'] or datetime.min, reverse=True)
+        
         context['master_data'] = master_data
         
         # Pagination: 10 rows per page
@@ -559,29 +560,28 @@ class JigAddModalDataView(TemplateView):
 
         logger.info(f"🎯 Modal data prepared with {len(modal_data['model_images'])} images, {len(modal_data['delink_table'])} existing trays")
         
+        
         # --- Overflow Handling: Lot Qty > Jig Capacity ---
         if modal_data['original_lot_qty'] > modal_data['jig_capacity'] and modal_data['broken_buildup_hooks'] == 0:
             # Only apply this logic if there are NO broken hooks
-            # Calculate full trays for jig_capacity
-            tray_capacity = modal_data['tray_distribution']['current_lot']['tray_capacity']
-            full_trays = modal_data['jig_capacity'] // tray_capacity
-            effective_loaded = full_trays * tray_capacity
+            # Calculate effective loaded as jig_capacity (fill jig fully)
+            effective_loaded = modal_data['jig_capacity']
             leftover_cases = modal_data['original_lot_qty'] - effective_loaded
-            modal_data['half_filled_tray_cases'] = leftover_cases
-            modal_data['remaining_cases'] = leftover_cases
-
-            # Build delink_table with only full trays
+            
+            # Build delink_table with distribution for effective_loaded cases
+            delink_distribution = self._distribute_cases_to_trays(effective_loaded, tray_capacity)
             delink_table = []
-            for i in range(full_trays):
+            for tray in delink_distribution.get('trays', []):
                 delink_table.append({
                     'tray_id': '',
-                    'tray_quantity': tray_capacity,
-                    'model_bg': self._get_model_bg(i + 1),
-                    'original_quantity': tray_capacity,
+                    'tray_quantity': tray['cases'],
+                    'model_bg': self._get_model_bg(len(delink_table) + 1),
+                    'original_quantity': tray['cases'],
                     'excluded_quantity': 0,
                 })
+            
             modal_data['delink_table'] = delink_table
-
+            
             # Prepare half-filled tray for the leftover cases (excess)
             half_filled_distribution = self._distribute_half_filled_trays(leftover_cases, tray_capacity)
             modal_data['tray_distribution']['half_filled_lot'] = {
@@ -596,13 +596,11 @@ class JigAddModalDataView(TemplateView):
                 'effective_capacity': effective_loaded,
                 'broken_hooks': 0,
                 'tray_capacity': tray_capacity,
-                'distribution': self._distribute_cases_to_trays(effective_loaded, tray_capacity),
+                'distribution': delink_distribution,
                 'total_trays': len(delink_table)
             }
             
             modal_data['open_with_half_filled'] = True
-
-            # Set loaded_cases_qty to 0/effective_loaded
             modal_data['loaded_cases_qty'] = f"0/{effective_loaded}"
             modal_data['excess_message'] = f"{leftover_cases} cases are in excess"
         else:
@@ -2055,6 +2053,12 @@ class JigCompletedTable(TemplateView):
                 tray_info = []
                 if getattr(jig_completed, 'delink_tray_info', None):
                     tray_info = jig_completed.delink_tray_info
+                    # Set status for each tray
+                    for i, tray in enumerate(tray_info):
+                        if i == len(tray_info) - 1 and tray.get('tray_quantity', 0) < 12:
+                            tray['status'] = 'Partial load'
+                        else:
+                            tray['status'] = 'Delinked'
                     no_of_trays = len(tray_info)
                 else:
                     # Fallback to calculation

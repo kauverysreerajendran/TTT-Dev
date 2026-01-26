@@ -4905,6 +4905,12 @@ function filterAndHighlightCompatibleRows(modelNumber, lotId, batchId, trayType,
     
     const rowBaseModel = getBaseModel(rowPlatingStockNo);
     
+    // Calculate lookalike status early
+    const isLookalike = areLookalikes(modelNumber, rowPlatingStockNo);
+    
+    // Calculate same base model status early
+    const sameBaseModel = rowBaseModel === currentBaseModel;
+    
     // Comprehensive compatibility checks
     const reasons = [];
     let isCompatible = true;
@@ -4933,25 +4939,19 @@ function filterAndHighlightCompatibleRows(modelNumber, lotId, batchId, trayType,
       reasons.push(`different plating color (${rowPlatingColor} vs ${platingColor})`);
     }
     
-    // Rule 5: Must have same polish finish
-    if (rowPolishFinish !== polishFinish) {
+    // Rule 5: Must have same polish finish (skip for lookalikes or same base models)
+    if (!(isLookalike || sameBaseModel) && rowPolishFinish !== polishFinish) {
       isCompatible = false;
       reasons.push(`different polish finish (${rowPolishFinish} vs ${polishFinish})`);
     }
     
     // Rule 6: Model compatibility check
     if (isCompatible) {
-      const sameBaseModel = rowBaseModel === currentBaseModel;
       const isCrossAllowed = isCrossModelAllowed(modelNumber, rowPlatingStockNo, platingColor, polishFinish);
-      const isLookalike = areLookalikes(modelNumber, rowPlatingStockNo);
       
-      if (!sameBaseModel && !isCrossAllowed) {
+      if (!sameBaseModel && !isCrossAllowed && !isLookalike) {
         isCompatible = false;
-        if (isLookalike) {
-          reasons.push(`lookalike conflict (${rowBaseModel} vs ${currentBaseModel})`);
-        } else {
-          reasons.push(`different base model (${rowBaseModel} vs ${currentBaseModel})`);
-        }
+        reasons.push(`different base model (${rowBaseModel} vs ${currentBaseModel})`);
       }
     }
     

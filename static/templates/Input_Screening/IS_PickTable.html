@@ -2159,10 +2159,17 @@ window.restorePreviousRowPosition = restorePreviousRowPosition;
      const redoBtn = document.getElementById("trayQtyRedoBtn");
      const modal = document.getElementById("trayScanModal_DayPlanning");
      const detailsDiv = document.getElementById("trayScanDetails_DayPlanning");
-   
+     
+     let isValidationStarted = false; // Flag to prevent multiple validation starts
      
      if (validateBtn) {
        validateBtn.addEventListener("click", function () {
+         if (isValidationStarted) return; // Prevent multiple clicks from resetting
+         
+         isValidationStarted = true;
+         validateBtn.disabled = true; // Disable button after first click
+         validateBtn.textContent = "Validating..."; // Optional: change text to indicate state
+         
          setTimeout(() => {
            const topTrayRow = document.querySelector('#trayScanDetails_DayPlanning tbody tr:first-child');
            if (topTrayRow) {
@@ -2179,6 +2186,8 @@ window.restorePreviousRowPosition = restorePreviousRowPosition;
      // Redo icon click: reset qty, disable editing, disable Tray Validate
      if (redoBtn) {
        redoBtn.addEventListener('click', function () {
+         isValidationStarted = false; // Reset flag for new validation
+         
          const topTrayRow = document.querySelector('#trayScanDetails_DayPlanning tbody tr:first-child');
          if (topTrayRow) {
            const qtyInput = topTrayRow.querySelector('.tray-qty-input[data-top-tray="1"]');
@@ -2204,6 +2213,7 @@ window.restorePreviousRowPosition = restorePreviousRowPosition;
            validateBtn.style.background = "#f5faff";
            validateBtn.style.borderColor = "#023E4DCC";
            validateBtn.style.color = "#023E4DCC";
+           validateBtn.textContent = "Tray Validate"; // Reset text
          }
          if (redoBtn) redoBtn.style.display = 'none';
        });

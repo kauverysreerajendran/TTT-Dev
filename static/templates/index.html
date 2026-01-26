@@ -3,13 +3,13 @@
 <!-- Dashboard Styles -->
 <style>
   :root {
-    --primary: #0b52bc;
-    --success: #29c17a;
-    --info: #38c1dc;
-    --warning: #cf8935;
-    --danger: #e74c3c;
-    --purple: #9b59b6;
-    --orange: #f39c12;
+    --primary: #008080;
+    --success: #20b2aa;
+    --info: #40e0d0;
+    --warning: #00ced1;
+    --danger: #48d1cc;
+    --purple: #5f9ea0;
+    --orange: #66cdaa;
   }
 
   html,
@@ -19,22 +19,79 @@
     overflow-x: hidden;
   }
 
+  /* Cover Banner */
+  .cover-banner {
+    height: 200px;
+    background: url('{% static "assets/images/tealMetallic2.jpg" %}') center/cover
+      no-repeat;
+    position: relative;
+    border-radius: 20px;
+    margin-bottom: 2rem;
+    box-shadow: 0 8px 32px rgba(0, 128, 128, 0.3);
+  }
+
+  .cover-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 20px;
+  }
+
+  .cover-content {
+    text-align: center;
+    color: white;
+    z-index: 2;
+  }
+
+  .cover-title {
+    font-size: 3rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+  }
+
+  .cover-subtitle {
+    font-size: 1.2rem;
+    margin-bottom: 1rem;
+    opacity: 0.9;
+  }
+
+  .cover-date {
+    font-size: 1rem;
+    opacity: 0.8;
+  }
+
   /* Main Module Card */
   .module-card {
     border-radius: 20px;
     border: none;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
     overflow: hidden;
     margin-bottom: 2rem;
-    transition:
-      transform 0.3s ease,
-      box-shadow 0.3s ease;
-    background: white;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+    position: relative;
+  }
+
+  .module-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #008080, #20b2aa, #40e0d0, #00ced1);
+    z-index: 1;
   }
 
   .module-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    transform: translateY(-10px) scale(1.02);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
   }
 
   .module-header {
@@ -66,21 +123,15 @@
 
   /* Stat Card */
   .stat-card {
-    background: linear-gradient(135deg, #f5f7fa 0%, #ffffff 100%);
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 50%, #e9ecef 100%);
     border-radius: 15px;
     padding: 1.5rem;
     text-align: center;
-    border: 1px solid #e8ecf1;
-    transition:
-      transform 0.3s ease,
-      box-shadow 0.3s ease;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    transition: all 0.3s ease;
     position: relative;
     overflow: hidden;
-  }
-
-  .stat-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
   }
 
   .stat-card::before {
@@ -90,7 +141,24 @@
     left: 0;
     right: 0;
     height: 4px;
-    background: linear-gradient(90deg, #0b52bc, #29c17a, #38c1dc, #cf8935);
+    background: linear-gradient(90deg, #008080, #20b2aa, #40e0d0, #00ced1);
+    animation: gradientShift 3s ease infinite;
+  }
+
+  .stat-card:hover {
+    transform: translateY(-5px) scale(1.05);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    background: linear-gradient(135deg, #ffffff 0%, #f0f2f5 50%, #e1e5e9 100%);
+  }
+
+  .stat-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #008080, #20b2aa, #40e0d0, #00ced1);
     animation: gradientShift 3s ease infinite;
   }
 
@@ -136,7 +204,7 @@
 
   .progress-bar {
     height: 100%;
-    background: linear-gradient(90deg, #0b52bc, #29c17a);
+    background: linear-gradient(90deg, #008080, #20b2aa);
     transition: width 0.6s ease;
     border-radius: 3px;
   }
@@ -168,8 +236,8 @@
   }
 
   .date-selector:hover {
-    border-color: #0b52bc;
-    color: #0b52bc;
+    border-color: #008080;
+    color: #008080;
   }
 
   /* Carousel Navigation */
@@ -192,13 +260,29 @@
   }
 
   .carousel-dot.active {
-    background: #0b52bc;
+    background: #008080;
     width: 30px;
     border-radius: 5px;
   }
 
   /* Responsive */
   @media (max-width: 768px) {
+    .cover-banner {
+      height: 200px;
+    }
+
+    .cover-title {
+      font-size: 2rem;
+    }
+
+    .cover-title img {
+      height: 1.5rem;
+    }
+
+    .cover-subtitle {
+      font-size: 1rem;
+    }
+
     .dashboard-header {
       flex-direction: column;
       align-items: flex-start;
@@ -220,6 +304,18 @@
   }
 
   @media (max-width: 480px) {
+    .cover-banner {
+      height: 150px;
+    }
+
+    .cover-title {
+      font-size: 1.5rem;
+    }
+
+    .cover-title img {
+      height: 1.2rem;
+    }
+
     .stat-cards-container {
       grid-template-columns: 1fr;
     }
@@ -284,7 +380,7 @@
 
   .bar {
     width: 40px;
-    background: linear-gradient(to top, #0b52bc, #29c17a);
+    background: linear-gradient(to top, #008080, #20b2aa);
     border-radius: 5px 5px 0 0;
     transition: height 0.5s ease;
     min-height: 5px;
@@ -331,14 +427,25 @@
 </style>
 
 <div class="container-fluid px-2 px-md-4">
-  <!-- Dashboard Header -->
-  <div class="dashboard-header">
-    <div>
-      <h2>📊 Dashboard</h2>
-      <p class="text-muted mb-0">Real-time operations overview</p>
-    </div>
-    <div class="date-selector">
-      <i class="mdi mdi-calendar"></i> {{ current_date }}
+  <!-- Cover Banner -->
+  <div class="cover-banner">
+    <div class="cover-overlay">
+      <div class="cover-content">
+        <h2 class="cover-title">
+          <img
+            src="{% static 'assets/logo/titan_logo.png' %}"
+            alt="Titan Logo"
+            style="height: 3rem; margin-right: -1.5rem; vertical-align: middle"
+          />
+          Watchcase Tracker Dashboard
+        </h2>
+        <p class="cover-subtitle">
+          Real-time operations overview and analytics
+        </p>
+        <div class="cover-date">
+          <i class="mdi mdi-calendar"></i> {{ current_date }}
+        </div>
+      </div>
     </div>
   </div>
 
@@ -403,7 +510,7 @@
           <div class="progress-bar-container">
             <div
               class="progress-bar"
-              style="width: {{ stat.in_progress_percent }}%; background: linear-gradient(90deg, #f39c12, #e74c3c);"
+              style="width: {{ stat.in_progress_percent }}%; background: linear-gradient(90deg, #20b2aa, #40e0d0);"
             ></div>
           </div>
         </div>
@@ -445,28 +552,28 @@
           <div class="bar-item">
             <div
               class="bar"
-              style="height: {{ stat.yet_to_start_percent }}%; background: linear-gradient(to top, #95a5a6, #bdc3c7);"
+              style="height: {{ stat.yet_to_start_percent }}%; background: linear-gradient(to top, #5f9ea0, #778899);"
             ></div>
             <span>Yet to Start</span>
           </div>
           <div class="bar-item">
             <div
               class="bar"
-              style="height: {{ stat.drafted_percent }}%; background: linear-gradient(to top, #f39c12, #e67e22);"
+              style="height: {{ stat.drafted_percent }}%; background: linear-gradient(to top, #20b2aa, #48d1cc);"
             ></div>
             <span>Draft</span>
           </div>
           <div class="bar-item">
             <div
               class="bar"
-              style="height: {{ stat.processed_percent }}%; background: linear-gradient(to top, #0b52bc, #29c17a);"
+              style="height: {{ stat.processed_percent }}%; background: linear-gradient(to top, #008080, #20b2aa);"
             ></div>
             <span>Released</span>
           </div>
           <div class="bar-item">
             <div
               class="bar"
-              style="height: {{ stat.in_progress_percent }}%; background: linear-gradient(to top, #3498db, #2980b9);"
+              style="height: {{ stat.in_progress_percent }}%; background: linear-gradient(to top, #40e0d0, #00ced1);"
             ></div>
             <span>In Progress</span>
           </div>
@@ -517,9 +624,38 @@
     updateActiveDot(0);
   }
 
-  // Update active dot on scroll
+  // Auto-slide functionality
+  let autoSlideInterval;
+  function startAutoSlide() {
+    autoSlideInterval = setInterval(() => {
+      const cards = document.querySelectorAll(".module-card");
+      const dots = document.querySelectorAll(".carousel-dot");
+      if (cards.length === 0) return;
+
+      let currentIndex = Array.from(dots).findIndex((dot) =>
+        dot.classList.contains("active"),
+      );
+      let nextIndex = (currentIndex + 1) % cards.length;
+
+      cards[nextIndex].scrollIntoView({ behavior: "smooth", block: "nearest" });
+      updateActiveDot(nextIndex);
+    }, 5000); // Slide every 5 seconds
+  }
+
+  function stopAutoSlide() {
+    clearInterval(autoSlideInterval);
+  }
+
+  // Start auto-slide on page load
+  startAutoSlide();
+
+  // Pause auto-slide on hover
   const container = document.querySelector(".modules-container");
   if (container) {
+    container.addEventListener("mouseenter", stopAutoSlide);
+    container.addEventListener("mouseleave", startAutoSlide);
+
+    // Update active dot on scroll
     container.addEventListener("scroll", () => {
       const cards = document.querySelectorAll(".module-card");
       let closestIndex = 0;
