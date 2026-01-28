@@ -2336,8 +2336,13 @@ def user_allowed_modules(request):
             return Response({'success': False, 'error': str(e)}, status=500)
 
     # ----- GET logic -----
-    # If user is superuser OR in Admin group OR department is Admin → full access
-    if (
+    # ----- GET logic -----
+    # Check if a specific user_id is requested (for Admin editing)
+    target_user = user
+    requested_user_id = request.GET.get('user_id')
+    
+    # Permission check for fetching other users
+    is_admin = (
         user.is_superuser
         or user.groups.filter(name__iexact="Admin").exists()
         or (
@@ -2345,13 +2350,31 @@ def user_allowed_modules(request):
             and user.userprofile.department
             and user.userprofile.department.name.lower() == "admin"
         )
+    )
+
+    if requested_user_id and is_admin:
+        try:
+            target_user = User.objects.get(id=requested_user_id)
+        except User.DoesNotExist:
+            return Response({'allowed_modules': []}, status=404)
+
+    # 1. If target is Admin/Superuser -> Full Access
+    # (We check target_user properties here)
+    if (
+        target_user.is_superuser
+        or target_user.groups.filter(name__iexact="Admin").exists()
+        or (
+            hasattr(target_user, 'userprofile')
+            and target_user.userprofile.department
+            and target_user.userprofile.department.name.lower() == "admin"
+        )
     ):
         all_modules = Module.objects.all()
         modules = [{"name": mod.name, "headings": mod.headings} for mod in all_modules]
         return Response({"modules": modules})
 
-    # Normal users: use UserModuleProvision
-    provisions = UserModuleProvision.objects.filter(user=user)
+    # 2. Normal users: use UserModuleProvision for target_user
+    provisions = UserModuleProvision.objects.filter(user=target_user)
     modules = [{"name": p.module_name, "headings": p.headings} for p in provisions]
     return Response({"modules": modules})
 

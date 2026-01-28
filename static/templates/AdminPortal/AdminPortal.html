@@ -1354,6 +1354,12 @@ async function editUser(userId) {
     // Store editing user id for update logic if needed
     // Store editing user id for update logic if needed
     window.editingUserId = userId;
+    
+    // Update URL to persist state
+    const url = new URL(window.location);
+    url.searchParams.set("edit_user_id", userId);
+    window.history.replaceState({}, "", url);
+
     if (typeof updateBreadcrumbAccess === "function") updateBreadcrumbAccess();
 
     // Make password and confirm fields optional for edit and show helper note
@@ -1378,14 +1384,16 @@ async function editUser(userId) {
 
     // --- Auto-populate modules for this user ---
     // Fetch allowed modules for this user
-    const modRes = await fetch(`/adminportal/api/user-allowed-modules/`, {
-      method: "POST",
+    // --- Auto-populate modules for this user ---
+    // Fetch allowed modules for this user
+    // FIXED: Use GET with query param to fetch specific user modules
+    const modRes = await fetch(`/adminportal/api/user-allowed-modules/?user_id=${userId}`, {
+      method: "GET",
       headers: {
-        "Content-Type": "application/json",
+        "Accept": "application/json",
         "X-CSRFToken": getCookie("csrftoken")
       },
-      credentials: "same-origin",
-      body: JSON.stringify({ user_id: userId })
+      credentials: "same-origin"
     });
     const modData = await modRes.json();
     if (modData.modules && Array.isArray(modData.modules)) {
@@ -1832,6 +1840,11 @@ form.addEventListener("submit", async function (e) {
    function completeUserFlow() {
      window.latestCreatedUser = null;
      window.editingUserId = null;
+     
+     // Remove URL param
+     const url = new URL(window.location);
+     url.searchParams.delete("edit_user_id");
+     window.history.replaceState({}, "", url);
 
      if (typeof resetUserForm === "function") {
        resetUserForm();
@@ -3608,6 +3621,16 @@ document.getElementById("btn-module-save-next").onclick = async function () {
      populateDepartments();
      populateRoles();
      populateUserCategories();
+
+     // Check for persisted edit state
+     const url = new URL(window.location);
+     const editId = url.searchParams.get("edit_user_id");
+     if (editId) {
+         // Small delay to ensure dependencies are loaded
+         setTimeout(() => {
+             editUser(editId);
+         }, 100);
+     }
    });
 </script>
 
