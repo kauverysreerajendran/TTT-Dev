@@ -2266,7 +2266,8 @@ class UserListAPIView(APIView):
                 "manager": manager,
                 "employment_status": employment_status,
                 "modules": modules,
-                "created": created
+                "created": created,
+                "is_superuser": user.is_superuser
             })
         return Response({
             "results": user_list,
