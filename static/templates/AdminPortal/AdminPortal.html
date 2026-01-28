@@ -1307,8 +1307,8 @@ async function editUser(userId) {
     document.getElementById("lastName").value = user.last_name || "";
     document.getElementById("email").value = user.email || "";
     document.getElementById("manager").value = user.manager || "";
-/*     document.getElementById("password").value = "";
-    document.getElementById("confirmPassword").value = ""; */
+    document.getElementById("password").value = "";
+    document.getElementById("confirmPassword").value = "";
     document.getElementById("passwordStrengthMsg").textContent = "";
     document.getElementById("passwordMatchIcon").style.display = "none";
 
@@ -1340,11 +1340,11 @@ async function editUser(userId) {
   const conf = document.getElementById("confirmPassword");
   if (pwd) {
     pwd.required = false;
-    // preserve any value already entered in the password field
+    pwd.placeholder = "Leave blank to keep current password";
   }
   if (conf) {
     conf.required = false;
-    // preserve any value already entered in the confirm password field
+    conf.placeholder = "Leave blank to keep current password";
   }
   // remove helper note if it exists (we're not showing the "Leave blank..." message)
   const existingNote = document.getElementById("passwordOptionalNote");

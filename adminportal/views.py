@@ -2431,6 +2431,12 @@ class UserDetailAPIView(APIView):
             user.first_name = data.get('first_name', user.first_name)
             user.last_name = data.get('last_name', user.last_name)
             user.email = data.get('email', user.email)
+            
+            # Update password only if provided
+            password = data.get('password')
+            if password and password.strip():
+                user.set_password(password)
+                
             user.save()
 
             profile = getattr(user, 'userprofile', None)
