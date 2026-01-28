@@ -1005,10 +1005,12 @@
                      aria-labelledby="settingsDropdown"
                      style="min-width: 200px;"
                      >
+                     {% if is_admin %}
                      <a class="dropdown-item" href="{% url 'adminportal' %}">
                      <i class="ti-user text-primary" style="margin-right: 8px;"></i>
                      User Creation
                      </a>
+                     {% endif %}
                      <a class="dropdown-item" href="{% url 'dp_modelmaster' %}">
                      <i class="ti-package text-primary" style="margin-right: 8px;"></i>
                      Model Master
