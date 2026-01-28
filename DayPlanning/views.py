@@ -603,7 +603,7 @@ class DPBulkUploadView(APIView):
                         continue
 
                     # 3. Cross-validation: Check if resolved plating_color_internal matches with the plating color from Excel
-                    if plating_obj_code.pk != plating_color_obj.pk:
+                    if plating_obj_code.plating_color.strip().upper() != plating_colour.strip().upper():
                         failure_count += 1
                         failed_rows.append(f"Row {idx}: ❌ Plating color mismatch: Stock code '{plating_stock_no}' resolves to '{plating_obj_code.plating_color}' but Excel shows '{plating_colour}'.")
                         continue
@@ -878,7 +878,7 @@ class DPBulkUploadView(APIView):
                     continue
 
                 # 3. Cross-validation: Check if resolved plating_color_internal matches with the plating color from Excel
-                if plating_obj_code.pk != plating_color_obj.pk:
+                if plating_obj_code.plating_color.strip().upper() != plating_colour.strip().upper():
                     failure_count += 1
                     failed_rows.append(f"Row {idx}: ❌ Plating color mismatch: Stock code '{plating_stock_no}' resolves to '{plating_obj_code.plating_color}' but Excel shows '{plating_colour}'.")
                     continue

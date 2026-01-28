@@ -140,7 +140,9 @@ class IS_PickTable(APIView):
             tray_scan_exists=True,
 
         ).exclude(
-            totalstockmodel__remove_lot=True    
+            totalstockmodel__remove_lot=True
+        ).exclude(
+        totalstockmodel__accepted_Ip_stock=True   
         ).order_by('-date_time')
 
         # Pagination
@@ -4214,12 +4216,21 @@ def reject_check_tray_id_simple(request):
 
     tray_obj = IPTrayId.objects.filter(tray_id=tray_id, lot_id=current_lot_id).first()
     if not tray_obj:
-        return JsonResponse({
-            'exists': False,
-            'valid_for_rejection': False,
-            'error': 'Tray not found in lot',
-            'status_message': 'Not Found'
-        })
+        # Check if it's a delinked tray from Jig Loading
+        if JigLoadTrayId.objects.filter(tray_id=tray_id).exists():
+            return JsonResponse({
+                'exists': True,
+                'valid_for_rejection': True,
+                'status_message': 'Delinked Tray Available',
+                'validation_type': 'delinked_tray'
+            })
+        else:
+            return JsonResponse({
+                'exists': False,
+                'valid_for_rejection': False,
+                'error': 'Tray not found in lot',
+                'status_message': 'Not Found'
+            })
 
     if not getattr(tray_obj, 'IP_tray_verified', False):
         return JsonResponse({
@@ -4237,22 +4248,57 @@ def reject_check_tray_id_simple(request):
             'status_message': 'Already Rejected'
         })
 
-    # ✅ OPTION C: FLEXIBLE TRAY SELECTION - Allow ANY tray that will be completely emptied
-    # User can select any tray they want. Validation checks if this specific tray
-    # will be completely consumed by rejection qty (considering already-selected trays)
-    trays = IPTrayId.objects.filter(lot_id=current_lot_id, IP_tray_verified=True, rejected_tray=False).order_by('tray_id')
+    # ✅ FIXED LOGIC: Calculate total session rejections and determine which trays will be emptied
+    trays = IPTrayId.objects.filter(lot_id=current_lot_id, IP_tray_verified=True, rejected_tray=False).order_by('-top_tray', 'date')
     original_distribution = [t.tray_quantity for t in trays]
     
-    # Find the index and quantity of current tray being validated
+    # Calculate total rejection quantity from current session (including current rejection)
+    total_session_qty = rejection_qty  # Start with current rejection
+    
+    # Add quantities from existing allocations (excluding SHORTAGE)
+    for alloc in current_session_allocations:
+        reason_text = alloc.get('reason_text', '').upper()
+        if reason_text != 'SHORTAGE':
+            alloc_qty = int(alloc.get('qty', 0) or alloc.get('rejection_qty', 0) or 0)
+            total_session_qty += alloc_qty
+
+    print(f"🔧 [REUSE VALIDATION] Total session rejection qty: {total_session_qty}")
+    print(f"🔧 [REUSE VALIDATION] Original distribution: {original_distribution}")
+    
+    # ✅ CORRECTED: Calculate which trays will be COMPLETELY emptied by total rejections
+    trays_that_will_be_emptied = []
+    remaining_to_consume = total_session_qty
+    
+    # Consume from trays in order (smallest first for optimal emptying)
+    sorted_indices = sorted(range(len(original_distribution)), key=lambda i: original_distribution[i])
+    
+    for i in sorted_indices:
+        tray_qty = original_distribution[i]
+        if remaining_to_consume <= 0:
+            break
+            
+        if remaining_to_consume >= tray_qty:
+            # This tray will be completely emptied
+            trays_that_will_be_emptied.append(i)
+            remaining_to_consume -= tray_qty
+            print(f"🔧 [REUSE VALIDATION] Tray {i} (qty: {tray_qty}) will be emptied")
+        else:
+            # This tray will only be partially consumed - does NOT count as emptied
+            print(f"🔧 [REUSE VALIDATION] Tray {i} (qty: {tray_qty}) will be partially consumed ({remaining_to_consume}/{tray_qty})")
+            break  # Stop here, partial consumption doesn't count as emptying
+    
+    max_allowed_reuse_trays = len(trays_that_will_be_emptied)
+    print(f"🔧 [REUSE VALIDATION] Max allowed reuse trays: {max_allowed_reuse_trays}")
+    print(f"🔧 [REUSE VALIDATION] Trays that will be emptied: {trays_that_will_be_emptied}")
+    
+    # ✅ Find the index of this tray
     tray_index = None
-    current_tray_qty = None
     for idx, t in enumerate(trays):
         if t.tray_id == tray_id:
             tray_index = idx
-            current_tray_qty = t.tray_quantity
             break
-
-    if tray_index is None or current_tray_qty is None:
+    
+    if tray_index is None:
         return JsonResponse({
             'exists': False,
             'valid_for_rejection': False,
@@ -4260,58 +4306,43 @@ def reject_check_tray_id_simple(request):
             'status_message': 'Not Found'
         })
     
-    # ✅ Calculate CONSUMED qty from ALREADY-SELECTED trays for this rejection reason
-    # Each allocation in frontend represents ONE tray that was selected
-    # The frontend sends: qty = that tray's capacity (or consumed qty)
-    consumed_qty = 0
-    already_selected_tray_ids = []
-    
-    for alloc in current_session_allocations:
-        reason_text = alloc.get('reason_text', '').upper()
-        alloc_reason_id = alloc.get('reason_id', '')
-        
-        # Only count selections for THIS rejection reason (excluding current tray and SHORTAGE)
-        if alloc_reason_id == rejection_reason_id and reason_text != 'SHORTAGE':
-            tray_ids = alloc.get('tray_ids', [])
-            if isinstance(tray_ids, str):
-                tray_ids = [tray_ids]
-            
-            for tid in tray_ids:
-                if tid and tid != tray_id:  # Exclude current tray to avoid double counting
-                    already_selected_tray_ids.append(tid)
-                    # The qty in alloc represents what will be consumed from this tray
-                    # which is min(remaining_rejection_qty, tray_capacity)
-                    # For sequential allocation: just add the tray's capacity
-                    tray_qty = alloc.get('qty', 0)
-                    consumed_qty += tray_qty
-    
-    # ✅ Calculate REMAINING rejection qty after already-selected trays
-    remaining_rejection_qty = rejection_qty - consumed_qty
-    
-    print(f"🔧 [FLEXIBLE REUSE] Validating tray: {tray_id} (index {tray_index}, qty {current_tray_qty})")
-    print(f"🔧 [FLEXIBLE REUSE] Already-selected trays: {already_selected_tray_ids} (consumed qty: {consumed_qty})")
-    print(f"🔧 [FLEXIBLE REUSE] Rejection qty: {rejection_qty}")
-    print(f"🔧 [FLEXIBLE REUSE] Remaining rejection qty after selected: {remaining_rejection_qty}")
-    print(f"🔧 [FLEXIBLE REUSE] Current tray qty: {current_tray_qty}")
-    
-    # ✅ NEW LOGIC: Check if current tray will be COMPLETELY CONSUMED by remaining qty
-    # A tray can be used if:
-    # - Remaining rejection qty >= current tray qty (tray will be fully consumed)
-    # - OR remaining rejection qty is exactly enough (tray will be fully consumed)
-    will_be_completely_consumed = (remaining_rejection_qty >= current_tray_qty) and (remaining_rejection_qty > 0)
-    
-    print(f"🔧 [FLEXIBLE REUSE] Will {tray_id} be completely consumed?")
-    print(f"  - Remaining qty ({remaining_rejection_qty}) >= Tray qty ({current_tray_qty})? {remaining_rejection_qty >= current_tray_qty}")
-    print(f"  - Remaining qty > 0? {remaining_rejection_qty > 0}")
-    print(f"  - Result: {will_be_completely_consumed}")
-
-    # ✅ Allow reuse ONLY if this tray will be completely consumed by remaining qty
-    if not will_be_completely_consumed:
+    # ✅ Check if this tray will be emptied - only allow reuse of emptied trays
+    if tray_index not in trays_that_will_be_emptied:
         return JsonResponse({
             'exists': True,
             'valid_for_rejection': False,
-            'error': f'Tray will not be completely consumed. Remaining qty: {remaining_rejection_qty}, Tray qty: {current_tray_qty}',
+            'error': 'Tray cannot be reused: only trays that will be completely emptied by the total rejection quantity can be reused',
             'status_message': 'Not eligible for reuse'
+        })
+    
+    # ✅ Count how many emptied trays are already being reused in current session
+    trays_already_reused = set()
+    for alloc in current_session_allocations:
+        tray_ids = alloc.get('tray_ids', [])
+        if isinstance(tray_ids, str):
+            tray_ids = [tray_ids]
+        
+        # Only count existing trays that are in the emptied list
+        for existing_tray_id in tray_ids:
+            for idx, t in enumerate(trays):
+                if t.tray_id == existing_tray_id and idx in trays_that_will_be_emptied:
+                    trays_already_reused.add(existing_tray_id)
+                    break
+    
+    current_reuse_count = len(trays_already_reused)
+    print(f"🔧 [REUSE VALIDATION] Emptied trays already being reused: {current_reuse_count} ({list(trays_already_reused)})")
+    
+    # ✅ Check if this would exceed the allowed reuse limit
+    if current_reuse_count >= max_allowed_reuse_trays:
+        return JsonResponse({
+            'exists': True,
+            'valid_for_rejection': False,
+            'error': f'Reuse limit exceeded: Only {max_allowed_reuse_trays} emptied tray(s) can be reused (total rejection {total_session_qty} empties {max_allowed_reuse_trays} tray(s)), but {current_reuse_count} already in use',
+            'status_message': f'Max {max_allowed_reuse_trays} reuse allowed',
+            'max_allowed_reuse': max_allowed_reuse_trays,
+            'current_reuse_count': current_reuse_count,
+            'total_session_qty': total_session_qty,
+            'trays_already_reused': list(trays_already_reused)
         })
 
     # ✅ Check for duplicate usage of same tray for same rejection reason
@@ -4336,6 +4367,11 @@ def reject_check_tray_id_simple(request):
     return JsonResponse({
         'exists': True,
         'valid_for_rejection': True,
-        'status_message': 'Tray reuse allowed',
-        'validation_type': 'tray_will_be_consumed'
+        'status_message': f'Tray reuse allowed ({current_reuse_count + 1}/{max_allowed_reuse_trays} trays)',
+        'validation_type': 'existing_tray_reuse',
+        'max_allowed_reuse': max_allowed_reuse_trays,
+        'current_reuse_count': current_reuse_count + 1,  # Including this tray
+        'total_session_qty': total_session_qty,
+        'trays_that_will_be_emptied': trays_that_will_be_emptied,
+        'original_distribution': original_distribution
     })

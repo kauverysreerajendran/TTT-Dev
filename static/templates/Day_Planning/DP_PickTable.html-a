@@ -587,6 +587,29 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
     grid-template-columns: 30px 1fr 70px 90px !important;
   }
 }
+
+/* Redo2.png button visibility and hover effects */
+#trayScanRedoClearBtn {
+  display: inline-block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  width: 24px !important;
+  height: 24px !important;
+  min-width: 24px !important;
+  min-height: 24px !important;
+  cursor: pointer !important;
+  transition: transform 0.2s ease, opacity 0.2s ease !important;
+  flex-shrink: 0 !important;
+}
+
+#trayScanRedoClearBtn:hover {
+  transform: scale(1.15) !important;
+  opacity: 0.8 !important;
+}
+
+#trayScanRedoClearBtn:active {
+  transform: scale(0.95) !important;
+}
 </style>
  
 
@@ -927,10 +950,10 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
       <h5 style="margin: 0; font-weight: 600; color: #595959;">Day Planning - Tray Scan</h5>
       <div style="display: flex; align-items: center; gap: 16px;">
-<div id="trayScanSummary" style="font-weight: 600; font-size: 15px; color: #028084; margin-bottom: 0; white-space: nowrap;">
-  Qty to Scan: 0/0
+<div id="trayScanSummary" style="font-weight: 600; font-size: 15px; color: #028084; margin-bottom: 0; display: flex; align-items: center; gap: 8px;">
+  <span style="white-space: nowrap;">Qty to Scan: 0/0</span>
+  <img src="{% static 'assets/icons/redo2.png' %}" alt="Redo" id="trayScanRedoClearBtn" title="Clear Tray IDs" style="width: 24px; height: 24px; cursor: pointer; flex-shrink: 0;" />
 </div>
-        <img src="{% static 'assets/icons/redo2.png' %}" alt="Redo" id="trayIDRedoBtn" title="Clear Tray IDs" style="width: 24px; height: 24px; cursor: pointer;" />
       </div>
     </div>
 
@@ -1010,14 +1033,6 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
 
                   <!-- Hidden input field - completely invisible to users -->
                   <input id="trayValidateInput" type="text" placeholder="Enter validation info..." style="position: absolute; left: -9999px; opacity: 0; pointer-events: none;" />
-
-                  <img
-                      src="{% static 'assets/icons/redo2.png' %}"
-                      alt="Redo"
-                      id="trayScanRedoBtn"
-                      style="width: 24px; height: 24px; cursor: pointer; margin-left: 8px;"
-                      title="Clear Tray IDs"
-                  />
                 </div>
                 
                 <!-- Error message container - initially hidden -->
@@ -1771,7 +1786,7 @@ document.addEventListener("DOMContentLoaded", function () {
       if (!detailsDiv) return;
 
       // Clear all tray ID inputs
-      const trayIdInputs = detailsDiv.querySelectorAll('.tray-id-input');
+      const trayIdInputs = detailsDiv.querySelectorAll('.tray-id, .tray-id-input');
       trayIdInputs.forEach((input, index) => {
         input.value = '';
         input.style.borderColor = '';
@@ -1798,14 +1813,7 @@ document.addEventListener("DOMContentLoaded", function () {
       
       console.log('🔄 Redo: Cleared all tray IDs and unchecked verification');
       
-      // ✅ NEW: Update the button's data attribute to reflect unverified state
-      const currentBatchId = window.currentModalConfig?.batchId;
-      if (currentBatchId) {
-        const openerBtn = document.querySelector(`.tray-scan-btn[data-batch-id="${currentBatchId}"]`);
-        if (openerBtn) {
-          openerBtn.setAttribute('data-top-tray-qty-verified', 'False');
-        }
-      }
+    
       
       // ✅ NEW: Focus on first empty tray ID input after clearing
       const firstTrayIdInput = detailsDiv.querySelector('.tray-id-input');
@@ -1820,6 +1828,29 @@ document.addEventListener("DOMContentLoaded", function () {
       updateUIElements();
     });
   }
+
+  // Attach click handler to the initial redo button if it exists
+  const initialRedoBtn = document.getElementById("trayScanRedoClearBtn");
+  if (initialRedoBtn) {
+    initialRedoBtn.onclick = function() {
+      console.log('✅ Initial redo button clicked!');
+      let detailsDiv = document.getElementById("trayScanDetails");
+      let errorFooterId = 'trayQtyErrorFooter';
+      if (!detailsDiv || detailsDiv.querySelectorAll('.tray-id-input').length === 0) {
+        detailsDiv = document.getElementById("trayScanDetails_DayPlanning");
+        errorFooterId = 'trayErrorMessage';
+      }
+      
+      console.log('🔍 Using detailsDiv:', detailsDiv ? detailsDiv.id : 'not found');
+      
+      if (detailsDiv) {
+        clearTrayIdInputs(detailsDiv, errorFooterId);
+        console.log('🔄 Cleared tray IDs from modal');
+      } else {
+        console.log('❌ No active tray scan modal found');
+      }
+    };
+  }
   
   // ✅ NEW: Add handler for Day Planning modal redo button
   const trayScanRedoBtn = document.getElementById("trayScanRedoBtn");
@@ -1829,7 +1860,7 @@ document.addEventListener("DOMContentLoaded", function () {
       if (!detailsDiv) return;
 
       // Clear all tray ID inputs in Day Planning modal
-      const trayIdInputs = detailsDiv.querySelectorAll('.tray-id-input');
+      const trayIdInputs = detailsDiv.querySelectorAll('.tray-id, .tray-id-input');
       trayIdInputs.forEach((input, index) => {
         input.value = '';
         input.style.borderColor = '';
@@ -1849,6 +1880,9 @@ document.addEventListener("DOMContentLoaded", function () {
       }
       
       console.log('🔄 Day Planning Redo: Cleared all tray IDs and unchecked verification');
+
+      window.currentTrayScanData = getCurrentTrayData().map(d => ({ ...d, trayId: '' }));
+
       
       // ✅ NEW: Clear the error footer to remove persistent verified message
       const errorFooter = document.getElementById('trayErrorMessage');
@@ -1881,6 +1915,83 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 });
 
+
+
+// Helper function to clear tray ID inputs
+function clearTrayIdInputs(detailsDiv, errorFooterId) {
+  try {
+    // Try multiple selectors to find tray ID inputs
+    let trayIdInputs = detailsDiv.querySelectorAll('input.tray-id-input');
+    if (trayIdInputs.length === 0) {
+      trayIdInputs = detailsDiv.querySelectorAll('input[type="text"]');
+    }
+    
+    console.log('🔍 Found tray ID inputs to clear:', trayIdInputs.length);
+    
+    if (trayIdInputs.length === 0) {
+      console.log('⚠️ No tray ID inputs found to clear');
+      return;
+    }
+    
+    trayIdInputs.forEach((input, index) => {
+      try {
+        console.log(`Clearing input ${index}: "${input.value}" -> ""`); 
+        input.value = '';
+        input.style.borderColor = '';
+        input.style.backgroundColor = '';
+        
+        // Trigger input event so summary and submit button update correctly
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        
+        const errorElement = input.parentNode.querySelector('.tray-id-error, .tray-id-success');
+        if (errorElement) {
+          errorElement.remove();
+        }
+      } catch (e) {
+        console.error('Error clearing input:', e);
+      }
+    });
+    
+    const verifyCheckbox = detailsDiv.querySelector('.tray-verify-checkbox');
+    if (verifyCheckbox && verifyCheckbox.checked) {
+      verifyCheckbox.checked = false;
+      verifyCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+      
+    const errorFooter = document.getElementById(errorFooterId);
+    if (errorFooter) {
+      if (errorFooterId === 'trayQtyErrorFooter') {
+        errorFooter.textContent = 'All tray IDs cleared';
+        errorFooter.style.color = '#007bff';
+      } else {
+        errorFooter.style.display = 'none';
+        const errorText = errorFooter.querySelector('#trayErrorText');
+        if (errorText) {
+          errorText.textContent = '';
+        }
+      }
+    }
+
+    // Final UI update
+    if (typeof updateUIElements === 'function') {
+      updateUIElements();
+    }
+    
+    console.log('🔄 Cleared tray IDs from modal successfully');
+  } catch (e) {
+    console.error('Error in clearTrayIdInputs:', e);
+  }
+}
+    
+    const firstTrayIdInput = detailsDiv.querySelector('.tray-id-input');
+    if (firstTrayIdInput) {
+      setTimeout(() => {
+        firstTrayIdInput.focus();
+        console.log('🎯 Cursor placed on first tray ID input');
+      }, 100);
+    }
+}
 
 
 // ✅ ENHANCED: Re-attach all event listeners after rebuild
@@ -2070,7 +2181,7 @@ function reattachAllEventListenersAfterRebuild() {
                       if (nextInput) {
                           nextInput.focus();
                           nextInput.select();
-                      }
+                      
                   } else {
                       input.focus();
                       input.select();
@@ -2078,7 +2189,7 @@ function reattachAllEventListenersAfterRebuild() {
               }, 50);
           }
       });
-  });
+
 
   // ✅ 2. TOP TRAY QUANTITY EDIT FUNCTIONALITY 
   const editBtn = detailsDiv.querySelector('.tray-edit-btn');
@@ -2178,7 +2289,7 @@ if (verifyCheckbox) {
   setTimeout(() => {
     autoFocusFirstTrayInput();
   }, 50);
-}
+
 
 // Fixed updateTrayScanSummary function
 function updateTrayScanSummary() {
@@ -2191,7 +2302,12 @@ function updateTrayScanSummary() {
 
   // If no rows yet, show 0/0
   if (qtyInputs.length === 0 || trayIdInputs.length === 0) {
-    summaryDiv.textContent = `Qty to Scan: 0/0`;
+    const textSpan = summaryDiv.querySelector('span');
+    if (textSpan) {
+      textSpan.textContent = `Qty to Scan: 0/0`;
+    } else {
+      summaryDiv.innerHTML = `<span style="white-space: nowrap;">Qty to Scan: 0/0</span><img src="/static/assets/icons/redo2.png" alt="Redo" id="trayScanRedoClearBtn" title="Clear Tray IDs" style="width: 24px; height: 24px; cursor: pointer; flex-shrink: 0;" />`;
+    }
     return;
   }
 
@@ -2239,7 +2355,12 @@ function updateTrayScanSummary() {
   }
 
   // Show: scanned quantity / total quantity
-  summaryDiv.textContent = `Qty to Scan: ${scannedQuantity}/${totalQuantity}`;
+  const textSpan = summaryDiv.querySelector('span');
+  if (textSpan) {
+    textSpan.textContent = `Qty to Scan: ${scannedQuantity}/${totalQuantity}`;
+  } else {
+    summaryDiv.innerHTML = `<span style="white-space: nowrap;">Qty to Scan: ${scannedQuantity}/${totalQuantity}</span><img src="/static/assets/icons/redo2.png" alt="Redo" id="trayScanRedoClearBtn" title="Clear Tray IDs" style="width: 24px; height: 24px; cursor: pointer; flex-shrink: 0;" />`;
+  }
 }
 
 // Updated validation function to not reset quantities
@@ -3191,7 +3312,12 @@ function updateTrayScanSummary() {
     const trayIdInputs = detailsDiv.querySelectorAll('input[type="text"]');
 
     if (qtyInputs.length === 0 || trayIdInputs.length === 0) {
-        summaryDiv.textContent = `Qty to Scan: 0/0`;
+        const textSpan = summaryDiv.querySelector('span');
+        if (textSpan) {
+            textSpan.textContent = `Qty to Scan: 0/0`;
+        } else {
+            summaryDiv.innerHTML = `<span style="white-space: nowrap;">Qty to Scan: 0/0</span><img src="/static/assets/icons/redo2.png" alt="Redo" id="trayScanRedoClearBtn" title="Clear Tray IDs" style="width: 24px; height: 24px; cursor: pointer; flex-shrink: 0;" />`;
+        }
         return;
     }
 
@@ -3238,7 +3364,32 @@ function updateTrayScanSummary() {
         }
     }
 
-    summaryDiv.textContent = `Qty to Scan: ${scannedQuantity}/${totalQuantity}`;
+    const allFilled = validateAllTrayIds();
+    const buttonHtml = allFilled ? '' : `<img src="/static/assets/icons/redo2.png" alt="Redo" id="trayScanRedoClearBtn" title="Clear Tray IDs" style="width: 24px; height: 24px; cursor: pointer; flex-shrink: 0;" />`;
+    summaryDiv.innerHTML = `<span style="white-space: nowrap;">Qty to Scan: ${scannedQuantity}/${totalQuantity}</span>${buttonHtml}`;
+
+    // Attach click handler to the redo button if it exists
+    const redoBtn = summaryDiv.querySelector('#trayScanRedoClearBtn');
+    if (redoBtn) {
+        redoBtn.onclick = function() {
+            console.log('✅ Redo button clicked!');
+            let detailsDiv = document.getElementById("trayScanDetails");
+            let errorFooterId = 'trayQtyErrorFooter';
+            if (!detailsDiv || detailsDiv.querySelectorAll('.tray-id-input').length === 0) {
+                detailsDiv = document.getElementById("trayScanDetails_DayPlanning");
+                errorFooterId = 'trayErrorMessage';
+            }
+            
+            console.log('🔍 Using detailsDiv:', detailsDiv ? detailsDiv.id : 'not found');
+            
+            if (detailsDiv) {
+                clearTrayIdInputs(detailsDiv, errorFooterId);
+                console.log('🔄 Cleared tray IDs from modal');
+            } else {
+                console.log('❌ No active tray scan modal found');
+            }
+        };
+    }
     
     const modalTrayQty = document.getElementById("modalTrayQty");
     if (modalTrayQty && totalQuantity > 0) {
@@ -3644,7 +3795,7 @@ function rebuildTrayScanTable(currentData, newRowCount, trayCapacity, topTrayQty
     console.log('✅ Table rebuilt successfully with checkbox state preservation');
 
     // Add event listeners for draft tray deletion on clear AND checkbox unchecking
-    const trayIdInputs = detailsDiv.querySelectorAll('.tray-id-input');
+    const trayIdInputs = detailsDiv.querySelectorAll('.tray-id, .tray-id-input');
     trayIdInputs.forEach(input => {
       input.addEventListener('input', function() {
         // ✅ NEW: Uncheck checkbox when any tray ID is modified or cleared
@@ -3706,7 +3857,7 @@ function handleTopTrayZeroQuantity() {
 function handleRemoveOneRow() {
     console.log('🗑️ Removing one row due to top tray being empty with zero quantity');
     
-    const currentData = getCurrentTrayData();
+    const currentData = window.currentTrayScanData || getCurrentTrayData();
     const currentRowCount = currentData.length;
 
     if (currentRowCount <= 1) {
@@ -3795,7 +3946,7 @@ function attachEnhancedEventListeners() {
     const isDraft = buttonElement && buttonElement.getAttribute('data-draft-saved') === 'true';
     
     // Attach listeners to tray ID inputs
-    const trayIdInputs = detailsDiv.querySelectorAll('.tray-id-input');
+    const trayIdInputs = detailsDiv.querySelectorAll('.tray-id, .tray-id-input');
     trayIdInputs.forEach(input => {
         input.addEventListener('input', function() {
             // ✅ NEW: Uncheck checkbox when any tray ID is modified
@@ -3928,17 +4079,6 @@ trayScanLinks.forEach((link) => {
 
         // Get tray scan status from the clicked link
         const trayScanStatus = link.getAttribute('data-tray-scan-status') === 'true';
-        // Show/hide redo button based on tray scan status
-        const redoButton = document.getElementById('trayIDRedoBtn');
-        if (redoButton) {
-            if (trayScanStatus === false) {
-                // Show redo button when tray scan status is false
-                redoButton.style.display = 'inline-block';
-            } else {
-                // Hide redo button when tray scan status is true
-                redoButton.style.display = 'none';
-            }
-        }
         
         window.currentTrayScanBatchId = event.target.getAttribute("data-batch-id");
         clearTrayVerificationMessage();
@@ -4267,6 +4407,27 @@ trayScanLinks.forEach((link) => {
                                     Scanned Type: <strong>${result.scanned_tray_type || 'Not Set'}</strong>
                                 </div>
                             `;
+                            
+                            input.parentNode.appendChild(errorDiv);
+                            input.style.borderColor = '#ff5722';
+                            input.style.backgroundColor = '#fff3e0';
+                            input.focus();
+                            input.select();
+                            updateUIElements();
+                            updateUIElements();
+                            
+                        } else if (result.polish_finish_error) {
+                            const errorDiv = document.createElement('div');
+                            errorDiv.className = 'tray-id-error';
+                            errorDiv.style.color = 'red';
+                            errorDiv.style.fontSize = '11px';
+                            errorDiv.style.fontWeight = 'bold';
+                            errorDiv.style.backgroundColor = '#ffebee';
+                            errorDiv.style.padding = '4px 6px';
+                            errorDiv.style.borderRadius = '4px';
+                            errorDiv.style.marginTop = '4px';
+                            
+                            errorDiv.innerHTML = `<div style="color: #d32f2f;">${result.error}</div>`;
                             
                             input.parentNode.appendChild(errorDiv);
                             input.style.borderColor = '#ff5722';
@@ -4684,13 +4845,6 @@ trayScanLinks.forEach((link) => {
             const buttonSection = document.querySelector('.tray-scan-modal-buttons');
             const errorFooter = document.getElementById('trayQtyErrorFooter');
             
-            // 🎯 NEW: Hide redo button when top tray scan UI is shown
-            const redoButton = document.getElementById('trayIDRedoBtn');
-            if (redoButton) {
-                redoButton.style.display = 'none';
-                console.log('✅ Redo button hidden (top tray scan UI shown)');
-            }
-
             if (detailsDiv) {
                 detailsDiv.querySelectorAll('input, button, checkbox').forEach(element => {
                     element.disabled = true;
@@ -5595,7 +5749,7 @@ All other actions (edit, delete, filter, etc.) are blocked visually and function
 
     // Visually block all actions except view icons (no grey, just block)
     document.querySelectorAll(
-      'img[alt="Edit Disabled"], img[alt="Delete Disabled"], .fa-filter, button:not(#closeTrayScanModal_DayPlanning):not(#trayValidateBtn):not(#trayScanRedoBtn)'
+      'img[alt="Edit Disabled"], img[alt="Delete Disabled"], .fa-filter, button:not(#closeTrayScanModal_DayPlanning):not(#trayValidateBtn)'
     ).forEach(function (el) {
       el.style.pointerEvents = 'none';
       el.style.opacity = '';
@@ -5803,5 +5957,6 @@ All other actions (edit, delete, filter, etc.) are blocked visually and function
     input.style.backgroundColor = '#ffebee';
   }
 </script>
+
+
   {% endblock %} {% endblock content %}
-</div>
