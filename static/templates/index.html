@@ -1,0 +1,678 @@
+{% extends "base.html" %} {% load static %} {% block content %}
+
+<!-- Dashboard Styles -->
+<style>
+  :root {
+    --primary: #008080;
+    --success: #20b2aa;
+    --info: #40e0d0;
+    --warning: #00ced1;
+    --danger: #48d1cc;
+    --purple: #5f9ea0;
+    --orange: #66cdaa;
+  }
+
+  html,
+  body {
+    height: auto;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  /* Cover Banner */
+  .cover-banner {
+    height: 200px;
+    background: url('{% static "assets/images/tealMetallic2.jpg" %}') center/cover
+      no-repeat;
+    position: relative;
+    border-radius: 20px;
+    margin-bottom: 2rem;
+    box-shadow: 0 8px 32px rgba(0, 128, 128, 0.3);
+  }
+
+  .cover-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 20px;
+  }
+
+  .cover-content {
+    text-align: center;
+    color: white;
+    z-index: 2;
+  }
+
+  .cover-title {
+    font-size: 3rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+  }
+
+  .cover-subtitle {
+    font-size: 1.2rem;
+    margin-bottom: 1rem;
+    opacity: 0.9;
+  }
+
+  .cover-date {
+    font-size: 1rem;
+    opacity: 0.8;
+  }
+
+  /* Main Module Card */
+  .module-card {
+    border-radius: 20px;
+    border: none;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+    overflow: hidden;
+    margin-bottom: 2rem;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+    position: relative;
+  }
+
+  .module-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #008080, #20b2aa, #40e0d0, #00ced1);
+    z-index: 1;
+  }
+
+  .module-card:hover {
+    transform: translateY(-10px) scale(1.02);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+  }
+
+  .module-header {
+    padding: 1.5rem;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-radius: 20px 20px 0 0;
+  }
+
+  .module-header h3 {
+    margin: 0;
+    font-weight: 600;
+    font-size: 1.3rem;
+  }
+
+  .module-header .module-icon {
+    font-size: 2rem;
+    opacity: 0.8;
+  }
+
+  .stat-cards-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+    padding: 2rem;
+  }
+
+  /* Stat Card */
+  .stat-card {
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 50%, #e9ecef 100%);
+    border-radius: 15px;
+    padding: 1.5rem;
+    text-align: center;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+  }
+
+  .stat-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #008080, #20b2aa, #40e0d0, #00ced1);
+    animation: gradientShift 3s ease infinite;
+  }
+
+  .stat-card:hover {
+    transform: translateY(-5px) scale(1.05);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    background: linear-gradient(135deg, #ffffff 0%, #f0f2f5 50%, #e1e5e9 100%);
+  }
+
+  .stat-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #008080, #20b2aa, #40e0d0, #00ced1);
+    animation: gradientShift 3s ease infinite;
+  }
+
+  @keyframes gradientShift {
+    0%,
+    100% {
+      background-position: 0 center;
+    }
+    50% {
+      background-position: 100% center;
+    }
+  }
+
+  .stat-label {
+    font-size: 0.85rem;
+    color: #7f8c8d;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #2c3e50;
+    margin-bottom: 0.5rem;
+  }
+
+  .stat-unit {
+    font-size: 0.75rem;
+    color: #95a5a6;
+  }
+
+  .progress-bar-container {
+    width: 100%;
+    height: 6px;
+    background: #ecf0f1;
+    border-radius: 3px;
+    margin-top: 1rem;
+    overflow: hidden;
+  }
+
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #008080, #20b2aa);
+    transition: width 0.6s ease;
+    border-radius: 3px;
+  }
+
+  /* Dashboard Header */
+  .dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .dashboard-header h2 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #2c3e50;
+    margin: 0;
+  }
+
+  .date-selector {
+    background: white;
+    border: 2px solid #ecf0f1;
+    border-radius: 10px;
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+    color: #7f8c8d;
+  }
+
+  .date-selector:hover {
+    border-color: #008080;
+    color: #008080;
+  }
+
+  /* Carousel Navigation */
+  .carousel-nav {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 2rem;
+    flex-wrap: wrap;
+  }
+
+  .carousel-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #ecf0f1;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+  }
+
+  .carousel-dot.active {
+    background: #008080;
+    width: 30px;
+    border-radius: 5px;
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .cover-banner {
+      height: 200px;
+    }
+
+    .cover-title {
+      font-size: 2rem;
+    }
+
+    .cover-title img {
+      height: 1.5rem;
+    }
+
+    .cover-subtitle {
+      font-size: 1rem;
+    }
+
+    .dashboard-header {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .stat-cards-container {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+      padding: 1.5rem;
+    }
+
+    .stat-value {
+      font-size: 1.5rem;
+    }
+
+    .module-header h3 {
+      font-size: 1rem;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .cover-banner {
+      height: 150px;
+    }
+
+    .cover-title {
+      font-size: 1.5rem;
+    }
+
+    .cover-title img {
+      height: 1.2rem;
+    }
+
+    .stat-cards-container {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* Empty State */
+  .empty-state {
+    text-align: center;
+    padding: 3rem;
+    color: #7f8c8d;
+  }
+
+  .empty-state i {
+    font-size: 3rem;
+    color: #bdc3c7;
+    margin-bottom: 1rem;
+  }
+
+  /* Carousel Styles */
+  .modules-container {
+    display: flex;
+    overflow-x: auto;
+    overflow-y: visible;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    gap: 1rem;
+    padding-bottom: 1rem;
+  }
+
+  .module-card {
+    flex: 0 0 100%;
+    scroll-snap-align: start;
+  }
+
+  /* Graph Styles */
+  .graph-container {
+    padding: 1rem 2rem;
+    background: #f8f9fa;
+    border-radius: 0 0 20px 20px;
+  }
+
+  .graph-container h5 {
+    margin: 0 0 1rem 0;
+    font-size: 1rem;
+    color: #2c3e50;
+    text-align: center;
+  }
+
+  .mini-bar-chart {
+    display: flex;
+    justify-content: space-around;
+    height: 100px;
+    align-items: end;
+  }
+
+  .bar-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 60px;
+  }
+
+  .bar {
+    width: 40px;
+    background: linear-gradient(to top, #008080, #20b2aa);
+    border-radius: 5px 5px 0 0;
+    transition: height 0.5s ease;
+    min-height: 5px;
+  }
+
+  .bar-item span {
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    color: #7f8c8d;
+  }
+
+  /* Animation */
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .module-card {
+    animation: slideIn 0.5s ease;
+  }
+
+  .stat-card {
+    animation: slideIn 0.5s ease;
+  }
+
+  .stat-card:nth-child(1) {
+    animation-delay: 0.1s;
+  }
+  .stat-card:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+  .stat-card:nth-child(3) {
+    animation-delay: 0.3s;
+  }
+  .stat-card:nth-child(4) {
+    animation-delay: 0.4s;
+  }
+</style>
+
+<div class="container-fluid px-2 px-md-4">
+  <!-- Cover Banner -->
+  <div class="cover-banner">
+    <div class="cover-overlay">
+      <div class="cover-content">
+        <h2 class="cover-title">
+          <img
+            src="{% static 'assets/logo/titan_logo.png' %}"
+            alt="Titan Logo"
+            style="height: 3rem; margin-right: -1.5rem; vertical-align: middle"
+          />
+          Watchcase Tracker Dashboard
+        </h2>
+        <p class="cover-subtitle">
+          Real-time operations overview and analytics
+        </p>
+        <div class="cover-date">
+          <i class="mdi mdi-calendar"></i> {{ current_date }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Module Cards Container -->
+  <div id="modulesContainer" class="modules-container">
+    {% if dashboard_stats %} {% for stat in dashboard_stats %}
+    <div class="module-card">
+      <!-- Module Header with Color -->
+      <div class="module-header" style="background: {{ stat.color }};">
+        <div>
+          <h3>{{ stat.label }}</h3>
+        </div>
+        <div class="module-icon">
+          <i class="mdi {{ stat.icon }}"></i>
+        </div>
+      </div>
+
+      <!-- Stat Cards -->
+      <div class="stat-cards-container">
+        <!-- Total Lot Card -->
+        <div class="stat-card">
+          <div class="stat-label">
+            <i class="mdi mdi-folder-multiple"></i> Total Lots
+          </div>
+          <div class="stat-value">{{ stat.total_lot }}</div>
+          <div class="stat-unit">Active batches</div>
+        </div>
+
+        <!-- Progress Card with Detailed Breakdown -->
+        <div class="stat-card">
+          <div class="stat-label">
+            <i class="mdi mdi-progress-check"></i> Progress
+          </div>
+          <div class="stat-value">{{ stat.processed }}</div>
+          <div class="stat-unit">Released/Processed</div>
+          <div class="progress-bar-container">
+            <div
+              class="progress-bar"
+              style="width: {{ stat.processed_percent }}%"
+            ></div>
+          </div>
+          <div
+            style="
+              font-size: 0.75rem;
+              color: #7f8c8d;
+              margin-top: 0.5rem;
+              line-height: 1.4;
+            "
+          >
+            <div>📋 Yet to Start: {{ stat.yet_to_start }}</div>
+            <div>✏️ Draft: {{ stat.drafted }}</div>
+          </div>
+        </div>
+
+        <!-- In Progress Card -->
+        <div class="stat-card">
+          <div class="stat-label">
+            <i class="mdi mdi-arrow-right-circle"></i> In Progress
+          </div>
+          <div class="stat-value">{{ stat.in_progress }}</div>
+          <div class="stat-unit">Processing queue</div>
+          <div class="progress-bar-container">
+            <div
+              class="progress-bar"
+              style="width: {{ stat.in_progress_percent }}%; background: linear-gradient(90deg, #20b2aa, #40e0d0);"
+            ></div>
+          </div>
+        </div>
+
+        <!-- Status Summary Card -->
+        <div class="stat-card">
+          <div class="stat-label">
+            <i class="mdi mdi-chart-pie"></i> Status Overview
+          </div>
+          <div style="font-size: 0.9rem; color: #2c3e50; margin-bottom: 0.5rem">
+            <div
+              style="
+                display: flex;
+                justify-content: space-between;
+                margin: 0.3rem 0;
+              "
+            >
+              <span>Released:</span>
+              <strong>{{ stat.processed_percent }}%</strong>
+            </div>
+            <div
+              style="
+                display: flex;
+                justify-content: space-between;
+                margin: 0.3rem 0;
+              "
+            >
+              <span>In Queue:</span>
+              <strong>{{ stat.in_progress_percent }}%</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Minimal Graph -->
+      <div class="graph-container">
+        <h5>Status Distribution</h5>
+        <div class="mini-bar-chart">
+          <div class="bar-item">
+            <div
+              class="bar"
+              style="height: {{ stat.yet_to_start_percent }}%; background: linear-gradient(to top, #5f9ea0, #778899);"
+            ></div>
+            <span>Yet to Start</span>
+          </div>
+          <div class="bar-item">
+            <div
+              class="bar"
+              style="height: {{ stat.drafted_percent }}%; background: linear-gradient(to top, #20b2aa, #48d1cc);"
+            ></div>
+            <span>Draft</span>
+          </div>
+          <div class="bar-item">
+            <div
+              class="bar"
+              style="height: {{ stat.processed_percent }}%; background: linear-gradient(to top, #008080, #20b2aa);"
+            ></div>
+            <span>Released</span>
+          </div>
+          <div class="bar-item">
+            <div
+              class="bar"
+              style="height: {{ stat.in_progress_percent }}%; background: linear-gradient(to top, #40e0d0, #00ced1);"
+            ></div>
+            <span>In Progress</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %} {% else %}
+    <div class="empty-state">
+      <i class="mdi mdi-inbox-multiple"></i>
+      <h4>No data available</h4>
+      <p>Start by creating batches in your modules to see statistics here.</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Carousel Navigation Dots -->
+  {% if dashboard_stats %}
+  <div class="carousel-nav">
+    {% for stat in dashboard_stats %}
+    <div class="carousel-dot" data-module-index="{{ forloop.counter0 }}"></div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+<!-- Scripts -->
+<script>
+  // Smooth scroll navigation for carousel dots
+  document.querySelectorAll(".carousel-dot").forEach((dot, index) => {
+    dot.addEventListener("click", () => {
+      const cards = document.querySelectorAll(".module-card");
+      if (cards[index]) {
+        cards[index].scrollIntoView({ behavior: "smooth", block: "nearest" });
+        updateActiveDot(index);
+      }
+    });
+  });
+
+  // Update active dot based on scroll position
+  function updateActiveDot(index) {
+    document.querySelectorAll(".carousel-dot").forEach((dot, i) => {
+      dot.classList.toggle("active", i === index);
+    });
+  }
+
+  // Initialize first dot as active
+  if (document.querySelectorAll(".carousel-dot").length > 0) {
+    updateActiveDot(0);
+  }
+
+  // Auto-slide functionality
+  let autoSlideInterval;
+  function startAutoSlide() {
+    autoSlideInterval = setInterval(() => {
+      const cards = document.querySelectorAll(".module-card");
+      const dots = document.querySelectorAll(".carousel-dot");
+      if (cards.length === 0) return;
+
+      let currentIndex = Array.from(dots).findIndex((dot) =>
+        dot.classList.contains("active"),
+      );
+      let nextIndex = (currentIndex + 1) % cards.length;
+
+      cards[nextIndex].scrollIntoView({ behavior: "smooth", block: "nearest" });
+      updateActiveDot(nextIndex);
+    }, 5000); // Slide every 5 seconds
+  }
+
+  function stopAutoSlide() {
+    clearInterval(autoSlideInterval);
+  }
+
+  // Start auto-slide on page load
+  startAutoSlide();
+
+  // Pause auto-slide on hover
+  const container = document.querySelector(".modules-container");
+  if (container) {
+    container.addEventListener("mouseenter", stopAutoSlide);
+    container.addEventListener("mouseleave", startAutoSlide);
+
+    // Update active dot on scroll
+    container.addEventListener("scroll", () => {
+      const cards = document.querySelectorAll(".module-card");
+      let closestIndex = 0;
+      let closestDistance = Infinity;
+
+      cards.forEach((card, index) => {
+        const rect = card.getBoundingClientRect();
+        const distance = Math.abs(rect.left);
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestIndex = index;
+        }
+      });
+
+      updateActiveDot(closestIndex);
+    });
+  }
+</script>
+
+{% endblock %}
