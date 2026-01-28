@@ -1524,7 +1524,7 @@ form.addEventListener("submit", async function (e) {
         Swal.fire({
           icon: 'success',
           title: 'User Created',
-          text: `User created successfully! User ID: ${result.user_name}`
+          text: `User created successfully! User ID: ${result.user.username}`
         });
         window.latestCreatedUser = result.user;
         showStep(2);
