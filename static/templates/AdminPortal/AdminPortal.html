@@ -1332,7 +1332,9 @@ async function editUser(userId) {
     }
 
     // Store editing user id for update logic if needed
+    // Store editing user id for update logic if needed
     window.editingUserId = userId;
+    if (typeof updateBreadcrumbAccess === "function") updateBreadcrumbAccess();
 
     // Make password and confirm fields optional for edit and show helper note
 (function makePasswordOptionalForEdit() {
@@ -1498,6 +1500,9 @@ form.addEventListener("submit", async function (e) {
           text: `User updated successfully!`
         });
         window.editingUserId = null;
+        // Keep them "active" for navigation purposes
+        window.latestCreatedUser = data; 
+        if (typeof updateBreadcrumbAccess === "function") updateBreadcrumbAccess();
         showStep(2);
       //    fetch("/adminportal/api/users/list/")
       //     .then(res => res.json())
@@ -1532,6 +1537,7 @@ form.addEventListener("submit", async function (e) {
           text: `User created successfully! User ID: ${result.user.username}`
         });
         window.latestCreatedUser = result.user;
+        if (typeof updateBreadcrumbAccess === "function") updateBreadcrumbAccess();
         showStep(2);
         // fetch("/adminportal/api/users/list/")
         //   .then(res => res.json())
@@ -3312,6 +3318,10 @@ document.getElementById("btn-module-save-next").onclick = async function () {
     renderSelectedModulesContainer();
     renderModuleBtnGrid();
 
+    // Reset creation state
+    window.latestCreatedUser = null;
+    if (typeof updateBreadcrumbAccess === "function") updateBreadcrumbAccess();
+
     // Make password required for create mode
     const pwd = document.getElementById("password");
     const conf = document.getElementById("confirmPassword");
@@ -3432,18 +3442,42 @@ document.getElementById("btn-module-save-next").onclick = async function () {
 <script nonce="{{ csp_nonce }}">
    // filepath: a:\Workspace\Server_Setup_TTT\New_TTT_V2\static\templates\Settings.html
    
+   function updateBreadcrumbAccess() {
+     const canNavigateModules = !!(window.editingUserId || window.latestCreatedUser);
+     const bcModules = document.getElementById("bc-modules");
+     
+     if (bcModules) {
+       bcModules.style.cursor = canNavigateModules ? "pointer" : "not-allowed";
+       bcModules.style.opacity = canNavigateModules ? "1" : "0.6";
+     }
+     
+     // User Table is always accessible
+     const bcTable = document.getElementById("bc-table");
+     if (bcTable) {
+       bcTable.style.cursor = "pointer";
+       bcTable.style.opacity = "1";
+     }
+   }
+
    document.getElementById("bc-user").style.cursor = "pointer";
-   document.getElementById("bc-modules").style.cursor = "pointer";
-   document.getElementById("bc-table").style.cursor = "pointer";
+   
    document.getElementById("bc-user").onclick = function () {
-   showStep(1);
+     showStep(1);
    };
+   
    document.getElementById("bc-modules").onclick = function () {
-   showStep(2);
+     if (window.editingUserId || window.latestCreatedUser) {
+        showStep(2);
+     }
    };
+   
    document.getElementById("bc-table").onclick = function () {
-   showStep(3);
+     // Always allow navigation to user table
+     showStep(3);
    };
+   
+   // Initialize
+   updateBreadcrumbAccess();
 </script>
 <!-- // Script for dynamically fetching and populating the Department and 
    Role dropdowns (departmentSelect and roleSelect) 
