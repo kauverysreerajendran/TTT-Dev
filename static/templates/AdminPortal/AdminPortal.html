@@ -1,5 +1,53 @@
 {% extends "base.html" %} {% load static %} {% block content %}
 <style>
+  /* Pagination Styles */
+  #paginationControls {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1.5rem;
+  }
+  #paginationControls button {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    color: #64748b;
+    padding: 0.4rem 0.85rem;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  }
+  #paginationControls button:hover:not(:disabled) {
+    background: #f8fafc;
+    color: #334155;
+    border-color: #cbd5e1;
+    transform: translateY(-1px);
+  }
+  #paginationControls button:disabled {
+    cursor: default;
+    opacity: 0.7;
+  }
+  
+  /* Active Page (numbers that are disabled) */
+  #paginationControls button[disabled]:not(:first-child):not(:last-child) {
+     background: #028084;
+     color: #fff;
+     border-color: #028084;
+     opacity: 1;
+     box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+  }
+  
+   /* Prev/Next Disabled State */
+  #paginationControls button:first-child:disabled,
+  #paginationControls button:last-child:disabled {
+      background: #f1f5f9;
+      color: #cbd5e1;
+      border-color: #e2e8f0;
+      box-shadow: none;
+      transform: none;
+  }
 
 #usersTable td { position: relative; } /* anchor absolute dropdowns inside the cell */
 .modexp-list { position: absolute; left: 0; top: 100%; display: none; z-index: 1001; }
@@ -1002,7 +1050,7 @@
 </style>
 
 <!-- Breadgrumbs Menu-->
-<main class="main" style="overflow: scroll !important">
+<main class="main">
    <nav aria-label="Breadcrumb" style="position: relative; margin-bottom: -1.5em;">
       <div class="breadcrumb-steps">
          <div id="bc-user" class="breadcrumb-step" onclick="showStep(1)">
@@ -1022,7 +1070,7 @@
    <div class="container">
       <!-- User Creation Section -->
       <div id="step-user-form">
-         <div class="card" style ="overflow: auto !important;">
+         <div class="card">
             <form id="userForm" autocomplete="off">
                <h2 class="card-title">
                   User Creation & Management
@@ -3158,7 +3206,7 @@ document.getElementById("btn-module-save-next").onclick = async function () {
    ];
    
    // State
-   let droppedModules = []; // [{name, headings: [checked]}]
+   window.droppedModules = []; // [{name, headings: [checked]}]
    
    // Render module buttons
    

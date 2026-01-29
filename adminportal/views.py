@@ -2232,7 +2232,7 @@ def create_user(request):
 class UserListAPIView(APIView):
     def get(self, request):
         users = User.objects.all().order_by('id')
-        paginator = Paginator(users, 10)  # 10 users per page
+        paginator = Paginator(users, 8)
         page_number = request.GET.get('page', 1)
         page_obj = paginator.get_page(page_number)
         user_list = []
