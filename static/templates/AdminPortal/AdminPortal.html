@@ -1622,9 +1622,11 @@ form.addEventListener("submit", async function (e) {
           title: 'User Updated',
           text: `User updated successfully!`
         });
-        window.editingUserId = null;
-        // Keep them "active" for navigation purposes
-        window.latestCreatedUser = data; 
+        // Do NOT clear editingUserId here. We need it for the next steps (Modules, Table highlight).
+        // window.editingUserId = null; 
+        
+        // Update latestCreatedUser with ID for consistency, though editingUserId is primary.
+        window.latestCreatedUser = { ...data, id: window.editingUserId }; 
         if (typeof updateBreadcrumbAccess === "function") updateBreadcrumbAccess();
         showStep(2);
       //    fetch("/adminportal/api/users/list/")

@@ -2608,3 +2608,22 @@ def is_admin_user(user):
             and user.userprofile.department.name.lower() == "admin"
         )
     )
+
+class UserPageAPIView(APIView):
+    def get(self, request):
+        user_id = request.GET.get('user_id')
+        if not user_id:
+            return Response({'error': 'User ID required'}, status=400)
+        
+        try:
+            target_user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=404)
+            
+        # Must match UserListAPIView ordering (id ascending)
+        position = User.objects.filter(id__lt=user_id).count() 
+        
+        page_size = 6 # Must match UserListAPIView
+        page_number = (position // page_size) + 1
+        
+        return Response({'page': page_number})
