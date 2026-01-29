@@ -16,6 +16,27 @@
     justify-content: center;
     color: #2563eb;
   }
+
+  /* --- Module Chips Styles --- */
+  .modules-cell-content {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+  }
+  .module-chip {
+    display: inline-flex;
+    align-items: center;
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #dbeafe;
+    border-radius: 9999px;
+    padding: 2px 8px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
   .modexp-list {
     display: none;
     position: absolute;
@@ -59,6 +80,27 @@
     min-width: 180px;
     box-shadow: 0 2px 8px #e0e7ef;
   }
+
+   /* --- Module Chips Styles --- */
+   .modules-cell-content {
+     display: flex;
+     flex-wrap: wrap;
+     gap: 4px;
+     align-items: center;
+   }
+   .module-chip {
+     display: inline-flex;
+     align-items: center;
+     background: #eff6ff; /* blue-50 */
+     color: #1d4ed8; /* blue-700 */
+     border: 1px solid #dbeafe; /* blue-100 */
+     border-radius: 9999px; /* pill shape */
+     padding: 2px 8px;
+     font-size: 0.75rem;
+     font-weight: 500;
+     line-height: 1.2;
+     white-space: nowrap;
+   }
 
    .modexp-list {
    transition: opacity 0.15s;
@@ -1404,6 +1446,11 @@ async function editUser(userId) {
       renderModuleBtnGrid();
       renderSelectedModulesContainer();
     }
+    // Forcing the users table to re-render to update "Submit" button state
+    setTimeout(() => {
+        fetchAndRenderUsers(1);
+    }, 500);
+
   } catch (err) {
     Swal.fire({
       icon: 'error',
@@ -1632,6 +1679,57 @@ form.addEventListener("submit", async function (e) {
      });
    });
 
+   function getModuleChipStyle(name) {
+      const dpModules = ["Data Upload", "DP Pick Table", "DP Complete Table"];
+      const recoveryModules = ["Recovery Bulk Upload", "Recovery Pick Table", "Recovery Complete Table"];
+      const inputModules = ["Input Main Table", "Input Complete Table", "Input Accept Table", "Input Reject Table"];
+      const brassIqfModules = ["Brass QC Pick Table", "Brass QC Complete Table", "IQF Pick Table", "IQF Complete Table", "IQF Reject Table"];
+
+      if (dpModules.includes(name)) {
+        return { bg: "#e0f2fe", color: "#334155", border: "#38bdf8" };
+      }
+      if (recoveryModules.includes(name)) {
+        return { bg: "#fce7f3", color: "#334155", border: "#f472b6" };
+      }
+      if (inputModules.includes(name)) {
+        return { bg: "rgb(220, 252, 231)", color: "rgb(51, 65, 85)", border: "rgb(52, 211, 153)" };
+      }
+      if (brassIqfModules.includes(name)) {
+        return { bg: "rgb(254, 243, 199)", color: "rgb(51, 65, 85)", border: "rgb(251, 191, 36)" };
+      }
+      // Default fallback
+      return { bg: "#f1f5f9", color: "#334155", border: "#cbd5e1" };
+   }
+
+   // --- SHow Module Details Popup ---
+   function showModuleDetails(name, headingsStr) {
+      const headings = headingsStr ? headingsStr.split("|") : [];
+      if (headings.length === 0) return;
+
+      const listHtml = `
+        <div style="max-height: 180px; overflow-y: auto; text-align: left; padding: 0.5rem 0.8rem; border: 1px solid #e2e8f0; border-radius: 6px; background: #f8fafc;">
+          <ul style="margin: 0; padding: 0 0 0 1.2rem; font-size: 0.85em;">
+            ${headings.map(h => `<li style="margin-bottom: 2px; color: #334155;">${h}</li>`).join('')}
+          </ul>
+        </div>
+      `;
+
+      Swal.fire({
+          title: `<div style="font-size: 1.1em; color: #1e293b;">${name}</div>`,
+          html: listHtml,
+          showCloseButton: false,
+          showConfirmButton: true,
+          confirmButtonText: 'Close',
+          confirmButtonColor: '#64748b',
+          customClass: {
+            popup: 'swal-module-popup',
+            confirmButton: 'btn btn-sm btn-secondary'
+          },
+          width: '320px',
+          padding: '1em'
+      });
+   }
+
    // Render users in the table
    function renderUsersTable(users) {
      const tbody = document.getElementById("usersTableBody");
@@ -1650,47 +1748,39 @@ form.addEventListener("submit", async function (e) {
        let modules = [];
        if (Array.isArray(user.modules)) {
          if (typeof user.modules[0] === "string") {
-           modules = user.modules.map(m => ({ name: m }));
+           modules = user.modules.map(m => ({ name: m, headings: [] }));
          } else {
            modules = user.modules;
          }
        } else if (typeof user.modules === "string") {
-         modules = user.modules.split(",").map(m => ({ name: m.trim() }));
+         modules = user.modules.split(",").map(m => ({ name: m.trim(), headings: [] }));
        }
 
       let modulesHtml = "";
        if (modules.length > 0) {
-         if (modules.length === 1) {
-           modulesHtml = `<span>${modules[0].name}</span>`;
-         } else {
-           const uid = `modexp-${user.id}`;
-           modulesHtml = `
-<span>${modules[0].name}</span>
-             <button type="button" class="mod-toggle-btn mod-info-btn"
+           modulesHtml = `<div class="modules-cell-content">`;
+           modules.forEach(m => {
+               const style = getModuleChipStyle(m.name);
+               let styleStr = `background:${style.bg}; color:${style.color}; border:1px solid ${style.border};`;
                
-               aria-haspopup="true"
-               aria-expanded="false"
-               data-modexp-id="${uid}"
-               onfocus="showModuleList('${uid}')"
-               onblur="hideModuleList('${uid}')"
-               onkeydown="if(event.key==='Enter' || event.key===' '){ event.preventDefault(); toggleModuleList('${uid}'); }">
-               <!-- info SVG icon -->
-               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                 <circle cx="12" cy="12" r="10" stroke="#2563eb" stroke-width="1.5" fill="#e6f2ff"/>
-                 <rect x="11" y="10" width="2" height="6" rx="1" fill="#0f172a"/>
-                 <rect x="11" y="7" width="2" height="2" rx="1" fill="#0f172a"/>
-               </svg>
-             </button>
-             <div id="${uid}" class="modexp-list"
-               onmouseenter="showModuleList('${uid}')"
-               onmouseleave="hideModuleList('${uid}')"
-               aria-hidden="true">
-               <ul class="modexp-ul">
-                 ${modules.map(m => `<li>${m.name}</li>`).join("")}
-               </ul>
-             </div>
-           `;
-         }
+               let label = m.name;
+               let dataAttrs = "";
+               let chipClass = "module-chip";
+               
+               // Logic for sub-modules count
+               if (m.headings && Array.isArray(m.headings) && m.headings.length > 0) {
+                  label += ` (${m.headings.length})`;
+                  const safeHeadings = m.headings.join("|").replace(/"/g, "&quot;");
+                  const safeName = m.name.replace(/"/g, "&quot;");
+                  
+                  dataAttrs = `data-module-name="${safeName}" data-module-headings="${safeHeadings}"`;
+                  chipClass += " clickable-module-chip";
+                  styleStr += " cursor:pointer;";
+               }
+
+               modulesHtml += `<span class="${chipClass}" style="${styleStr}" ${dataAttrs} title="Click to view details">${label}</span>`;
+           });
+           modulesHtml += `</div>`;
        } else {
          // Show "Add Modules" button if no modules AND not a superuser
          if (!user.is_superuser) {
@@ -1699,10 +1789,18 @@ form.addEventListener("submit", async function (e) {
             modulesHtml = `<span style="color:#94a3b8;font-style:italic;font-size:0.9em;">Admin</span>`;
          }
        }
-       const isNew = window.latestCreatedUser && String(user.id) === String(window.latestCreatedUser.id);
+
+       const isNew = (window.latestCreatedUser && String(user.id) === String(window.latestCreatedUser.id));
+       const isEditing = (window.editingUserId && String(user.id) === String(window.editingUserId));
+       const isActive = isNew || isEditing;
+
+       if (isEditing || isNew) {
+           console.log(`[renderUsersTable] User ${user.id} (${user.username}) isActive=${isActive}. isNew=${isNew}, isEditing=${isEditing}`);
+       }
+
        let actionsHtml = "";
 
-       if (isNew) {
+       if (isActive) {
          actionsHtml = `
            <button class="action-btn submit-flow" title="Complete Flow" data-user-id="${user.id}">
              <span style="font-size:1.1em; line-height:1;">&#10003;</span> <span style="margin-left:4px;">Submit</span>
@@ -1719,7 +1817,7 @@ form.addEventListener("submit", async function (e) {
        }
 
        const tr = document.createElement("tr");
-       if (isNew) {
+       if (isActive) {
          tr.classList.add("new-user-highlight");
        }
        tr.innerHTML = `
@@ -1739,6 +1837,17 @@ form.addEventListener("submit", async function (e) {
        tbody.appendChild(tr);
      });
    }
+   
+   document.addEventListener('click', function(e) {
+      const chip = e.target.closest('.clickable-module-chip');
+      if (chip) {
+         const name = chip.getAttribute('data-module-name');
+         const headings = chip.getAttribute('data-module-headings');
+         if (name && headings) {
+            showModuleDetails(name, headings);
+         }
+      }
+   });
 
    // Add this helper function (anywhere in your script tags, outside renderUsersTable)
    function toggleModuleList(id) {
@@ -1841,20 +1950,10 @@ form.addEventListener("submit", async function (e) {
      window.latestCreatedUser = null;
      window.editingUserId = null;
      
-     // Remove URL param
+     // Reload page to clear URL params and reset state fully (requested by user)
      const url = new URL(window.location);
      url.searchParams.delete("edit_user_id");
-     window.history.replaceState({}, "", url);
-
-     if (typeof resetUserForm === "function") {
-       resetUserForm();
-     }
-
-     if (typeof updateBreadcrumbAccess === "function") {
-       updateBreadcrumbAccess();
-     }
-
-     fetchAndRenderUsers(1);
+     window.location.href = url.toString();
    }
 
    function renderPaginationControls(current, total) {
@@ -3062,6 +3161,89 @@ document.getElementById("btn-module-save-next").onclick = async function () {
    let droppedModules = []; // [{name, headings: [checked]}]
    
    // Render module buttons
+   
+   // Drop Logic
+   function processModuleDrop(modName) {
+      if (!droppedModules.find((m) => m.name === modName)) {
+         const mod = modulesList.find((m) => m.name === modName);
+         if (mod) {
+            droppedModules.push({
+               name: mod.name,
+               headings: [...mod.headings],
+               file_name: mod.file_name
+            });
+            renderModuleBtnGrid();
+            renderSelectedModulesContainer();
+         }
+      }
+   }
+
+   // Touch Drag Handler
+   function enableTouchDrag(el, modName) {
+      let ghost = null;
+      
+      el.addEventListener("touchstart", function(e) {
+         const touch = e.touches[0];
+         ghost = el.cloneNode(true);
+         ghost.style.position = "absolute";
+         ghost.style.opacity = "0.8";
+         ghost.style.zIndex = "9999";
+         ghost.style.width = el.offsetWidth + "px";
+         ghost.style.height = el.offsetHeight + "px";
+         ghost.style.pointerEvents = "none";
+         // Center ghost on finger
+         const rect = el.getBoundingClientRect();
+         const offsetX = touch.clientX - rect.left;
+         const offsetY = touch.clientY - rect.top;
+         
+         ghost.dataset.offsetX = offsetX;
+         ghost.dataset.offsetY = offsetY;
+
+         ghost.style.left = (touch.clientX - offsetX) + "px";
+         ghost.style.top = (touch.clientY - offsetY) + "px";
+         document.body.appendChild(ghost);
+      }, { passive: false });
+
+      el.addEventListener("touchmove", function(e) {
+         if (!ghost) return;
+         e.preventDefault();
+         const touch = e.touches[0];
+         const offsetX = parseFloat(ghost.dataset.offsetX) || 0;
+         const offsetY = parseFloat(ghost.dataset.offsetY) || 0;
+         
+         ghost.style.left = (touch.clientX - offsetX) + "px";
+         ghost.style.top = (touch.clientY - offsetY) + "px";
+         
+         const dropZone = document.getElementById("dropZone");
+         const elemBelow = document.elementFromPoint(touch.clientX, touch.clientY);
+         if (dropZone && (elemBelow === dropZone || dropZone.contains(elemBelow))) {
+            dropZone.style.background = "#f1f5f9";
+         } else if (dropZone) {
+             dropZone.style.background = "#f8fafc";
+         }
+      }, { passive: false });
+
+      el.addEventListener("touchend", function(e) {
+         if (!ghost) return;
+         
+         // Final check for drop
+         const touch = e.changedTouches[0];
+         const elemBelow = document.elementFromPoint(touch.clientX, touch.clientY);
+         const dropZone = document.getElementById("dropZone");
+         
+         if (dropZone && (elemBelow === dropZone || dropZone.contains(elemBelow))) {
+            processModuleDrop(modName);
+            dropZone.style.background = "#f8fafc";
+         } else if (dropZone) {
+            dropZone.style.background = "#f8fafc";
+         }
+         
+         if (ghost.parentNode) {
+            document.body.removeChild(ghost);
+         }
+         ghost = null;
+      });
+   }
    function renderModuleBtnGrid() {
      const grid = document.getElementById("moduleBtnGrid");
      grid.innerHTML = "";
@@ -3181,6 +3363,9 @@ document.getElementById("btn-module-save-next").onclick = async function () {
          e.dataTransfer.setData("text/plain", mod.name);
          setTimeout(() => btn.classList.add("dragging"), 0);
        };
+       // Enable touch support
+       enableTouchDrag(btn, mod.name);
+
        btn.ondragend = function () {
          btn.classList.remove("dragging");
        };
@@ -3243,28 +3428,12 @@ document.getElementById("btn-module-save-next").onclick = async function () {
      dropZone.ondragleave = function () {
        dropZone.style.background = "#f8fafc";
      };
-     dropZone.ondrop = function (e) {
-       e.preventDefault();
-       dropZone.style.background = "#f8fafc";
-       const modName = e.dataTransfer.getData("text/plain");
-       if (!droppedModules.find((m) => m.name === modName)) {
-         const mod = modulesList.find((m) => m.name === modName);
-          if (mod) {
-            droppedModules.push({
-              name: mod.name,
-              headings: [...mod.headings],
-              file_name: mod.file_name // <-- Store file name
-            });
-            renderModuleBtnGrid();
-           renderSelectedModulesContainer();
-          }
-/*          if (droppedModules.length < modulesList.length) {
-           droppedModules.push({ name: mod.name, headings: [...mod.headings] });
-           renderModuleBtnGrid();
-           renderSelectedModulesContainer();
-         } */
-       }
-     };
+      dropZone.ondrop = function (e) {
+        e.preventDefault();
+        dropZone.style.background = "#f8fafc";
+        const modName = e.dataTransfer.getData("text/plain");
+        processModuleDrop(modName);
+      };
    
      // Show dropped modules with heading checkboxes
      droppedModules.forEach((mod, idx) => {
@@ -3628,7 +3797,11 @@ document.getElementById("btn-module-save-next").onclick = async function () {
      if (editId) {
          // Small delay to ensure dependencies are loaded
          setTimeout(() => {
-             editUser(editId);
+             editUser(editId).then(() => {
+                 console.log("[DOMContentLoaded] Reload edit setup complete. Re-rendering table.");
+                 // Re-render table again now that editingUserId is set
+                 fetchAndRenderUsers(1);
+             });
          }, 100);
      }
    });
