@@ -4,8 +4,6 @@
 {% block content %}
  
   <style>
-
- 
     /* ✅ FIX: Ensure acceptedTrayCancelBtn is always accessible */
     #acceptedTrayCancelBtn {
       z-index: 900005 !important; /* Highest priority above all modals and overlays */
@@ -2159,17 +2157,10 @@ window.restorePreviousRowPosition = restorePreviousRowPosition;
      const redoBtn = document.getElementById("trayQtyRedoBtn");
      const modal = document.getElementById("trayScanModal_DayPlanning");
      const detailsDiv = document.getElementById("trayScanDetails_DayPlanning");
-     
-     let isValidationStarted = false; // Flag to prevent multiple validation starts
+   
      
      if (validateBtn) {
        validateBtn.addEventListener("click", function () {
-         if (isValidationStarted) return; // Prevent multiple clicks from resetting
-         
-         isValidationStarted = true;
-         validateBtn.disabled = true; // Disable button after first click
-         validateBtn.textContent = "Validating..."; // Optional: change text to indicate state
-         
          setTimeout(() => {
            const topTrayRow = document.querySelector('#trayScanDetails_DayPlanning tbody tr:first-child');
            if (topTrayRow) {
@@ -2186,8 +2177,6 @@ window.restorePreviousRowPosition = restorePreviousRowPosition;
      // Redo icon click: reset qty, disable editing, disable Tray Validate
      if (redoBtn) {
        redoBtn.addEventListener('click', function () {
-         isValidationStarted = false; // Reset flag for new validation
-         
          const topTrayRow = document.querySelector('#trayScanDetails_DayPlanning tbody tr:first-child');
          if (topTrayRow) {
            const qtyInput = topTrayRow.querySelector('.tray-qty-input[data-top-tray="1"]');
@@ -2213,7 +2202,6 @@ window.restorePreviousRowPosition = restorePreviousRowPosition;
            validateBtn.style.background = "#f5faff";
            validateBtn.style.borderColor = "#023E4DCC";
            validateBtn.style.color = "#023E4DCC";
-           validateBtn.textContent = "Tray Validate"; // Reset text
          }
          if (redoBtn) redoBtn.style.display = 'none';
        });
@@ -5776,7 +5764,6 @@ function generateDynamicTrayIdInputs(row, quantity, trayIdCell) {
     const trayInput = document.createElement('input');
     trayInput.type = 'text';
     trayInput.className = 'form-control rejection-tray-id-input';
-    trayInput.maxLength = 9;
     trayInput.style.cssText = `
       flex: 1; font-size: 12px; padding: 6px 10px;
       border: 2px solid #ced4da; border-radius: 6px;
@@ -6950,8 +6937,8 @@ function performTrayValidation(inputElement, errorSpan, trayId, lotId, rejection
           errorSpan.style.marginTop = '4px';
         }
         
-        // ✅ FIXED: Auto-select invalid input only after entering exactly 9 characters
-        if (trayId.length == 9) {
+        // ✅ FIXED: Auto-select invalid input only after entering 9 characters
+        if (trayId.length >= 9) {
           setTimeout(() => {
             inputElement.focus();
             inputElement.select(); // Select all text for easy replacement
@@ -8997,35 +8984,43 @@ function interceptFormSubmission() {
      }
    
    // ✅ SIMPLIFIED: collectCurrentSessionAllocations function for frontend compatibility
-   function collectCurrentSessionAllocations(excludeInput) {
-     const allocations = [];
-     
-     console.log('📊 [collectCurrentSessionAllocations] Starting allocation collection...');
-     
-     document.querySelectorAll('.rejection-qty-input').forEach(qtyInput => {
-       const qty = parseInt(qtyInput.value) || 0;
-       const reasonId = qtyInput.getAttribute('data-reason-id');
-       
-       if (qty > 0) {
-         const row = qtyInput.closest('tr');
-         const reasonCell = row.cells[2];
-         const reasonText = reasonCell ? reasonCell.textContent.trim() : '';
-         
-         console.log(`📋 [collectCurrentSessionAllocations] Processing reason ${reasonId} (${reasonText}): qty=${qty}`);
-         
-         // For the new simplified logic, we just need the basic rejection quantities
-         allocations.push({
-           reason_id: reasonId,
-           reason_text: reasonText,
-           qty: qty,
-           rejection_qty: qty  // Add both for compatibility
-         });
-       }
-     });
-     
-     console.log('📊 [collectCurrentSessionAllocations] FINAL allocations:', allocations);
-     return allocations;
-   }
+    function collectCurrentSessionAllocations(excludeInput) {
+      const allocations = [];
+      
+      console.log('📊 [collectCurrentSessionAllocations] Starting allocation collection...');
+      
+      document.querySelectorAll('.rejection-qty-input').forEach(qtyInput => {
+        const qty = parseInt(qtyInput.value) || 0;
+        const reasonId = qtyInput.getAttribute('data-reason-id');
+        
+        if (qty > 0) {
+          const row = qtyInput.closest('tr');
+          const reasonCell = row.cells[2];
+          const reasonText = reasonCell ? reasonCell.textContent.trim() : '';
+          
+          // Collect tray IDs for this reason
+          const trayIdCell = row.querySelector('td:last-child');
+          const trayInputs = trayIdCell ? trayIdCell.querySelectorAll('.rejection-tray-id-input') : [];
+          const trayIds = Array.from(trayInputs)
+            .map(input => input.value.trim())
+            .filter(val => val !== '');
+
+          console.log(`📋 [collectCurrentSessionAllocations] Processing reason ${reasonId} (${reasonText}): qty=${qty}, tray_ids=${trayIds}`);
+          
+          // For the new simplified logic, we just need the basic rejection quantities
+          allocations.push({
+            reason_id: reasonId,
+            reason_text: reasonText,
+            qty: qty,
+            rejection_qty: qty,  // Add both for compatibility
+            tray_ids: trayIds    // ✅ ADDED: Include specific tray IDs
+          });
+        }
+      });
+      
+      console.log('📊 [collectCurrentSessionAllocations] FINAL allocations:', allocations);
+      return allocations;
+    }
 
    // ✅ ENHANCED: Update rejection scan counter with quantity tracking
    function updateRejectionScanCounter() {
@@ -9592,7 +9587,6 @@ function showAcceptedTrayModal(rescanData, lotId, isDraft) {
                  id="topTrayIdInput" 
                  placeholder="Scan Tray ID..." 
                  value="${draftTrayId}"
-                 maxlength="9"
                  style="width: 100%; max-width: 280px; padding: 8px 12px; border: 2px solid #ddd; border-radius: 6px; font-size: 14px; transition: all 0.3s ease; background: #fff; ${inputStyle} ${draftTrayId ? 'background-color: #d4edda; border-color: #28a745;' : ''}" 
                  class="top-tray-id-input" 
                  ${(!isDraft && draftTrayId) ? 'readonly' : ''} />
@@ -9882,7 +9876,6 @@ function loadDelinkTrayData(lotId) {
                      class="form-control delink-tray-input" 
                      placeholder="Scan Tray ID for Delink" 
                      value=""
-                     maxlength="9"
                      style="width: 100%; padding: 4px 6px; font-size: 11px; border: 1px solid #ddd; border-radius: 3px; background: #fff; height: 24px;" 
                      data-row="${tray.sno}"
                      data-expected-qty="${tray.tray_quantity}" />
@@ -10373,14 +10366,6 @@ function addInstantTopTrayValidation(lotId) {
         errorDiv.style.color = '#721c24';
         errorDiv.style.backgroundColor = '#f8d7da';
         errorDiv.style.border = '1px solid #f5c6cb';
-        
-        // ✅ Auto-select invalid input only after entering exactly 9 characters
-        if (trayId.length == 9) {
-          setTimeout(() => {
-            this.focus();
-            this.select(); // Select all text for easy replacement
-          }, 100);
-        }
         
         console.log('🔧 [addInstantTopTrayValidation] ❌ Invalid tray:', errorMessage);
       }
@@ -11296,8 +11281,8 @@ document.querySelectorAll('.delink-tray-input').forEach(function(input, idx, all
               this.style.backgroundColor = '#f8d7da';
               this.style.borderColor = '#dc3545';
               this.style.color = '#721c24';
-              // Auto-select if length == 9 (after typing 9th char) and invalid
-              if (this.value.trim().length == 9) {
+              // Auto-select if length >= 9 (after typing 9th char) and invalid
+              if (this.value.trim().length >= 9) {
                 setTimeout(() => {
                   this.focus();
                   this.select();
@@ -11496,10 +11481,8 @@ document.querySelectorAll('.delink-tray-input').forEach(function(input, idx, all
                   console.log(`🔄 [Delink Validation] Setting up auto-select for invalid tray: ${trayId}`);
                   setTimeout(() => {
                     console.log(`🎯 [Delink Validation] Executing auto-select for invalid tray: ${trayId}`);
-                    if (trayId.length == 9) {
-                      currentInput.focus();
-                      currentInput.select();
-                    }
+                    currentInput.focus();
+                    currentInput.select();
                     updateDelinkScanCounter();
                   }, 100);
                  }
