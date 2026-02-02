@@ -4987,6 +4987,12 @@ style="max-height: 320px !important; border: 1px solid #dee2e6; border-radius: 1
                 <button id="draftButton" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 30px;">
                   Draft
                 </button>
+                
+                <!-- ✅ NEW: Verify Button (Initially hidden unless in draft mode) -->
+                <button id="verifyButton" style="display: none; padding: 8px 16px; background: #ffc107; color: #333; border: none; border-radius: 30px; font-weight: bold;">
+                  <i class="fa fa-search"></i> Verify Rules
+                </button>
+                
                 <button id="proceedButton" style="padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 30px;">
                   Proceed
                 </button>
@@ -4998,6 +5004,17 @@ style="max-height: 320px !important; border: 1px solid #dee2e6; border-radius: 1
               `;
               
               if (draftData) {
+                // Show verify button, hide proceed button for drafts
+                setTimeout(() => {
+                  const verifyBtn = document.getElementById('verifyButton');
+                  const proceedBtn = document.getElementById('proceedButton');
+                  if (verifyBtn && proceedBtn) {
+                    verifyBtn.style.display = 'inline-block';
+                    proceedBtn.style.display = 'none';
+                    console.log('🔒 [Draft Mode] Switched to Verify button');
+                  }
+                }, 50);
+                
                 loadDraftDataIntoForm(draftData);
               }
 
@@ -5100,6 +5117,19 @@ style="max-height: 320px !important; border: 1px solid #dee2e6; border-radius: 1
       console.log('✅ [showEditableRejectionFormWithData] Cancel button listener attached');
     }
     
+    // ✅ NEW: Attach Verify button listener
+    const verifyButton = document.getElementById('verifyButton');
+    if (verifyButton) {
+      const newVerifyButton = verifyButton.cloneNode(true);
+      verifyButton.parentNode.replaceChild(newVerifyButton, verifyButton);
+      
+      newVerifyButton.addEventListener('click', () => {
+        console.log('🔍 [verifyButton] Verify clicked for lot:', stockLotId);
+        handleVerifyDraft(stockLotId, batchId);
+      });
+      console.log('✅ [showEditableRejectionFormWithData] Verify button listener attached');
+    }
+    
     // ✅ NEW: Ensure instant validation is attached to all tray inputs after form loads
     setTimeout(() => {
       console.log('🔧 [showEditableRejectionFormWithData] Re-attaching validation to all tray inputs');
@@ -5113,7 +5143,7 @@ style="max-height: 320px !important; border: 1px solid #dee2e6; border-radius: 1
       console.log('✅ [showEditableRejectionFormWithData] Validation re-attached to all rows');
     }, 200);
     
-    forceEnableRejectionDraftButtons();
+    // forceEnableRejectionDraftButtons(); // REMOVED: Function definition not found and verified logic handles button states now
     console.log('✅ [showEditableRejectionFormWithData] All button event listeners applied');
   }, 100); // Increased timeout to ensure DOM is ready
 }
@@ -5572,8 +5602,8 @@ window.loadDraftDataIntoForm = function(draftData) {
    });
    });
    
-   // ✅ SIMPLIFIED: Calculate required trays based on standard capacity
-   function calculateRequiredTrays(rejectionQty, trayCapacity = 16) {
+// ✅ SIMPLIFIED: Calculate required trays based on standard capacity
+function calculateRequiredTrays(rejectionQty, trayCapacity = 16) {
    if (rejectionQty <= 0) {
    return [];
    }
@@ -5597,8 +5627,176 @@ window.loadDraftDataIntoForm = function(draftData) {
    
    console.log(`✅ Simplified calculation for qty ${rejectionQty} with capacity ${trayCapacity}:`, 
    traysWithQuantity.map(t => `Tray ${t.trayIndex + 1}: ${t.trayQty}/${t.trayCapacity}`).join(', '));
+   
    return traysWithQuantity;
-   }
+}
+
+// ✅ NEW: Handle Verify Draft Function with Sequential Validation
+async function handleVerifyDraft(stockLotId, batchId) {
+  console.log('🔍 [handleVerifyDraft] Starting verification process...');
+  const verifyBtn = document.getElementById('verifyButton');
+  const proceedBtn = document.getElementById('proceedButton');
+  const batchRejectionCheckbox = document.getElementById('batchRejection');
+  
+  // Show loading state
+  if (verifyBtn) {
+    verifyBtn.disabled = true;
+    verifyBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Verifying...';
+  }
+  
+  // 1. Check if it's Lot Rejection
+  if (batchRejectionCheckbox && batchRejectionCheckbox.checked) {
+    const lotRejectionRemarksInput = document.getElementById("lotRejectionRemarksInput");
+    const remarks = lotRejectionRemarksInput ? lotRejectionRemarksInput.value.trim() : "";
+    
+    if (!remarks) {
+      showErrorMessage('Lot rejection remarks are required.');
+      resetVerifyButton();
+      return;
+    }
+    
+    // Valid for lot rejection
+    showSuccessAndEnableProceed();
+    return;
+  }
+  
+  // 2. Validate all tray inputs sequentially
+  const trayInputs = document.querySelectorAll('.rejection-tray-id-input');
+  let hasErrors = false;
+  let validCount = 0;
+  
+  if (trayInputs.length === 0) {
+    // Check if we have rejection quantities but no trays (might be shortage)
+    const rejectionDataPresent = Array.from(document.querySelectorAll('.rejection-qty-input'))
+      .some(input => (parseInt(input.value) || 0) > 0);
+      
+    if (rejectionDataPresent) {
+       // Check if all are SHORTAGE
+       const isAllShortage = Array.from(document.querySelectorAll('.rejection-qty-input'))
+         .filter(input => (parseInt(input.value) || 0) > 0)
+         .every(input => {
+             const row = input.closest('tr');
+             const reasonText = row.cells[2].textContent.trim().toUpperCase();
+             return reasonText === 'SHORTAGE';
+         });
+         
+       if (isAllShortage) {
+         showSuccessAndEnableProceed();
+         return;
+       }
+    }
+    
+    showErrorMessage('No tray inputs found to verify.');
+    resetVerifyButton();
+    return;
+  }
+  
+  console.log(`🔍 [handleVerifyDraft] Validating ${trayInputs.length} tray inputs...`);
+  
+  // Collect all validations into promises
+  const validationPromises = Array.from(trayInputs).map(async (input, index) => {
+    const trayId = input.value.trim();
+    if (!trayId) return { valid: false, error: 'Empty tray ID' };
+    
+    // Check backend validation cache or re-trigger
+    // We'll manually trigger the validation logic used in validateTrayIdSimple 
+    // but promisified for coordination
+    return new Promise(resolve => {
+        // Use existing validation function logic
+        // We trigger the InstantValidation handler which eventually updates the UI
+        // We need to tap into that or simulate it. 
+        // Simpler approach: Call validateTrayIdSimple and wait a bit for result
+        
+        // Reset valid state
+        input._isValid = false; 
+        
+        // Trigger validation
+        validateTrayIdSimple(input, trayId);
+        
+        // Wait for potential async API call to complete
+        // We poll the _isValid property or check class/style
+        const checkInterval = setInterval(() => {
+           // If we have a definitive result (success or error style applied)
+           const isSuccess = input.style.borderColor === 'rgb(40, 167, 69)' || input.style.borderColor === '#28a745'; // Green
+           const isError = input.style.borderColor === 'rgb(220, 53, 69)' || input.style.borderColor === '#dc3545'; // Red
+           
+           if (isSuccess || isError) {
+             clearInterval(checkInterval);
+             resolve({ valid: isSuccess, trayId });
+           }
+        }, 100);
+        
+        // Timeout safety
+        setTimeout(() => {
+           clearInterval(checkInterval);
+           // If still pending (e.g. network issue), treat as error
+           const isSuccess = input.style.borderColor === 'rgb(40, 167, 69)' || input.style.borderColor === '#28a745';
+           resolve({ valid: isSuccess, trayId, timeout: true });
+        }, 5000); 
+    });
+  });
+  
+  // Wait for all
+  const results = await Promise.all(validationPromises);
+  
+  // Analyze results
+  const failures = results.filter(r => !r.valid);
+  
+  if (failures.length > 0) {
+    console.log('❌ [handleVerifyDraft] Verification failed for:', failures);
+    showErrorMessage(`Verification failed for ${failures.length} tray(s). Please fix highlighted errors.`);
+    resetVerifyButton();
+  } else {
+    console.log('✅ [handleVerifyDraft] All inputs verified successfully!');
+    // Also run duplicate check one last time
+    if (!validateDuplicateTrayIds()) {
+        showErrorMessage('Duplicate tray IDs found.');
+        resetVerifyButton();
+        return;
+    }
+    
+    showSuccessAndEnableProceed();
+  }
+}
+
+function resetVerifyButton() {
+  const verifyBtn = document.getElementById('verifyButton');
+  if (verifyBtn) {
+    verifyBtn.disabled = false;
+    verifyBtn.innerHTML = '<i class="fa fa-search"></i> Verify Rules';
+  }
+}
+
+function showSuccessAndEnableProceed() {
+  const verifyBtn = document.getElementById('verifyButton');
+  const proceedBtn = document.getElementById('proceedButton');
+  
+  if (verifyBtn) verifyBtn.style.display = 'none';
+  if (proceedBtn) {
+      proceedBtn.style.display = 'inline-block';
+      proceedBtn.disabled = false;
+      proceedBtn.style.opacity = '1';
+      proceedBtn.style.cursor = 'pointer';
+      
+      // Auto-focus proceed for convenience
+      proceedBtn.focus();
+  }
+  
+  // Show success toast/message
+  const msgDiv = document.getElementById("batchRejectionMsg");
+  if (msgDiv) {
+    msgDiv.style.color = "#28a745";
+    msgDiv.style.backgroundColor = "#d4edda";
+    msgDiv.style.border = "1px solid #c3e6cb";
+    msgDiv.textContent = "✅ Verification Complete! You can now proceed.";
+    msgDiv.style.padding = "8px";
+    msgDiv.style.display = "block";
+    
+    setTimeout(() => {
+        msgDiv.style.display = "none";
+    }, 5000);
+  }
+}
    
    
    // ✅ FIXED: Corrected column indices for proper tray distribution
