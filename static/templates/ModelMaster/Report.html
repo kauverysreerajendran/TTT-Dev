@@ -136,6 +136,83 @@
         </div>
 
 
+<style>
+/* Toggle Switch Styles - Premium Look */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 22px;
+  margin-right: 12px;
+  vertical-align: middle;
+}
+
+.switch input { 
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #e9ecef; /* Light gray for inactive */
+  -webkit-transition: .3s cubic-bezier(0.4, 0.0, 0.2, 1);
+  transition: .3s cubic-bezier(0.4, 0.0, 0.2, 1);
+  border-radius: 34px;
+  border: 1px solid #ced4da;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 2px;
+  bottom: 2px;
+  background-color: white;
+  -webkit-transition: .3s cubic-bezier(0.4, 0.0, 0.2, 1);
+  transition: .3s cubic-bezier(0.4, 0.0, 0.2, 1);
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+input:checked + .slider {
+  background-color: #0d6efd; /* Bootstrap Primary Blue or nicer specific blue */
+  border-color: #0d6efd;
+}
+
+input:focus + .slider {
+  box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.25);
+}
+
+input:checked + .slider:before {
+  -webkit-transform: translateX(18px);
+  -ms-transform: translateX(18px);
+  transform: translateX(18px);
+}
+
+/* Table styling fixes */
+.table th {
+    background-color: #008080 !important; /* Teal color matching image */
+    color: white !important;
+    vertical-align: middle;
+    text-align: center;
+}
+
+/* Flex container for the cell content */
+.sno-cell {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start; /* Left align content */
+    padding-left: 5px;
+}
+</style>
+
         <!-- Batch Tracking Table -->
         <div class="table-section">
             <div class="table-header">
@@ -155,7 +232,7 @@
             <table class="table table-bordered">
                 <thead>
                     <tr>
-                        <th></th>
+                        <th style="width: 120px;">S.No</th>
                         <th>MODEL INFO</th>
                         <th>QUANTITY</th>
                         <th>CURRENT STAGE</th>
@@ -166,7 +243,15 @@
                 <tbody id="batchTableBody">
                     {% for row in batch_details %}
                         <tr>
-                            <td><input type="checkbox"></td>
+                            <td style="vertical-align: middle;">
+                                <div class="sno-cell">
+                                    <label class="switch">
+                                      <input type="checkbox">
+                                      <span class="slider round"></span>
+                                    </label>
+                                    <span style="font-weight: 600; font-size: 1.1em; color: #333;">{{ row.s_no }}</span>
+                                </div>
+                            </td>
                             <td>
                                 <strong>{{ row.model_no }}</strong><br>
                                 {{ row.version }}
