@@ -1,6 +1,6 @@
 from django.views.generic import *
 from modelmasterapp.models import *
-from .models import Jig, JigLoadingMaster, JigLoadTrayId, JigLoadingManualDraft, JigCompleted
+from .models import *
 from rest_framework.decorators import *
 from django.http import JsonResponse
 import logging
@@ -19,6 +19,8 @@ import re
 import json
 from django.core.paginator import Paginator
 from datetime import datetime
+
+
 @method_decorator(login_required, name='dispatch') 
 class JigView(TemplateView):
     template_name = "JigLoading/Jig_Picktable.html"
@@ -502,7 +504,7 @@ class JigAddModalDataView(TemplateView):
             modal_data['half_filled_tray_cases'] = 0
 
         # Delink Table preparation (existing tray data)
-        modal_data['delink_table'] = self._prepare_existing_delink_table(lot_id, batch, modal_data['effective_loaded_cases'], tray_capacity, broken_hooks)
+        modal_data['delink_table'] = self._prepare_existing_delink_table(lot_id, batch, modal_data['effective_loaded_cases'], tray_capacity, broken_hooks, modal_data['jig_capacity'])
 
         # If lot qty >= jig capacity, force empty_hooks to 0 regardless of broken hooks
         if modal_data['loaded_cases_qty'] >= modal_data['jig_capacity']:
@@ -625,7 +627,7 @@ class JigAddModalDataView(TemplateView):
                 })
         return model_image_data
     
-    def _prepare_existing_delink_table(self, lot_id, batch, effective_loaded_cases, tray_capacity, broken_hooks):
+    def _prepare_existing_delink_table(self, lot_id, batch, effective_loaded_cases, tray_capacity, broken_hooks, jig_capacity=None):
         """
         Prepare delink table data for scanning.
         Logic: 
@@ -685,29 +687,43 @@ class JigAddModalDataView(TemplateView):
                         'excluded_quantity': tray_data['excluded_qty']
                     })
             else:
-                # No broken hooks - use existing trays with their quantities
-                existing_trays = JigLoadTrayId.objects.filter(lot_id=lot_id, batch_id=batch).order_by('id')
-                no_of_full_trays = effective_loaded_cases // tray_capacity
-                partial_cases = effective_loaded_cases % tray_capacity
-                for idx in range(no_of_full_trays):
-                    if idx < len(existing_trays):
-                        tray = existing_trays[idx]
-                        model_bg = self._get_model_bg(idx + 1)
-                        tray_qty = tray_capacity
+                # No broken hooks - check if lot qty <= jig capacity (specific scenario fix)
+                if effective_loaded_cases <= jig_capacity and broken_hooks == 0:
+                    # For this scenario: show all existing trays fully without exclusions
+                    existing_trays = JigLoadTrayId.objects.filter(lot_id=lot_id, batch_id=batch).order_by('id')
+                    for tray in existing_trays:
                         delink_table.append({
                             'tray_id': tray.tray_id,
-                            'tray_quantity': tray_qty,
-                            'model_bg': model_bg,
-                            'original_quantity': tray_qty,
+                            'tray_quantity': tray.tray_quantity,
+                            'model_bg': self._get_model_bg(len(delink_table) + 1),
+                            'original_quantity': tray.tray_quantity,
                             'excluded_quantity': 0,
                         })
+                    logger.info(f"📊 DELINK TABLE (FIXED SCENARIO): Showing all {len(delink_table)} existing trays fully for lot {lot_id}")
+                else:
+                    # Existing logic for other scenarios: distribute based on effective cases
+                    existing_trays = JigLoadTrayId.objects.filter(lot_id=lot_id, batch_id=batch).order_by('id')
+                    no_of_full_trays = effective_loaded_cases // tray_capacity
+                    partial_cases = effective_loaded_cases % tray_capacity
+                    for idx in range(no_of_full_trays):
+                        if idx < len(existing_trays):
+                            tray = existing_trays[idx]
+                            model_bg = self._get_model_bg(idx + 1)
+                            tray_qty = tray_capacity
+                            delink_table.append({
+                                'tray_id': tray.tray_id,
+                                'tray_quantity': tray_qty,
+                                'model_bg': model_bg,
+                                'original_quantity': tray_qty,
+                                'excluded_quantity': 0,
+                            })
             
             logger.info(f"📊 DELINK TABLE: {len(delink_table)} trays for scanning (effective_cases={effective_loaded_cases}, broken_hooks={broken_hooks})")
             return delink_table
         
         except Exception as e:
             logger.error(f"❌ Error in _prepare_existing_delink_table: {str(e)}")
-            logger.error(f"Parameters: lot_id={lot_id}, effective_loaded_cases={effective_loaded_cases}, tray_capacity={tray_capacity}, broken_hooks={broken_hooks}")
+            logger.error(f"Parameters: lot_id={lot_id}, effective_loaded_cases={effective_loaded_cases}, tray_capacity={tray_capacity}, broken_hooks={broken_hooks}, jig_capacity={jig_capacity}")
             return []
     
     
@@ -1076,27 +1092,56 @@ class JigAddModalDataView(TemplateView):
 # Tray ID Validation - Delink Table View
 @api_view(['GET'])
 def validate_tray_id(request):
+    import logging
+    logger = logging.getLogger(__name__)
+    
     tray_id = request.GET.get('tray_id')
     batch_id = request.GET.get('batch_id')
-    lot_id = request.GET.get('lot_id')  # <-- Add this line to get lot_id from request
-    if not tray_id or not batch_id or not lot_id:
+    lot_id = request.GET.get('lot_id')  # Single lot ID (for backward compatibility)
+    lot_ids_param = request.GET.get('lot_ids')  # Comma-separated lot IDs (for multi-model)
+    
+    # Determine which lot IDs to validate against
+    if lot_ids_param:
+        # Multi-model mode: parse comma-separated lot IDs
+        lot_ids_to_check = [lid.strip() for lid in lot_ids_param.split(',') if lid.strip()]
+    elif lot_id:
+        # Single model mode: validate against single lot ID
+        lot_ids_to_check = [lot_id]
+    else:
         return Response({'valid': False, 'message': 'Tray ID, Batch ID, and Lot ID required'}, status=400)
-    # Only accept tray_id that belongs to this lot and batch
-    tray = JigLoadTrayId.objects.filter(
-        tray_id=tray_id,
-        batch_id__batch_id=batch_id,
-        lot_id=lot_id
-    ).first()
+    
+    if not tray_id:
+        return Response({'valid': False, 'message': 'Tray ID, Batch ID, and Lot ID required'}, status=400)
+    
+    logger.info(f"🔍 Multi-model validation: tray_id={tray_id}, batch_id={batch_id}, lot_ids={lot_ids_to_check}")
+    
+    # For multi-model scenarios, don't filter by batch_id since different lots may have different batches
+    if len(lot_ids_to_check) > 1:
+        # Multi-model: Check if tray exists for ANY of the provided lot IDs (ignore batch_id)
+        tray = JigLoadTrayId.objects.filter(
+            tray_id=tray_id,
+            lot_id__in=lot_ids_to_check
+        ).first()
+    else:
+        # Single model: Check with batch_id for backward compatibility
+        if not batch_id:
+            return Response({'valid': False, 'message': 'Tray ID, Batch ID, and Lot ID required'}, status=400)
+        tray = JigLoadTrayId.objects.filter(
+            tray_id=tray_id,
+            batch_id__batch_id=batch_id,
+            lot_id__in=lot_ids_to_check
+        ).first()
+    
     if tray:
         tray_quantity = tray.tray_quantity or tray.tray_capacity or 0
+        logger.info(f"✅ Tray validated: {tray_id} found with quantity {tray_quantity}")
         return Response({'valid': True, 'tray_quantity': tray_quantity})
     else:
-        # Do NOT allow new trays for delink table (only for half-filled section, handled elsewhere)
+        logger.warning(f"❌ Tray validation failed: {tray_id} not found in batch {batch_id} for lot IDs {lot_ids_to_check}")
         return Response({'valid': False, 'message': 'Invalid Tray ID.'})
 
+
 # Add Jig Btn - Delink Table View
-
-
 class DelinkTableAPIView(APIView):
     """
     Returns tray rows for Delink Table based on tray type, lot qty, and jig capacity.
@@ -1856,6 +1901,39 @@ class JigSubmitAPIView(APIView):
                     stock.Jig_Load_completed = True
                     stock.jig_draft = False
                 stock.save()
+                
+                # Mark primary draft as submitted
+                if draft:
+                    draft.draft_status = 'submitted'
+                    draft.save()
+                    logger.info(f"✅ Primary draft marked as submitted for lot_id={lot_id}")
+                
+                # For multi-model submissions, mark ALL combined lots as completed and their drafts as submitted
+                if is_multi_model and combined_lot_ids:
+                    for combined_lot in combined_lot_ids:
+                        if combined_lot != lot_id:  # Skip primary lot (already updated above)
+                            try:
+                                # Update stock record
+                                secondary_stock = TotalStockModel.objects.get(lot_id=combined_lot)
+                                secondary_stock.Jig_Load_completed = True
+                                secondary_stock.jig_draft = False
+                                secondary_stock.save()
+                                logger.info(f"✅ Secondary lot {combined_lot} marked as completed")
+                                
+                                # Mark draft as submitted
+                                try:
+                                    secondary_draft = JigLoadingManualDraft.objects.get(
+                                        lot_id=combined_lot, 
+                                        user=user
+                                    )
+                                    secondary_draft.draft_status = 'submitted'
+                                    secondary_draft.save()
+                                    logger.info(f"✅ Secondary draft marked as submitted for lot_id={combined_lot}")
+                                except JigLoadingManualDraft.DoesNotExist:
+                                    logger.info(f"ℹ️ No draft found for secondary lot {combined_lot}")
+                                    
+                            except TotalStockModel.DoesNotExist:
+                                logger.warning(f"⚠️ Secondary lot {combined_lot} not found in TotalStockModel")
 
             except Exception as e:
                 logger.error(f"❌ Failed to create JigCompleted record: {e}")

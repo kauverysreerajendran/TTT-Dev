@@ -93,7 +93,7 @@ class Migration(migrations.Migration):
                 ('new_tray', models.BooleanField(default=True, help_text='Is tray new')),
                 ('tray_type', models.CharField(blank=True, help_text='Type of tray (Jumbo, Normal, etc.) - filled by admin', max_length=50, null=True)),
                 ('tray_capacity', models.IntegerField(blank=True, help_text='Capacity of this specific tray - filled by admin', null=True)),
-                ('batch_id', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='Recovery_DP.RecoveryMasterCreation')),
+                ('batch_id', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='Recovery_DP.recoverymastercreation')),
                 ('user', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL)),
             ],
             options={

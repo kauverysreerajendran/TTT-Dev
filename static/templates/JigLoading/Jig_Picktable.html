@@ -3195,6 +3195,17 @@ function recalcLoadedCasesQty() {
     }
   }
   
+  // Update empty hooks display
+  const emptyHooksElement = document.getElementById("emptyHooksInput");
+  const jigCapacity = parseInt(jigCapacityElem.value || "0");
+  const emptyHooks = Math.max(0, jigCapacity - total);
+  if (emptyHooksElement) {
+    emptyHooksElement.value = emptyHooks;
+  }
+  
+  // Update global validation flag for Submit button
+  window.backendOverallValid = (total >= jigCapacity);
+  
   // Update display: loaded / jig_capacity, cap at jig_capacity
   const denominator = jigCapacityElem.value;
   const displayTotal = Math.min(total, parseInt(denominator));
@@ -3568,7 +3579,7 @@ function renderDelinkTableFromData(delinkTable) {
         type="text" 
         id="tray-${index}"
         class="tray-id-input ${tray.model_bg || 'model-bg-1'}" 
-        placeholder="Scan Tray Id"
+        placeholder="Scan Tray ${index + 1} Id"
         data-row-index="${index}"
         data-batch-id="${window.currentModalContext?.batchId || ''}"
         data-lot-id="${window.currentModalContext?.lotId || ''}"
@@ -3584,7 +3595,28 @@ function renderDelinkTableFromData(delinkTable) {
   });
   
   // Setup scanning listeners for new inputs
-  setupTrayScanningListeners();
+  if (typeof setupTrayScanningListeners === 'function') {
+    setupTrayScanningListeners();
+  } else {
+    console.warn('⚠️ setupTrayScanningListeners not available, setting up manually');
+    // Fallback: setup listeners manually
+    const trayInputs = delinkTableSection.querySelectorAll('.tray-id-input:not([readonly])');
+    trayInputs.forEach((input) => {
+      input.addEventListener('input', function () {
+        if (this.value.trim() === '') {
+          this.style.borderColor = '';
+          this.style.backgroundColor = '';
+          return;
+        }
+        if (this.value.length <= 9) {
+          validateAndMoveToNext(this);
+        }
+      });
+      input.addEventListener('focus', function () {
+        this.select();
+      });
+    });
+  }
 }
 
 function renderHalfFilledTraySection(trayDistribution, brokenHooks = 0, halfFilledTrayCases = 0) {
@@ -3615,7 +3647,7 @@ function renderHalfFilledTraySection(trayDistribution, brokenHooks = 0, halfFill
           <input 
             type="text" 
             class="tray-id-input model-bg-1" 
-            placeholder="Scan tray ID"
+            placeholder="Scan Half-Filled Tray ID"
             data-row-index="half-filled"
             data-tray-qty="${halfFilledTrayCases}"
             data-batch-id="${window.currentModalContext?.batchId || ''}"
@@ -3877,7 +3909,22 @@ function validateAndMoveToNext(input) {
   const trayId = input.value.trim();
   const rowIndex = parseInt(input.dataset.rowIndex);
   const batchId = input.getAttribute("data-batch-id") || "";
-  const lotId = input.getAttribute("data-lot-id") || "";
+  let lotId = input.getAttribute("data-lot-id") || "";
+  
+  // Check if we're in multi-model mode - get combined lot IDs from modal
+  const modal = document.getElementById('jigAddModal');
+  const isMultiModel = modal && modal.getAttribute('data-is-multi-model') === 'true';
+  const combinedLotIdsStr = modal ? modal.getAttribute('data-combined-lot-ids') : null;
+  
+  let lotIdsToValidate = [lotId];
+  if (isMultiModel && combinedLotIdsStr) {
+    try {
+      lotIdsToValidate = JSON.parse(combinedLotIdsStr);
+      console.log('🔍 Multi-model validation mode: checking against lot IDs:', lotIdsToValidate);
+    } catch (e) {
+      console.error('❌ Failed to parse combined lot IDs:', e);
+    }
+  }
 
   // Helper: recalculate loaded cases qty from all valid tray inputs [Loaded Case Qty Filed]
   recalcLoadedCasesQty();
@@ -3933,12 +3980,22 @@ function validateAndMoveToNext(input) {
       recalcLoadedCasesQty();
       return;
     }
+    
+    // Build validation URL with all lot IDs for multi-model scenarios
+    let validationUrl = `/jig_loading/validate-tray-id/?tray_id=${encodeURIComponent(trayId)}`;
+    
+    if (isMultiModel && lotIdsToValidate.length > 1) {
+      // Multi-model: send all lot IDs as comma-separated string
+      const lotIdsStr = lotIdsToValidate.join(',');
+      validationUrl += `&batch_id=${encodeURIComponent(batchId)}&lot_ids=${encodeURIComponent(lotIdsStr)}`;
+      console.log(`🔍 Validating tray ${trayId} against multiple lots:`, lotIdsToValidate);
+    } else {
+      // Single model: send single lot_id and batch_id
+      validationUrl += `&batch_id=${encodeURIComponent(batchId)}&lot_id=${encodeURIComponent(lotId)}`;
+    }
+    
     // Instant backend validation
-    fetch(
-      `/jig_loading/validate-tray-id/?tray_id=${encodeURIComponent(
-        trayId
-      )}&batch_id=${encodeURIComponent(batchId)}&lot_id=${encodeURIComponent(lotId)}`
-    )
+    fetch(validationUrl)
       .then((resp) => resp.json())
       .then((data) => {
         if (data.valid) {
@@ -4622,6 +4679,7 @@ let currentPlatingColor = '';
 let currentPolishFinish = '';
 let currentJigType = '';
 let previouslyCombinedRows = new Set();
+let combinedModels = [];
 
 // Add Model button click handler
 document.addEventListener('DOMContentLoaded', function() {
@@ -4646,11 +4704,21 @@ document.addEventListener('DOMContentLoaded', function() {
       const lotId = window.currentModalContext.lotId;
       const platingStockNo = document.getElementById('modalPlatingStockNo')?.textContent || '';
       
+      // Get lot qty from modal input (this is the actual quantity of the primary model)
+      const lotQtyInput = document.getElementById('reallotQty');
+      const primaryModelQty = lotQtyInput ? parseInt(lotQtyInput.value) || 0 : 0;
+      
       // Get current quantity and empty hooks from modal inputs
       const loadedCasesDisplay = document.getElementById('loadedCasesQtyDisplay')?.textContent || '0/0';
-      const loadedCasesQty = parseInt(loadedCasesDisplay.split('/')[0]) || 0;
+      const loadedCasesQty = parseInt(loadedCasesDisplay.split('/')[0]) || primaryModelQty; // Use lot qty if loaded cases is 0
       const emptyHooks = parseInt(document.getElementById('emptyHooksInput')?.value) || 0;
       const jigCapacity = parseInt(document.getElementById('jigCapacityInput')?.value) || 0;
+      
+      console.log('📦 Primary model quantity:', {
+        fromLotQty: primaryModelQty,
+        fromLoadedCases: parseInt(loadedCasesDisplay.split('/')[0]) || 0,
+        usingQty: loadedCasesQty
+      });
       
       // Get tray type and capacity
       const trayTypeElement = document.getElementById('trayTypeInput');
@@ -4747,6 +4815,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Enter Add Model Mode
 function enterAddModelMode(modelNumber, lotId, batchId, currentQty, jigCapacity, emptyHooks, trayType, trayCapacity, platingColor, polishFinish, jigType) {
+  // Initialize combinedModels if empty
+  if (combinedModels.length === 0) {
+    combinedModels = [{
+      modelNumber: modelNumber,
+      lotId: lotId,
+      batchId: batchId,
+      quantity: currentQty,
+      platingColor: platingColor || '',
+      polishFinish: polishFinish || '',
+      jigType: jigType || ''
+    }];
+  }
+  
   // Store current modal context
   currentModelNumber = modelNumber;
   currentLotId = lotId;
@@ -4927,26 +5008,14 @@ function filterAndHighlightCompatibleRows(modelNumber, lotId, batchId, trayType,
       reasons.push('no quantity');
     }
     
-    // Rule 3: Must have same jig type
-    if (rowJigType !== jigType) {
-      isCompatible = false;
-      reasons.push(`different jig type (${rowJigType} vs ${jigType})`);
-    }
-    
-    // Rule 4: Must have same plating color
-    if (rowPlatingColor !== platingColor) {
-      isCompatible = false;
-      reasons.push(`different plating color (${rowPlatingColor} vs ${platingColor})`);
-    }
-    
     // Rule 5: Must have same polish finish (skip for lookalikes or same base models)
     if (!(isLookalike || sameBaseModel) && rowPolishFinish !== polishFinish) {
       isCompatible = false;
       reasons.push(`different polish finish (${rowPolishFinish} vs ${polishFinish})`);
     }
     
-    // Rule 6: Model compatibility check
-    if (isCompatible) {
+    // Rule 6: Model compatibility check (only if plating color or polish finish differ)
+    if (isCompatible && (rowPlatingColor !== platingColor || rowPolishFinish !== polishFinish)) {
       const isCrossAllowed = isCrossModelAllowed(modelNumber, rowPlatingStockNo, platingColor, polishFinish);
       
       if (!sameBaseModel && !isCrossAllowed && !isLookalike) {
@@ -5124,19 +5193,28 @@ function updateSelectionSummaryAndButton() {
             const polishingStockNo = polishingStockNoCell ? polishingStockNoCell.textContent.trim() : '';
             const qty = parseInt(qtyInput.value) || 0;
             
-            // Get lot ID and batch ID from hidden cells or data attributes
-            const lotIdCell = row.cells[1]; // Assuming lot ID is in 2nd column
-            const batchIdCell = row.cells[0]; // Assuming batch ID is in 1st column (hidden)
+            // Get lot ID and batch ID from data attributes
+            const lotId = row.getAttribute('data-stock-lot-id') || '';
+            const batchId = row.getAttribute('data-batch-id') || '';
             
-            const lotId = lotIdCell ? lotIdCell.textContent.trim() : '';
-            const batchId = batchIdCell ? batchIdCell.textContent.trim() : '';
+            // Get additional details from row
+            const platingColorCell = row.querySelector('td:nth-child(6)');
+            const polishFinishCell = row.querySelector('td:nth-child(7)');
+            const jigTypeCell = row.querySelector('td:nth-child(10)');
+            
+            const platingColor = platingColorCell ? platingColorCell.textContent.trim() : '';
+            const polishFinish = polishFinishCell ? polishFinishCell.textContent.trim() : '';
+            const jigType = jigTypeCell ? jigTypeCell.textContent.trim() : 'Jig';
             
             selectedModelsData.push({
               platingStockNo: platingStockNo,
               polishingStockNo: polishingStockNo,
               lotId: lotId,
               batchId: batchId,
-              qty: qty
+              qty: qty,
+              platingColor: platingColor,
+              polishFinish: polishFinish,
+              jigType: jigType
             });
             
             totalQty += qty;
@@ -5223,47 +5301,67 @@ function confirmModelSelection(selectedModels, totalAddedQty) {
 // Proceed with combination
 function proceedWithCombination(selectedModels, newTotalQuantity, newEmptyHooks) {
   console.log(`📈 New totals: Loaded ${newTotalQuantity}/${currentJigCapacity}, Empty hooks: ${newEmptyHooks}`);
+  console.log('📦 Combined models before adding:', combinedModels);
+  console.log('📦 Selected models to add:', selectedModels);
   
-  // Calculate actual current quantity from jig capacity minus empty hooks
-  const actualCurrentQty = currentJigCapacity - currentEmptyHooks;
+  // Add selected models to combinedModels (primary model is already in the array)
+  for (let selected of selectedModels) {
+    combinedModels.push({
+      modelNumber: selected.platingStockNo,
+      lotId: selected.lotId,
+      batchId: selected.batchId,
+      quantity: selected.qty,
+      platingColor: selected.platingColor || currentPlatingColor,
+      polishFinish: selected.polishFinish || currentPolishFinish,
+      jigType: selected.jigType || currentJigType
+    });
+  }
   
-  // Combine current model with selected models
-  const allModels = [{
-    platingStockNo: currentModelNumber,
-    lotId: currentLotId,
-    batchId: currentBatchId,
-    qty: actualCurrentQty
-  }, ...selectedModels];
+  console.log('📦 Combined models after adding:', combinedModels);
+  
+  // Recalculate totals from all combined models
+  const totalQuantity = combinedModels.reduce((sum, m) => sum + m.quantity, 0);
+  const emptyHooks = Math.max(0, currentJigCapacity - totalQuantity);
+  
+  console.log(`🧮 Calculated totals: ${totalQuantity} cases, ${emptyHooks} empty hooks`);
   
   // Update modal with combined data
-  updateModalWithCombinedModels(allModels, newTotalQuantity, newEmptyHooks);
+  updateModalWithCombinedModels(combinedModels, totalQuantity, emptyHooks);
   
-  // Exit Add Model mode
+  // Update previouslyCombinedRows
+  previouslyCombinedRows = new Set(combinedModels.map(m => m.lotId));
+  
+  // Exit Add Model mode (this will reopen the modal)
   exitAddModelMode();
   
-  // Reopen the modal
+  // Show success message after a brief delay
   setTimeout(() => {
-    const jigModal = document.getElementById('jigAddModal');
-    if (jigModal) {
-      jigModal.classList.add('open');
-    }
-  }, 500);
-  
-  // Show success message
-  Swal.fire({
-    icon: 'success',
-    title: 'Models Combined!',
-    html: `Successfully added ${selectedModels.length} model(s)<br>
-           Total Quantity: <b>${newTotalQuantity}</b> cases<br>
-           Empty Hooks: <b>${newEmptyHooks}</b>`,
-    timer: 2000,
-    showConfirmButton: false
-  });
+    Swal.fire({
+      icon: 'success',
+      title: 'Models Combined!',
+      html: `Successfully added ${selectedModels.length} model(s)<br>
+             Total Quantity: <b>${totalQuantity}</b> cases<br>
+             Empty Hooks: <b>${emptyHooks}</b>`,
+      timer: 2000,
+      showConfirmButton: false
+    });
+  }, 300);
 }
 
 // Update modal with combined models
 function updateModalWithCombinedModels(allModels, newTotalQuantity, newEmptyHooks) {
   console.log('🔄 Updating modal with', allModels.length, 'models');
+  console.log('📊 Total quantity:', newTotalQuantity, 'Empty hooks:', newEmptyHooks);
+  
+  // Map combinedModels to expected format
+  let mappedModels = allModels.map(m => ({
+    platingStockNo: m.modelNumber,
+    lotId: m.lotId,
+    batchId: m.batchId,
+    qty: m.quantity
+  }));
+  
+  console.log('🗺️ Mapped models:', mappedModels);
   
   const modal = document.getElementById('jigAddModal');
   if (!modal) {
@@ -5275,6 +5373,7 @@ function updateModalWithCombinedModels(allModels, newTotalQuantity, newEmptyHook
   const loadedCasesQtyDisplay = document.getElementById('loadedCasesQtyDisplay');
   if (loadedCasesQtyDisplay) {
     loadedCasesQtyDisplay.textContent = `${newTotalQuantity}/${currentJigCapacity}`;
+    console.log('✅ Updated loaded cases qty display:', newTotalQuantity);
   }
   
   // Update empty hooks
@@ -5284,15 +5383,15 @@ function updateModalWithCombinedModels(allModels, newTotalQuantity, newEmptyHook
   }
   
   // Create/Update model tabs in modal header
-  createModelTabs(allModels);
+  createModelTabs(mappedModels);
   
   // Recalculate tray distribution for all models
-  recalculateTrayDistributionForAllModels(allModels);
+  recalculateTrayDistributionForAllModels(mappedModels);
   
   // Store combined lot IDs in modal for backend submission
-  const combinedLotIds = allModels.map(m => m.lotId);
+  const combinedLotIds = mappedModels.map(m => m.lotId);
   modal.setAttribute('data-combined-lot-ids', JSON.stringify(combinedLotIds));
-  modal.setAttribute('data-is-multi-model', allModels.length > 1 ? 'true' : 'false');
+  modal.setAttribute('data-is-multi-model', mappedModels.length > 1 ? 'true' : 'false');
   
   console.log('✅ Modal updated with combined models');
   console.log('📦 Combined lot IDs:', combinedLotIds);
@@ -5322,8 +5421,27 @@ function createModelTabs(allModels) {
       if (!tab) {
         tab = document.createElement('div');
         tab.className = 'model-tab primary-model';
+        tab.style.cssText = `
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 12px;
+          background: #e8f5e9;
+          border: 2px solid #4CAF50;
+          border-radius: 8px;
+          margin: 0 5px;
+          font-weight: 600;
+          color: #2E7D32;
+        `;
         modalHeader.appendChild(tab);
       }
+      
+      // Update primary model tab content
+      tab.innerHTML = `
+        <span>📦 ${model.platingStockNo}</span>
+        <span style="background: #fff; padding: 2px 6px; border-radius: 4px; font-size: 12px;">${model.qty} cases</span>
+        <span style="font-size: 11px; color: #4CAF50; margin-left: 5px;">(Primary)</span>
+      `;
     } else {
       // Additional models - create new tabs
       tab = document.createElement('div');
@@ -5366,7 +5484,8 @@ function createModelTabs(allModels) {
     }
   });
   
-  console.log('✅ Model tabs created');
+  console.log('✅ Model tabs created with', allModels.length, 'models');
+  console.log('📦 Tab data:', allModels.map(m => `${m.platingStockNo}: ${m.qty}`).join(', '));
 }
 
 // Remove model from selection
@@ -5420,6 +5539,7 @@ function removeModelFromSelection(lotIdToRemove) {
 // Recalculate tray distribution for all models
 function recalculateTrayDistributionForAllModels(allModels) {
   console.log('🧮 Recalculating tray distribution for', allModels.length, 'models');
+  console.log('📦 All models:', allModels);
   
   const delinkTableSection = document.getElementById('delinkTableSection');
   if (!delinkTableSection) {
@@ -5427,12 +5547,29 @@ function recalculateTrayDistributionForAllModels(allModels) {
     return;
   }
   
+  // Store existing tray IDs and their validation states before clearing
+  const existingTrayData = [];
+  const existingInputs = delinkTableSection.querySelectorAll('.tray-id-input');
+  existingInputs.forEach((input, index) => {
+    const trayId = input.value.trim();
+    const isValid = input.parentNode.querySelector('.tray-valid-alert') !== null;
+    const rowIndex = input.getAttribute('data-row-index');
+    existingTrayData.push({
+      index: parseInt(rowIndex) || index,
+      trayId: trayId,
+      isValid: isValid
+    });
+  });
+  
+  console.log('💾 Stored existing tray data:', existingTrayData);
+  
   // Calculate total trays needed
-  const totalQuantity = allModels.reduce((sum, model) => sum + model.qty, 0);
+  const totalQuantity = allModels.reduce((sum, model) => sum + parseInt(model.qty || 0), 0);
   const totalTrays = Math.ceil(totalQuantity / currentTrayCapacity);
   
   console.log(`📊 Total quantity: ${totalQuantity}, Trays needed: ${totalTrays}, Tray capacity: ${currentTrayCapacity}`);
   console.log(`📊 Models breakdown:`, allModels.map(m => `${m.platingStockNo}: ${m.qty}`).join(', '));
+  console.log(`🧮 Tray calculation: ${totalQuantity} / ${currentTrayCapacity} = ${totalQuantity / currentTrayCapacity} → ${totalTrays} trays`);
   
   // Update delink count header
   const delinkTrayCount = document.getElementById('delinkTrayCount');
@@ -5443,8 +5580,16 @@ function recalculateTrayDistributionForAllModels(allModels) {
     console.error('❌ delinkTrayCount element not found');
   }
   
+  // Get batch_id and lot_id from modal context
+  const batchId = window.currentModalContext?.batchId || '';
+  const lotId = window.currentModalContext?.lotId || '';
+  
   // Clear existing tray inputs
   delinkTableSection.innerHTML = '';
+  
+  // Calculate quantities for each tray
+  const fullTrays = Math.floor(totalQuantity / currentTrayCapacity);
+  const partialTrayQty = totalQuantity % currentTrayCapacity;
   
   // Create tray inputs for total quantity
   for (let i = 0; i < totalTrays; i++) {
@@ -5452,28 +5597,99 @@ function recalculateTrayDistributionForAllModels(allModels) {
     trayTab.className = 'tray-scan-tab model-bg-1';
     
     // Calculate quantity for this tray
+    // If there's a partial tray, it should be the first one (top tray)
     let trayQty;
-    if (i === 0 && totalQuantity % currentTrayCapacity !== 0) {
-      // First tray might be partial (top tray)
-      trayQty = totalQuantity % currentTrayCapacity;
+    if (i === 0 && partialTrayQty > 0) {
+      // First tray is partial (top tray)
+      trayQty = partialTrayQty;
     } else {
       // Full tray
       trayQty = currentTrayCapacity;
     }
     
+    // Check if we have existing tray data for this index
+    const existingTray = existingTrayData.find(t => t.index === i);
+    const existingTrayId = existingTray ? existingTray.trayId : '';
+    
     trayTab.innerHTML = `
+      <label style="font-size: 13px; font-weight: 600; color: #028084; margin-bottom: 4px;">Tray ${i + 1}</label>
       <input 
         type="text" 
         id="tray-${i}"
         class="tray-id-input model-bg-1" 
-        placeholder="Scan Tray Id"
+        placeholder="Scan Tray ${i + 1} Id"
         data-row-index="${i}"
+        data-batch-id="${batchId}"
+        data-lot-id="${lotId}"
         data-tray-qty="${trayQty}"
+        value="${existingTrayId}"
+        autocomplete="off"
+        maxlength="9"
+        style="text-transform: uppercase;"
       />
+      <div class="tray-qty" style="font-size: 12px; color: #666; margin-top: 2px;">${trayQty} cases</div>
     `;
     
     delinkTableSection.appendChild(trayTab);
   }
+  
+  // Re-setup scanning listeners for all inputs
+  if (typeof setupTrayScanningListeners === 'function') {
+    setupTrayScanningListeners();
+  } else {
+    console.warn('⚠️ setupTrayScanningListeners not available in Add Model context');
+    // Fallback: Setup listeners manually for new tray inputs
+    const trayInputs = delinkTableSection.querySelectorAll('.tray-id-input:not([readonly])');
+    trayInputs.forEach((input) => {
+      // Remove existing listeners to prevent duplicates
+      const newInput = input.cloneNode(true);
+      input.parentNode.replaceChild(newInput, input);
+      
+      newInput.addEventListener('input', function () {
+        if (this.value.trim() === '') {
+          this.style.borderColor = '';
+          this.style.backgroundColor = '';
+          const errorAlerts = this.parentNode.querySelectorAll('.tray-error-message');
+          errorAlerts.forEach(a => a.remove());
+          const validAlerts = this.parentNode.querySelectorAll('.tray-valid-alert');
+          validAlerts.forEach(a => a.remove());
+          return;
+        }
+        if (this.value.length <= 9) {
+          if (typeof validateAndMoveToNext === 'function') {
+            validateAndMoveToNext(this);
+          }
+        }
+      });
+      
+      newInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (typeof validateAndMoveToNext === 'function') {
+            validateAndMoveToNext(this);
+          }
+        }
+      });
+      
+      newInput.addEventListener('focus', function () {
+        this.select();
+      });
+    });
+  }
+  
+  // Re-trigger validation for existing tray IDs
+  setTimeout(() => {
+    existingTrayData.forEach(trayData => {
+      if (trayData.trayId && trayData.index < totalTrays) {
+        const input = document.getElementById(`tray-${trayData.index}`);
+        if (input && input.value) {
+          console.log(`🔄 Re-validating tray ${trayData.index + 1}: ${trayData.trayId}`);
+          // Trigger validation by dispatching input event
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      }
+    });
+  }, 100);
   
   // Update tray distribution summary
   updateTrayDistributionSummary(allModels, totalQuantity, totalTrays);
@@ -5483,6 +5699,11 @@ function recalculateTrayDistributionForAllModels(allModels) {
 
 // Update tray distribution summary
 function updateTrayDistributionSummary(allModels, totalQuantity, totalTrays) {
+  console.log('📊 Updating tray distribution summary:');
+  console.log('  Total Quantity:', totalQuantity);
+  console.log('  Total Trays:', totalTrays);
+  console.log('  Models:', allModels);
+  
   const trayDistributionDiv = document.querySelector('.tray-distribution-display');
   if (!trayDistributionDiv) return;
   
@@ -5658,7 +5879,7 @@ function updateDelinkTableWithCombinedData(totalQty, selectedRows) {
       trayHTML += `
         <div class="tray-scan-tab model-bg-1">
           <label>Tray ${i}${isTopTray ? ' (Top)' : ''}</label>
-          <input type="text" class="tray-id-input" placeholder="Scan Tray ID" 
+          <input type="text" class="tray-id-input" placeholder="Scan Tray ${i} ID" 
                  data-tray-qty="${trayQty}" data-is-top-tray="${isTopTray}">
           <div class="tray-qty">Qty: ${trayQty}</div>
         </div>
@@ -5697,14 +5918,18 @@ function createExitAddModelButton() {
 
 // Exit Add Model Mode
 function exitAddModelMode() {
+  console.log('🚪 Exiting Add Model Mode...');
+  
   document.body.classList.remove('add-model-mode');
   
   // Remove buttons and indicators
   const exitBtn = document.getElementById('exitAddModelBtn');
+  const confirmBtn = document.getElementById('confirmSelectionBtn');
   const summary = document.getElementById('compatibleSummary');
   const loadingIndicator = document.getElementById('addModelLoadingIndicator');
   
   if (exitBtn) exitBtn.remove();
+  if (confirmBtn) confirmBtn.remove();
   if (summary) summary.remove();
   if (loadingIndicator) loadingIndicator.remove();
   
@@ -5726,18 +5951,15 @@ function exitAddModelMode() {
   });
   
   // Reopen the jig modal
-  const jigModal = document.getElementById('jigAddModal');
-  if (jigModal) {
-    jigModal.classList.add('open');
-    
-    Swal.fire({
-      icon: 'info',
-      title: 'Returned to Jig Loading',
-      text: 'Your progress is preserved.',
-      timer: 1500,
-      showConfirmButton: false
-    });
-  }
+  setTimeout(() => {
+    const jigModal = document.getElementById('jigAddModal');
+    if (jigModal) {
+      jigModal.classList.add('open');
+      console.log('✅ Modal reopened');
+    } else {
+      console.error('❌ Could not find jig modal to reopen');
+    }
+  }, 100);
   
   console.log('✅ Exited Add Model Mode');
 }
@@ -5791,4 +6013,3 @@ console.log('✅ Add Model functionality initialized for Jig Loading');
 
 {% endblock %}
 {% endblock content %}
-

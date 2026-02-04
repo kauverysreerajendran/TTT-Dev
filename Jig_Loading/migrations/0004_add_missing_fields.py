@@ -9,7 +9,6 @@ class Migration(migrations.Migration):
         ('Jig_Loading', '0003_add_hold_status'),
     ]
 
-
     operations = [
         migrations.AddField(
             model_name='jigcompleted',

@@ -3,7 +3,6 @@
 from django.db import migrations, models
 import django.db.models.deletion
 import django.contrib.postgres.fields
-from django.conf import settings
 from django.contrib.auth.models import User
 
 
@@ -12,9 +11,6 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('Recovery_DP', '0001_initial'),
-        ('modelmasterapp', '0006_totalstockmodel_jig_draft'),
-        migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
@@ -200,7 +196,7 @@ class Migration(migrations.Migration):
                 ('tray_type', models.CharField(blank=True, help_text='Type of tray (Jumbo, Normal, etc.) - filled by admin', max_length=50, null=True)),
                 ('tray_capacity', models.IntegerField(blank=True, help_text='Capacity of this specific tray - filled by admin', null=True)),
                 ('batch_id', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='modelmasterapp.modelmastercreation')),
-                ('recovery_batch_id', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='Recovery_DP.RecoveryMasterCreation')),
+                ('recovery_batch_id', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='Recovery_DP.recoverymastercreation')),
                 ('user', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='auth.user')),
             ],
             options={

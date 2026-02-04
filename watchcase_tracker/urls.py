@@ -61,7 +61,7 @@ urlpatterns = [
 
     path('spider_spindle/', include('Spider_Spindle.urls')),  # Add this line for DRF authentication
     path('spider_spindle_zone_two/', include('Spider_Spindle_zone_two.urls')),  # Add this line for DRF authentication
-    path('reports_module/', include('ReportsModule.urls')),
+    path('reports_module/', include('ReportsModule.urls', namespace='reports_module')),
     
     
     

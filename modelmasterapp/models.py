@@ -531,7 +531,6 @@ class TotalStockModel(models.Model):
             IP_Accepted_TrayID_Store.objects.filter(lot_id=self.lot_id).delete()
             Brass_Qc_Accepted_TrayID_Store.objects.filter(lot_id=self.lot_id).delete()
             IQF_Accepted_TrayID_Store.objects.filter(lot_id=self.lot_id).delete()
-            JigDetails.objects.filter(lot_id=self.lot_id).delete()
         
         super().delete(*args, **kwargs)
 

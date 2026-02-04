@@ -510,7 +510,10 @@ class DPBulkUploadView(APIView):
                 if obj.version_internal:
                     versions[obj.version_internal] = obj
                 versions[obj.version_name] = obj
-            plating_colors_internal = {obj.plating_color_internal: obj for obj in Plating_Color.objects.all()}
+            plating_colors_internal = {}
+            for obj in Plating_Color.objects.order_by('id'):
+                if obj.plating_color_internal not in plating_colors_internal:
+                    plating_colors_internal[obj.plating_color_internal] = obj
             plating_colors_name = {obj.plating_color: obj for obj in Plating_Color.objects.all()}
             categories = {obj.category_name: obj for obj in Category.objects.all()}
             vendors = {obj.vendor_name: obj for obj in Vendor.objects.all()}
@@ -3410,4 +3413,3 @@ class ValidatePlatingStockNoAPIView(APIView):
                 'message': f'Error validating plating stock number: {str(e)}'
             }
             return JsonResponse(result)
-

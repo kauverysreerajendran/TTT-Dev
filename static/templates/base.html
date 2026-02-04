@@ -950,7 +950,7 @@
       <nav class="navbar col-lg-12 col-12 p-0 fixed-top d-flex flex-row">
          <div class="text-center navbar-brand-wrapper d-flex align-items-center justify-content-start">
             <div class="navbar-brand-wrapper d-flex align-items-center justify-content-start position-relative" style="min-width: 140px; margin-top: 0px;">
-               <div class="d-flex align-items-center" style="margin-left: -30px; margin-top: 18px;">
+               <div class="d-flex align-items-center" style="margin-left: -35px; margin-top: 18px;">
                   <a class="navbar-brand brand-logo me-2" href="{% url 'index' %}">
                   <img src="{% static 'assets/logo/t_t.png' %}" class="me-1" alt="logo" style="height:53px; width:auto; margin-top: -15px; margin-right: -20px;"/>
                   </a>
@@ -979,12 +979,16 @@
                    aria-describedby="search">
                </div>
                </li> -->
-            <!-- ...existing code... -->
             <ul class="navbar-nav navbar-nav-right">
-               <li class="nav-item dropdown">
-                  <a class="nav-link count-indicator ms-2" href="{% url 'reports' %}" style="border-radius: 50%; padding: 7px; display: flex; align-items: center; justify-content: center;">
-                     <i class="ti-bar-chart" style="font-size: 1.3rem; color: #028084;"></i>
+                              <li class="nav-item d-flex align-items-center ms-2">
+                  <a class="nav-link p-0" href="{% url 'reports_module:reports' %}" tabindex="-1" aria-disabled="false" style="background: none; border: none;" data-tooltip="Reports">
+                     <div style="display: flex; flex-direction: column; align-items: center;">
+                        <img src="{% static 'assets/gif/rprt.gif' %}" alt="Reports" title="Reports" style="height: 1.9rem; vertical-align: middle;"> <!-- Reports icon -->
+                        <small style="font-size: 0.7rem; color: #666; margin-top: 0px;">Report</small>
+                     </div>
                   </a>
+               </li>
+               <li class="nav-item dropdown">
                   <a
                      class="nav-link count-indicator dropdown-toggle ms-2"
                      id="settingsDropdown"
@@ -1000,7 +1004,10 @@
                      aria-expanded="false"
                      style="border-radius: 50%; padding: 7px; display: flex; align-items: center; justify-content: center;"
                      >
-                  <i class="ti-settings" style="font-size: 1.3rem; color: #028084;"></i>
+                  <div style="display: flex; flex-direction: column; align-items: center;">
+                     <img src="{% static 'assets/gif/settings.gif' %}" alt="Settings" style="height: 1.9rem; vertical-align: middle;">
+                     <small style="font-size: 0.7rem; color: #666; margin-top: 2px;">Setitngs</small>
+                  </div>
                   </a>
                   </a>
                   <div
@@ -1032,11 +1039,14 @@
                      id="barcodeStatus"
                      href="#"
                      >
-                  <img
-                     src="{% static 'assets/gif/barcode.gif' %}"
-                     alt="Barcode"
-                     class="barcode-icon"
-                     />
+                  <div style="display: flex; flex-direction: column; align-items: center;">
+                     <img
+                        src="{% static 'assets/gif/barcode.gif' %}"
+                        alt="Barcode"
+                        class="barcode-icon"
+                        />
+                     <small style="font-size: 0.7rem; color: #666; margin-top: 2px;">Tray Scan</small>
+                  </div>
                   </a>
                   <span style="display: inline-block; width: 4px"></span>
                   <a
@@ -1067,11 +1077,7 @@
                      </p>
                   </div>
                </li>
-               <li class="nav-item d-flex align-items-center ms-2">
-                  <a class="nav-link p-0" href="#" tabindex="-1" aria-disabled="true" style="background: none; border: none;">
-                     <i class="ti-file" style="font-size: 1.5rem; color: #028084;"></i> <!-- Document icon -->
-                  </a>
-               </li>
+
                <li class="nav-item nav-profile dropdown">
                   <!-- Find this block in your navbar profile dropdown: -->
                   <a
@@ -1990,7 +1996,7 @@
       
       <script nonce="{{ csp_nonce }}" src="{% static 'assets/js/jquery.cookie.js' %}"></script>
       <script nonce="{{ csp_nonce }}" src="{% static 'assets/js/dashboard.js' %}"></script>
-      <script nonce="{{ csp_nonce }}" src="{% static 'assets/js/Chart.roundedBarCharts.js' %}"></script>
+      <!-- <script nonce="{{ csp_nonce }}" src="{% static 'assets/js/Chart.roundedBarCharts.js' %}"></script> -->
       <!-- End custom js for this page-->
       <!-- Modal for Add Account (reuse your previous modal) -->
       <div class="modal fade" id="swapUserModal" tabindex="-1" role="dialog" aria-labelledby="swapUserModalLabel" aria-hidden="true" style="display:none; background:rgba(0,0,0,0.35); position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:1050;">

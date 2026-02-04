@@ -3118,6 +3118,71 @@ class IPSaveHoldUnholdReasonAPIView(APIView):
         
 # Add these views to your views.py
 
+def validate_tray_for_rejection(tray_id, lot_id, rejection_qty=0, current_session_allocations=None, rejection_reason_id=None):
+    """
+    Validate if a tray ID is valid for rejection in the given lot.
+    Returns True if valid, False otherwise.
+    Simplified version of reject_check_tray_id_simple logic.
+    """
+    if not tray_id or not isinstance(tray_id, str) or len(tray_id.strip()) < 9:
+        return False
+    
+    tray_id = tray_id.strip()
+    
+    if current_session_allocations is None:
+        current_session_allocations = []
+    
+    # Basic existence check
+    tray_id_obj = TrayId.objects.filter(tray_id=tray_id).first()
+    
+    is_new_tray = not tray_id_obj
+    if is_new_tray:
+        # For new trays, create temporary object
+        tray_type_from_id = tray_id.split('-')[0] if '-' in tray_id else tray_id
+        tray_id_obj = type('TrayId', (), {'tray_type': tray_type_from_id, 'tray_id': tray_id, 'new_tray': True, 'lot_id': None})()
+    
+    # Validate tray type compatibility
+    validation_result = validate_tray_type_compatibility(tray_id_obj, lot_id)
+    if not validation_result.get('is_compatible', True):
+        return False
+    
+    # If new tray, allow
+    if getattr(tray_id_obj, 'new_tray', False) and not tray_id_obj.lot_id:
+        return True
+    
+    # Check if tray exists in IP for this lot
+    ip_tray_obj = IPTrayId.objects.filter(tray_id=tray_id, lot_id=lot_id).first()
+    
+    if not ip_tray_obj:
+        # Check if already rejected
+        if getattr(tray_id_obj, 'rejected_tray', False):
+            return False
+        # Allow existing tray from other lot
+        return True
+    
+    if not ip_tray_obj.IP_tray_verified:
+        return False
+    
+    if ip_tray_obj.rejected_tray:
+        return False
+    
+    # For existing trays, do basic checks (simplified)
+    # We skip the complex reuse pool checks for draft saving to avoid complexity
+    # Just ensure it's not already used by another reason in current session
+    if rejection_reason_id:
+        for alloc in current_session_allocations:
+            alloc_reason_id = str(alloc.get('reason_id', ''))
+            alloc_tray_ids = alloc.get('tray_ids', [])
+            if isinstance(alloc_tray_ids, str):
+                alloc_tray_ids = [alloc_tray_ids]
+            
+            if alloc_reason_id != str(rejection_reason_id):
+                if tray_id in alloc_tray_ids:
+                    return False
+    
+    return True
+
+
 @method_decorator(csrf_exempt, name='dispatch')
 @method_decorator(login_required, name='dispatch')
 class SaveRejectionDraftAPIView(APIView):
@@ -3141,11 +3206,53 @@ class SaveRejectionDraftAPIView(APIView):
             if not lot_id:
                 return JsonResponse({'success': False, 'error': 'Missing lot_id'}, status=400)
 
+            # ✅ FIX: Filter out invalid tray IDs from tray_scans
+            # Build current session allocations from rejection_data for validation
+            current_session_allocations = []
+            for item in rejection_data:
+                reason_id = item.get('reason_id')
+                qty = item.get('qty', 0)
+                tray_ids = item.get('tray_ids', [])
+                if isinstance(tray_ids, str):
+                    tray_ids = [tray_ids]
+                current_session_allocations.append({
+                    'reason_id': reason_id,
+                    'qty': qty,
+                    'tray_ids': tray_ids
+                })
+            
+            # Filter tray_scans to only include valid trays
+            valid_tray_scans = []
+            for tray_scan in tray_scans:
+                if isinstance(tray_scan, dict):
+                    tray_id = tray_scan.get('tray_id')
+                    reason_id = tray_scan.get('reason_id')
+                else:
+                    tray_id = tray_scan
+                    reason_id = None
+                if validate_tray_for_rejection(tray_id, lot_id, 0, current_session_allocations, reason_id):
+                    valid_tray_scans.append(tray_scan)
+                else:
+                    print(f"❌ Invalid tray {tray_id} removed from draft for lot {lot_id}")
+            
+            # Also filter tray_ids in rejection_data if they exist
+            for item in rejection_data:
+                tray_ids = item.get('tray_ids', [])
+                if isinstance(tray_ids, str):
+                    tray_ids = [tray_ids]
+                valid_tray_ids = []
+                for tray_id in tray_ids:
+                    if validate_tray_for_rejection(tray_id, lot_id, item.get('qty', 0), current_session_allocations, item.get('reason_id')):
+                        valid_tray_ids.append(tray_id)
+                    else:
+                        print(f"❌ Invalid tray {tray_id} removed from rejection_data for lot {lot_id}")
+                item['tray_ids'] = valid_tray_ids
+
             # Prepare draft data
             draft_data = {
                 'batch_id': batch_id,
                 'rejection_data': rejection_data,
-                'tray_scans': tray_scans,
+                'tray_scans': valid_tray_scans,
                 'is_batch_rejection': is_batch_rejection,
                 'total_rejection_qty': sum(int(item.get('qty', 0)) for item in rejection_data)
             }
@@ -4171,7 +4278,6 @@ def get_lot_id_for_tray(request):
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
-
 # Tray Re-use Logical Handling
 def reject_check_tray_id_simple(request):
     """
@@ -4184,87 +4290,25 @@ def reject_check_tray_id_simple(request):
         rejection_qty = int(request.GET.get('rejection_qty', 0))
         current_session_allocations_str = request.GET.get('current_session_allocations', '[]')
         rejection_reason_id = request.GET.get('rejection_reason_id', '').strip()
-
-        print(f"\n[reject_check_tray_id_simple] START Validating Tray Reuse")
-        print(f"  > Inputs: tray_id='{tray_id}', lot_id='{current_lot_id}', reason_id='{rejection_reason_id}'")
-        print(f"  > rejection_qty={rejection_qty}")
-
+        
         # ✅ FIX: Only validate if tray_id is complete (9 characters)
         if len(tray_id) < 9:
-            print(f"  > ❌ FAILED: Tray ID incomplete (len={len(tray_id)})")
             return JsonResponse({
                 'exists': False,
                 'valid_for_rejection': False,
                 'error': 'Tray ID incomplete',
                 'status_message': 'Incomplete'
             })
-
+        
         try:
             current_session_allocations = json.loads(current_session_allocations_str)
-            print(f"  > Session Allocations Parsed: {len(current_session_allocations)} items")
         except:
             current_session_allocations = []
-            print(f"  > ⚠️ Session Allocations Parse Failed - Defaulting to []")
-
-        # ---------------------------------------------------------
-        # Basic Existence Check
-        # ---------------------------------------------------------
-        tray_id_obj = TrayId.objects.filter(tray_id=tray_id).first()
-        print(f"  > Tray Lookup: {tray_id} -> Found? {bool(tray_id_obj)}")
-
-        # ✅ FIX: Only allow tray IDs that exist in TrayId model - no new trays
-        if not tray_id_obj:
-            print(f"  > ❌ FAILED: Tray ID not found in Master")
-            return JsonResponse({
-                'exists': False,
-                'valid_for_rejection': False,
-                'error': 'Tray ID not found',
-                'status_message': 'Not Found'
-            })
-
-        # ✅ GLOBAL CHECKS: Validate Tray Type against Lot Requirement
-        batch_obj = ModelMasterCreation.objects.filter(lot_id=current_lot_id).first()
-        
-        # Check using IPTrayId
-        if not batch_obj:
-            sample_tray = IPTrayId.objects.filter(lot_id=current_lot_id).first()
-            if sample_tray and sample_tray.batch_id:
-                batch_obj = sample_tray.batch_id
-                print(f"  > ✅ Found Batch Object via IPTrayId: {batch_obj}")
-        
-        # Fallback 1: Via TrayId
-        if not batch_obj:
-            print(f"  > ⚠️ IPTrayId Lookup Failed. Trying via TrayId...")
-            sample_tray_main = TrayId.objects.filter(lot_id=current_lot_id).exclude(batch_id__isnull=True).first()
-            if sample_tray_main and sample_tray_main.batch_id:
-                batch_obj = sample_tray_main.batch_id
-                print(f"  > ✅ Found Batch Object via TrayId: {batch_obj}")
-
-        if batch_obj:
-            required_type = str(batch_obj.tray_type or '').strip()
-            # tray_id_obj is 'tray_master' equivalent
-            actual_type = str(tray_id_obj.tray_type or '').strip()
-
-            print(f"  > Type Check: Required='{required_type}' vs Actual='{actual_type}'")
-
-            if required_type and actual_type:
-                # Case-insensitive comparison just in case
-                if required_type.lower() != actual_type.lower():
-                     print(f"  > ❌ FAILED: Tray Type Mismatch")
-                     return JsonResponse({
-                        'exists': True,
-                        'valid_for_rejection': False,
-                        'error': f'Tray Type Mismatch: Lot requires {required_type}, tray is {actual_type}',
-                        'status_message': 'Invalid Tray Type'
-                    })
-        else:
-            print(f"  > ⚠️ Lot Object Not Found for '{current_lot_id}' (All Methods) - Skipping Type Check")
 
         # ---------------------------------------------------------
         # MANDATORY CHECK Step 1: 
         # If this rejection reason ALREADY has a tray assigned → validate isolation
         # ---------------------------------------------------------
-        print(f"  > Checking Session Allocations for Reason Isolation...")
         for alloc in current_session_allocations:
             alloc_reason_id = str(alloc.get('reason_id', ''))
             alloc_tray_ids = alloc.get('tray_ids', [])
@@ -4274,45 +4318,49 @@ def reject_check_tray_id_simple(request):
             if alloc_reason_id == str(rejection_reason_id):
                 # If same tray is rescanned → allow
                 if tray_id in alloc_tray_ids:
-                    print(f"  > ✅ Same Tray Rescan Detect - Allowed")
                     break
 
                 # ✅ FIX: Allow new trays for the same rejection reason (remove block)
                 # Only block if it's an existing tray already used elsewhere
-                tray_master = tray_id_obj # TrayId.objects.filter(tray_id=tray_id).first()
+                tray_master = TrayId.objects.filter(tray_id=tray_id).first()
                 is_new = getattr(tray_master, 'new_tray', False) and not tray_master.lot_id if tray_master else False
-                print(f"  > Checking New Tray Status: is_new={is_new} (new_tray={getattr(tray_master, 'new_tray', 'N/A')}, lot_id={tray_master.lot_id if tray_master else 'None'})")
 
                 # Allow new trays - do not block them
-                # ❗ FIX: Do NOT allow new trays for the same rejection reason
-                if is_new:
-                    print(f"  > ❌ FAILED: Cannot add NEW tray to existing reason set")
-                    return JsonResponse({
-                        'exists': True,
-                        'valid_for_rejection': False,
-                        'error': 'Cannot introduce new tray for same rejection reason.',
-                        'status_message': 'Reason Isolation'
-                    })
-
-                # After fetching tray_id_obj
-                existing_lot_tray = IPTrayId.objects.filter(
-                    lot_id=current_lot_id
-                ).exclude(tray_id=tray_id).first()
-                
-                print(f"  > Checking Existing Lot Tray Consistency...")
-                if existing_lot_tray and tray_master:
-                    print(f"  > Comparing with existing tray {existing_lot_tray.tray_id} type: {existing_lot_tray.tray_type} vs {tray_master.tray_type}")
-                    # ✅ FIX: Use tray_master instead of tray_id_obj (which is undefined here)
-                    if tray_master.tray_type != existing_lot_tray.tray_type:
-                        print(f"  > ❌ FAILED: Tray Type inconsistent with other trays in lot")
-                        return JsonResponse({
-                            'exists': True,
-                            'valid_for_rejection': False,
-                            'error': 'Tray type mismatch',
-                            'status_message': 'Invalid Tray Type'
-                        })
+                if not is_new:
+                    # For existing trays, check if already used by another reason
+                    for other_alloc in current_session_allocations:
+                        if str(other_alloc.get('reason_id')) != str(rejection_reason_id):
+                            other_tray_ids = other_alloc.get('tray_ids', [])
+                            if isinstance(other_tray_ids, str):
+                                other_tray_ids = [other_tray_ids]
+                            if tray_id in other_tray_ids:
+                                return JsonResponse({
+                                    'exists': True,
+                                    'valid_for_rejection': False,
+                                    'error': 'Tray already used by another rejection reason.',
+                                    'status_message': 'Tray Cross-Mixing'
+                                })
                 break
+        # ---------------------------------------------------------
+        # Basic Existence Check
+        # ---------------------------------------------------------
+        tray_id_obj = TrayId.objects.filter(tray_id=tray_id).first()
+        
+        is_new_tray = not tray_id_obj
+        if is_new_tray:
+            # For new trays, create a temporary object with tray_type
+            tray_type_from_id = tray_id.split('-')[0] if '-' in tray_id else tray_id
+            tray_id_obj = type('TrayId', (), {'tray_type': tray_type_from_id, 'tray_id': tray_id, 'new_tray': True, 'lot_id': None})()
 
+        # Validate tray type compatibility
+        validation_result = validate_tray_type_compatibility(tray_id_obj, current_lot_id)
+        if not validation_result.get('is_compatible', True):
+            return JsonResponse({
+                'exists': True,
+                'valid_for_rejection': False,
+                'error': validation_result.get('error', 'Tray type mismatch'),
+                'status_message': 'Type Mismatch'
+            })
 
         # ---------------------------------------------------------
         # MANDATORY CHECK Step 2: 
@@ -4323,7 +4371,7 @@ def reject_check_tray_id_simple(request):
             return JsonResponse({
                 'exists': True,
                 'valid_for_rejection': True,
-                'status_message': 'New Tray Available',
+                'status_message': 'New tray allowed',
                 'validation_type': 'new_tray'
             })
 
@@ -4331,12 +4379,20 @@ def reject_check_tray_id_simple(request):
         # Step 3: Existing Tray Validation
         # ---------------------------------------------------------
         ip_tray_obj = IPTrayId.objects.filter(tray_id=tray_id, lot_id=current_lot_id).first()
-
-
+        
         if not ip_tray_obj:
+            # Check if tray is already rejected
+            if getattr(tray_id_obj, 'rejected_tray', False):
+                return JsonResponse({
+                    'exists': False, 'valid_for_rejection': False,
+                    'error': 'Tray already rejected', 'status_message': 'Already Rejected'
+                })
+            # Allow existing tray from other lot for rejection
             return JsonResponse({
-                'exists': False, 'valid_for_rejection': False,
-                'error': 'Tray not in this lot', 'status_message': 'Wrong Lot'
+                'exists': True,
+                'valid_for_rejection': True,
+                'status_message': 'New tray allowed',
+                'validation_type': 'reuse_existing'
             })
         if not ip_tray_obj.IP_tray_verified:
             return JsonResponse({
