@@ -723,11 +723,6 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                style="width: 28px; height: 28px; background-color: #0c8249; color: white; font-weight: bold; cursor: pointer;">
             T
           </div>
-        {% elif data.Draft_Saved %}
-          <div data-bs-toggle="tooltip" data-placement="right" data-bs-original-title="Tray Scan" class="d-flex align-items-center justify-content-center rounded-circle ms-1"
-               style="width: 28px; height: 28px; background: linear-gradient(to right, green 50%, #bfbfbf 50%); color: white; font-weight: bold; line-height: 20px; text-align: center; padding-top: 1px; padding-right: 1px; cursor: pointer;">
-            T
-          </div>
         {% else %}
           <div data-bs-toggle="tooltip" data-placement="right" data-bs-original-title="Tray Scan" class="d-flex align-items-center justify-content-center rounded-circle ms-1"
                style="width: 28px; height: 28px; background-color: #d3d2d2; color: white; font-weight: bold; cursor: pointer;">
@@ -783,16 +778,6 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
           <div class="d-inline-block px-3 fw-semibold text-center rounded-pill"
                style="border: 1px solid #dc3545; background-color: #f8d7da; color: #721c24; font-size: 13px; white-space: nowrap; padding: 5px;">
             On Hold
-          </div>
-        {% elif data.Moved_to_D_Picker %}
-          <div class="d-inline-block px-3 fw-semibold text-center rounded-pill"
-               style="border: 1px solid #0d5d17; background-color: #c5f9c2; color: #2f801b; font-size: 13px; white-space: nowrap; padding: 5px;">
-            Yet To Release
-          </div>
-        {% elif data.Draft_Saved %}
-          <div class="d-inline-block px-3 fw-semibold text-center rounded-pill"
-               style="border: 1px solid #4997ac; background-color: #d1f2f3; color: #03425d; font-size: 13px; white-space: nowrap; padding: 5px;">
-            Draft
           </div>
         {% else %}
           <div class="d-inline-block px-3 fw-semibold text-center rounded-pill"
