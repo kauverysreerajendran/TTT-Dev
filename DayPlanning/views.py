@@ -510,7 +510,10 @@ class DPBulkUploadView(APIView):
                 if obj.version_internal:
                     versions[obj.version_internal] = obj
                 versions[obj.version_name] = obj
-            plating_colors_internal = {obj.plating_color_internal: obj for obj in Plating_Color.objects.all()}
+            plating_colors_internal = {}
+            for obj in Plating_Color.objects.order_by('id'):
+                if obj.plating_color_internal not in plating_colors_internal:
+                    plating_colors_internal[obj.plating_color_internal] = obj
             plating_colors_name = {obj.plating_color: obj for obj in Plating_Color.objects.all()}
             categories = {obj.category_name: obj for obj in Category.objects.all()}
             vendors = {obj.vendor_name: obj for obj in Vendor.objects.all()}
@@ -603,7 +606,7 @@ class DPBulkUploadView(APIView):
                         continue
 
                     # 3. Cross-validation: Check if resolved plating_color_internal matches with the plating color from Excel
-                    if plating_obj_code.plating_color.strip().upper() != plating_colour.strip().upper():
+                    if plating_obj_code.pk != plating_color_obj.pk:
                         failure_count += 1
                         failed_rows.append(f"Row {idx}: ❌ Plating color mismatch: Stock code '{plating_stock_no}' resolves to '{plating_obj_code.plating_color}' but Excel shows '{plating_colour}'.")
                         continue
@@ -878,7 +881,7 @@ class DPBulkUploadView(APIView):
                     continue
 
                 # 3. Cross-validation: Check if resolved plating_color_internal matches with the plating color from Excel
-                if plating_obj_code.plating_color.strip().upper() != plating_colour.strip().upper():
+                if plating_obj_code.pk != plating_color_obj.pk:
                     failure_count += 1
                     failed_rows.append(f"Row {idx}: ❌ Plating color mismatch: Stock code '{plating_stock_no}' resolves to '{plating_obj_code.plating_color}' but Excel shows '{plating_colour}'.")
                     continue
@@ -2518,18 +2521,6 @@ class TrayIdUniqueCheckAPIView(APIView):
                     'batch_tray_type': validation_result['batch_tray_type'],
                     'scanned_tray_type': validation_result['scanned_tray_type']
                 })
-            
-            # ✅ NEW: Polish finish validation
-            polish_validation = self.validate_polish_finish_compatibility(existing_tray, batch_id)
-            if not polish_validation['compatible']:
-                return JsonResponse({
-                    'exists': True,
-                    'available': False,
-                    'polish_finish_error': True,
-                    'delink_tray': getattr(existing_tray, 'delink_tray', False),
-                    'error': polish_validation['error'],
-                    'polish_finish_status': polish_validation['status']  # 'pass' or 'fail'
-                })
         
         # Tray is available for use
         return JsonResponse({
@@ -2623,136 +2614,6 @@ class TrayIdUniqueCheckAPIView(APIView):
                 'error': f'Validation error: {str(e)}',
                 'batch_tray_type': None,
                 'scanned_tray_type': tray.tray_type if tray else None
-            }
-    
-    def validate_polish_finish_compatibility(self, tray, batch_id):
-        """
-        Validate polish finish compatibility based on batch requirements
-        
-        Polish Finish Validation Rules:
-        - Bi-Finish with code 'B' -> FAIL
-        - Bi-Finish with code 'C' -> PASS
-        - Buffed with code 'A' -> FAIL
-        - Shotblasting with code 'S' -> PASS
-        
-        Args:
-            tray: TrayId object
-            batch_id: Batch ID string
-            
-        Returns:
-            dict: {
-                'compatible': bool,
-                'error': str,
-                'status': 'pass' or 'fail'
-            }
-        """
-        try:
-            # Get batch instance
-            batch_instance = ModelMasterCreation.objects.filter(batch_id=batch_id).first()
-            if not batch_instance:
-                return {
-                    'compatible': False,
-                    'error': 'Batch not found for polish finish validation',
-                    'status': 'fail'
-                }
-            
-            # Get batch polish finish
-            batch_polish_finish = batch_instance.polish_finish
-            if not batch_polish_finish:
-                # If no polish finish specified for batch, allow
-                return {
-                    'compatible': True,
-                    'error': None,
-                    'status': 'pass'
-                }
-            
-            print(f"🔍 Polish Finish Validation: Batch polish finish = '{batch_polish_finish}'")
-            
-            # Extract polish finish code from batch polish finish
-            # Format: "Buffed (A)", "Bi-Finish (B)", "Shotblasting (S)"
-            polish_code = None
-            polish_type = None
-            
-            # Try to extract from parentheses format
-            import re
-            match = re.match(r'^(.+)\s*\(([^)]+)\)$', batch_polish_finish.strip())
-            if match:
-                polish_type = match.group(1).strip()
-                polish_code = match.group(2).strip()
-            
-            if not polish_code:
-                # If we can't parse the polish finish, allow it
-                return {
-                    'compatible': True,
-                    'error': None,
-                    'status': 'pass'
-                }
-            
-            # Apply validation rules
-            if polish_type == 'Bi-Finish':
-                if polish_code == 'B':
-                    return {
-                        'compatible': False,
-                        'error': f'❌ Polish Finish Validation Failed: Bi-Finish with code B is not acceptable for tray scanning',
-                        'status': 'fail'
-                    }
-                elif polish_code == 'C':
-                    return {
-                        'compatible': True,
-                        'error': None,
-                        'status': 'pass'
-                    }
-                else:
-                    # Unknown Bi-Finish code, allow
-                    return {
-                        'compatible': True,
-                        'error': None,
-                        'status': 'pass'
-                    }
-                    
-            elif polish_type == 'Buffed':
-                if polish_code == 'A':
-                    return {
-                        'compatible': False,
-                        'error': f'❌ Polish Finish Validation Failed: Buffed with code A is not acceptable for tray scanning',
-                        'status': 'fail'
-                    }
-                else:
-                    # Other Buffed codes, allow
-                    return {
-                        'compatible': True,
-                        'error': None,
-                        'status': 'pass'
-                    }
-                    
-            elif polish_type == 'Shotblasting':
-                if polish_code == 'S':
-                    return {
-                        'compatible': True,
-                        'error': None,
-                        'status': 'pass'
-                    }
-                else:
-                    # Other Shotblasting codes, allow
-                    return {
-                        'compatible': True,
-                        'error': None,
-                        'status': 'pass'
-                    }
-            
-            # For any other polish finish types, allow
-            return {
-                'compatible': True,
-                'error': None,
-                'status': 'pass'
-            }
-            
-        except Exception as e:
-            print(f"❌ Error in polish finish validation: {str(e)}")
-            return {
-                'compatible': False,
-                'error': f'Polish finish validation error: {str(e)}',
-                'status': 'fail'
             }
 
 
@@ -3552,4 +3413,3 @@ class ValidatePlatingStockNoAPIView(APIView):
                 'message': f'Error validating plating stock number: {str(e)}'
             }
             return JsonResponse(result)
-

@@ -1,5 +1,53 @@
 {% extends "base.html" %} {% load static %} {% block content %}
 <style>
+  /* Pagination Styles */
+  #paginationControls {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1.5rem;
+  }
+  #paginationControls button {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    color: #64748b;
+    padding: 0.4rem 0.85rem;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  }
+  #paginationControls button:hover:not(:disabled) {
+    background: #f8fafc;
+    color: #334155;
+    border-color: #cbd5e1;
+    transform: translateY(-1px);
+  }
+  #paginationControls button:disabled {
+    cursor: default;
+    opacity: 0.7;
+  }
+  
+  /* Active Page (numbers that are disabled) */
+  #paginationControls button[disabled]:not(:first-child):not(:last-child) {
+     background: #028084;
+     color: #fff;
+     border-color: #028084;
+     opacity: 1;
+     box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+  }
+  
+   /* Prev/Next Disabled State */
+  #paginationControls button:first-child:disabled,
+  #paginationControls button:last-child:disabled {
+      background: #f1f5f9;
+      color: #cbd5e1;
+      border-color: #e2e8f0;
+      box-shadow: none;
+      transform: none;
+  }
 
 #usersTable td { position: relative; } /* anchor absolute dropdowns inside the cell */
 .modexp-list { position: absolute; left: 0; top: 100%; display: none; z-index: 1001; }
@@ -15,6 +63,27 @@
     align-items: center;
     justify-content: center;
     color: #2563eb;
+  }
+
+  /* --- Module Chips Styles --- */
+  .modules-cell-content {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+  }
+  .module-chip {
+    display: inline-flex;
+    align-items: center;
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #dbeafe;
+    border-radius: 9999px;
+    padding: 2px 8px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.2;
+    white-space: nowrap;
   }
   .modexp-list {
     display: none;
@@ -59,6 +128,27 @@
     min-width: 180px;
     box-shadow: 0 2px 8px #e0e7ef;
   }
+
+   /* --- Module Chips Styles --- */
+   .modules-cell-content {
+     display: flex;
+     flex-wrap: wrap;
+     gap: 4px;
+     align-items: center;
+   }
+   .module-chip {
+     display: inline-flex;
+     align-items: center;
+     background: #eff6ff; /* blue-50 */
+     color: #1d4ed8; /* blue-700 */
+     border: 1px solid #dbeafe; /* blue-100 */
+     border-radius: 9999px; /* pill shape */
+     padding: 2px 8px;
+     font-size: 0.75rem;
+     font-weight: 500;
+     line-height: 1.2;
+     white-space: nowrap;
+   }
 
    .modexp-list {
    transition: opacity 0.15s;
@@ -862,10 +952,30 @@
    .action-btn:hover {
    transform: scale(1.1);
    }
+   .new-user-highlight {
+    background-color: #ffff77 !important;
+    transition: background-color 0.5s ease;
+   }
+   .action-btn.submit-flow {
+    background: #a6ff96;
+    padding: 0.35rem 0.75rem;
+    font-weight: 600;
+    font-size: 0.8rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3em;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+   }
+   .action-btn.submit-flow:hover {
+    background: #9cff8a;
+    transform: scale(1.05);
+   }
    .empty-state {
    text-align: center;
    padding: 3rem;
-   color: #6b7280;
+   color: #ffffff;
    }
    /* Modal */
    .modal {
@@ -940,7 +1050,7 @@
 </style>
 
 <!-- Breadgrumbs Menu-->
-<main class="main" style="overflow: scroll !important">
+<main class="main">
    <nav aria-label="Breadcrumb" style="position: relative; margin-bottom: -1.5em;">
       <div class="breadcrumb-steps">
          <div id="bc-user" class="breadcrumb-step" onclick="showStep(1)">
@@ -960,7 +1070,7 @@
    <div class="container">
       <!-- User Creation Section -->
       <div id="step-user-form">
-         <div class="card" style ="overflow: auto !important;">
+         <div class="card">
             <form id="userForm" autocomplete="off">
                <h2 class="card-title">
                   User Creation & Management
@@ -1307,8 +1417,8 @@ async function editUser(userId) {
     document.getElementById("lastName").value = user.last_name || "";
     document.getElementById("email").value = user.email || "";
     document.getElementById("manager").value = user.manager || "";
-/*     document.getElementById("password").value = "";
-    document.getElementById("confirmPassword").value = ""; */
+    document.getElementById("password").value = "";
+    document.getElementById("confirmPassword").value = "";
     document.getElementById("passwordStrengthMsg").textContent = "";
     document.getElementById("passwordMatchIcon").style.display = "none";
 
@@ -1332,7 +1442,15 @@ async function editUser(userId) {
     }
 
     // Store editing user id for update logic if needed
+    // Store editing user id for update logic if needed
     window.editingUserId = userId;
+    
+    // Update URL to persist state
+    const url = new URL(window.location);
+    url.searchParams.set("edit_user_id", userId);
+    window.history.replaceState({}, "", url);
+
+    if (typeof updateBreadcrumbAccess === "function") updateBreadcrumbAccess();
 
     // Make password and confirm fields optional for edit and show helper note
 (function makePasswordOptionalForEdit() {
@@ -1340,11 +1458,11 @@ async function editUser(userId) {
   const conf = document.getElementById("confirmPassword");
   if (pwd) {
     pwd.required = false;
-    // preserve any value already entered in the password field
+    pwd.placeholder = "Leave blank to keep current password";
   }
   if (conf) {
     conf.required = false;
-    // preserve any value already entered in the confirm password field
+    conf.placeholder = "Leave blank to keep current password";
   }
   // remove helper note if it exists (we're not showing the "Leave blank..." message)
   const existingNote = document.getElementById("passwordOptionalNote");
@@ -1356,14 +1474,16 @@ async function editUser(userId) {
 
     // --- Auto-populate modules for this user ---
     // Fetch allowed modules for this user
-    const modRes = await fetch(`/adminportal/api/user-allowed-modules/`, {
-      method: "POST",
+    // --- Auto-populate modules for this user ---
+    // Fetch allowed modules for this user
+    // FIXED: Use GET with query param to fetch specific user modules
+    const modRes = await fetch(`/adminportal/api/user-allowed-modules/?user_id=${userId}`, {
+      method: "GET",
       headers: {
-        "Content-Type": "application/json",
+        "Accept": "application/json",
         "X-CSRFToken": getCookie("csrftoken")
       },
-      credentials: "same-origin",
-      body: JSON.stringify({ user_id: userId })
+      credentials: "same-origin"
     });
     const modData = await modRes.json();
     if (modData.modules && Array.isArray(modData.modules)) {
@@ -1374,6 +1494,11 @@ async function editUser(userId) {
       renderModuleBtnGrid();
       renderSelectedModulesContainer();
     }
+    // Forcing the users table to re-render to update "Submit" button state
+    setTimeout(() => {
+        fetchAndRenderUsers(1);
+    }, 500);
+
   } catch (err) {
     Swal.fire({
       icon: 'error',
@@ -1383,9 +1508,14 @@ async function editUser(userId) {
   }
 }
 
+async function assignModules(userId) {
+  await editUser(userId);
+  showStep(2);
+}
+
    document.addEventListener("DOMContentLoaded", function () {
      // Populate Departments and Roles
-     function populateDepartments() {
+    function populateDepartments() {
        fetch("/adminportal/api/departments/")
          .then(response => response.json())
          .then(data => {
@@ -1492,11 +1622,20 @@ form.addEventListener("submit", async function (e) {
           title: 'User Updated',
           text: `User updated successfully!`
         });
-        window.editingUserId = null;
+        // Do NOT clear editingUserId here. We need it for the next steps (Modules, Table highlight).
+        // window.editingUserId = null; 
+        
+        // Update latestCreatedUser with ID for consistency, though editingUserId is primary.
+        window.latestCreatedUser = { ...data, id: window.editingUserId }; 
+        if (typeof updateBreadcrumbAccess === "function") updateBreadcrumbAccess();
         showStep(2);
+      //    fetch("/adminportal/api/users/list/")
+      //     .then(res => res.json())
+      //     .then(users => renderUsersTable(users));
+      // }
         fetch("/adminportal/api/users/list/")
           .then(res => res.json())
-          .then(users => renderUsersTable(users));
+          .then(data => renderUsersTable(data.results));
       } else {
         Swal.fire({
           icon: 'error',
@@ -1520,13 +1659,17 @@ form.addEventListener("submit", async function (e) {
         Swal.fire({
           icon: 'success',
           title: 'User Created',
-          text: `User created successfully! User ID: ${result.user_name}`
+          text: `User created successfully! User ID: ${result.user.username}`
         });
         window.latestCreatedUser = result.user;
+        if (typeof updateBreadcrumbAccess === "function") updateBreadcrumbAccess();
         showStep(2);
+        // fetch("/adminportal/api/users/list/")
+        //   .then(res => res.json())
+        //   .then(users => renderUsersTable(users));
         fetch("/adminportal/api/users/list/")
           .then(res => res.json())
-          .then(users => renderUsersTable(users));
+          .then(data => renderUsersTable(data.results));
       } else {
         Swal.fire({
           icon: 'error',
@@ -1547,6 +1690,12 @@ form.addEventListener("submit", async function (e) {
 
      // Delegate edit and delete button clicks for user table (CSP-safe)
      document.getElementById("usersTableBody").addEventListener("click", function (e) {
+       const submitBtn = e.target.closest(".action-btn.submit-flow");
+       if (submitBtn) {
+         completeUserFlow();
+         return;
+       }
+
        const delBtn = e.target.closest(".action-btn.delete");
        if (delBtn) {
          const tr = delBtn.closest("tr");
@@ -1569,8 +1718,67 @@ form.addEventListener("submit", async function (e) {
          }
          return;
        }
+       const assignBtn = e.target.closest(".assign-modules-btn");
+       if (assignBtn) {
+         const userId = assignBtn.getAttribute("data-user-id");
+         if (userId) {
+           assignModules(userId);
+         }
+         return;
+       }
      });
    });
+
+   function getModuleChipStyle(name) {
+      const dpModules = ["Data Upload", "DP Pick Table", "DP Complete Table"];
+      const recoveryModules = ["Recovery Bulk Upload", "Recovery Pick Table", "Recovery Complete Table"];
+      const inputModules = ["Input Main Table", "Input Complete Table", "Input Accept Table", "Input Reject Table"];
+      const brassIqfModules = ["Brass QC Pick Table", "Brass QC Complete Table", "IQF Pick Table", "IQF Complete Table", "IQF Reject Table"];
+
+      if (dpModules.includes(name)) {
+        return { bg: "#e0f2fe", color: "#334155", border: "#38bdf8" };
+      }
+      if (recoveryModules.includes(name)) {
+        return { bg: "#fce7f3", color: "#334155", border: "#f472b6" };
+      }
+      if (inputModules.includes(name)) {
+        return { bg: "rgb(220, 252, 231)", color: "rgb(51, 65, 85)", border: "rgb(52, 211, 153)" };
+      }
+      if (brassIqfModules.includes(name)) {
+        return { bg: "rgb(254, 243, 199)", color: "rgb(51, 65, 85)", border: "rgb(251, 191, 36)" };
+      }
+      // Default fallback
+      return { bg: "#f1f5f9", color: "#334155", border: "#cbd5e1" };
+   }
+
+   // --- SHow Module Details Popup ---
+   function showModuleDetails(name, headingsStr) {
+      const headings = headingsStr ? headingsStr.split("|") : [];
+      if (headings.length === 0) return;
+
+      const listHtml = `
+        <div style="max-height: 180px; overflow-y: auto; text-align: left; padding: 0.5rem 0.8rem; border: 1px solid #e2e8f0; border-radius: 6px; background: #f8fafc;">
+          <ul style="margin: 0; padding: 0 0 0 1.2rem; font-size: 0.85em;">
+            ${headings.map(h => `<li style="margin-bottom: 2px; color: #334155;">${h}</li>`).join('')}
+          </ul>
+        </div>
+      `;
+
+      Swal.fire({
+          title: `<div style="font-size: 1.1em; color: #1e293b;">${name}</div>`,
+          html: listHtml,
+          showCloseButton: false,
+          showConfirmButton: true,
+          confirmButtonText: 'Close',
+          confirmButtonColor: '#64748b',
+          customClass: {
+            popup: 'swal-module-popup',
+            confirmButton: 'btn btn-sm btn-secondary'
+          },
+          width: '320px',
+          padding: '1em'
+      });
+   }
 
    // Render users in the table
    function renderUsersTable(users) {
@@ -1590,57 +1798,78 @@ form.addEventListener("submit", async function (e) {
        let modules = [];
        if (Array.isArray(user.modules)) {
          if (typeof user.modules[0] === "string") {
-           modules = user.modules.map(m => ({ name: m }));
+           modules = user.modules.map(m => ({ name: m, headings: [] }));
          } else {
            modules = user.modules;
          }
        } else if (typeof user.modules === "string") {
-         modules = user.modules.split(",").map(m => ({ name: m.trim() }));
+         modules = user.modules.split(",").map(m => ({ name: m.trim(), headings: [] }));
        }
 
       let modulesHtml = "";
-      if (modules.length > 0) {
-        if (modules.length === 1) {
-          modulesHtml = `<span>${modules[0].name}</span>`;
-        } else {
-          const uid = `modexp-${user.id}`;
-          modulesHtml = `
-<span>${modules[0].name}</span>
-            <button type="button" class="mod-toggle-btn mod-info-btn"
-              
-              aria-haspopup="true"
-              aria-expanded="false"
-              data-modexp-id="${uid}"
-              onfocus="showModuleList('${uid}')"
-              onblur="hideModuleList('${uid}')"
-              onkeydown="if(event.key==='Enter' || event.key===' '){ event.preventDefault(); toggleModuleList('${uid}'); }">
-              <!-- info SVG icon -->
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <circle cx="12" cy="12" r="10" stroke="#2563eb" stroke-width="1.5" fill="#e6f2ff"/>
-                <rect x="11" y="10" width="2" height="6" rx="1" fill="#0f172a"/>
-                <rect x="11" y="7" width="2" height="2" rx="1" fill="#0f172a"/>
-              </svg>
-            </button>
-            <div id="${uid}" class="modexp-list"
-              onmouseenter="showModuleList('${uid}')"
-              onmouseleave="hideModuleList('${uid}')"
-              aria-hidden="true">
-              <ul class="modexp-ul">
-                ${modules.map(m => `<li>${m.name}</li>`).join("")}
-              </ul>
-            </div>
-          `;
-        }
-      }
-       const actionsHtml = `
-         <button class="action-btn edit" title="Edit" data-user-id="${user.id}">        <svg width="18" height="18" fill="none" viewBox="0 0 20 20"><path d="M4 13.5V16h2.5l7.06-7.06-2.5-2.5L4 13.5zM17.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="#1d4ed8"/></svg>
-         </button>
-         <button class="action-btn delete" title="Delete" data-user-id="${user.id}">
-           <svg width="18" height="18" fill="none" viewBox="0 0 20 20"><path d="M6 7v7a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V7M9 10v3m2-3v3M4 7h12M9 3h2a1 1 0 0 1 1 1v1H8V4a1 1 0 0 1 1-1z" stroke="#dc2626" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-         </button>
-       `;
+       if (modules.length > 0) {
+           modulesHtml = `<div class="modules-cell-content">`;
+           modules.forEach(m => {
+               const style = getModuleChipStyle(m.name);
+               let styleStr = `background:${style.bg}; color:${style.color}; border:1px solid ${style.border};`;
+               
+               let label = m.name;
+               let dataAttrs = "";
+               let chipClass = "module-chip";
+               
+               // Logic for sub-modules count
+               if (m.headings && Array.isArray(m.headings) && m.headings.length > 0) {
+                  label += ` (${m.headings.length})`;
+                  const safeHeadings = m.headings.join("|").replace(/"/g, "&quot;");
+                  const safeName = m.name.replace(/"/g, "&quot;");
+                  
+                  dataAttrs = `data-module-name="${safeName}" data-module-headings="${safeHeadings}"`;
+                  chipClass += " clickable-module-chip";
+                  styleStr += " cursor:pointer;";
+               }
+
+               modulesHtml += `<span class="${chipClass}" style="${styleStr}" ${dataAttrs} title="Click to view details">${label}</span>`;
+           });
+           modulesHtml += `</div>`;
+       } else {
+         // Show "Add Modules" button if no modules AND not a superuser
+         if (!user.is_superuser) {
+            modulesHtml = `<button class="btn btn-sm btn-outline-primary assign-modules-btn" style="padding: 2px 8px; font-size: 0.75rem; border: 1px solid #2563eb; color: #2563eb; background: none; border-radius: 4px; cursor: pointer;" data-user-id="${user.id}" title="Assign Modules">+ Add Modules</button>`;
+         } else {
+            modulesHtml = `<span style="color:#94a3b8;font-style:italic;font-size:0.9em;">Admin</span>`;
+         }
+       }
+
+       const isNew = (window.latestCreatedUser && String(user.id) === String(window.latestCreatedUser.id));
+       const isEditing = (window.editingUserId && String(user.id) === String(window.editingUserId));
+       const isActive = isNew || isEditing;
+
+       if (isEditing || isNew) {
+           console.log(`[renderUsersTable] User ${user.id} (${user.username}) isActive=${isActive}. isNew=${isNew}, isEditing=${isEditing}`);
+       }
+
+       let actionsHtml = "";
+
+       if (isActive) {
+         actionsHtml = `
+           <button class="action-btn submit-flow" title="Complete Flow" data-user-id="${user.id}">
+             <span style="font-size:1.1em; line-height:1;">&#10003;</span> <span style="margin-left:4px;">Submit</span>
+           </button>
+         `;
+       } else {
+         actionsHtml = `
+          <button class="action-btn edit" title="Edit" data-user-id="${user.id}">        <svg width="18" height="18" fill="none" viewBox="0 0 20 20"><path d="M4 13.5V16h2.5l7.06-7.06-2.5-2.5L4 13.5zM17.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="#1d4ed8"/></svg>
+          </button>
+          <button class="action-btn delete" title="Delete" data-user-id="${user.id}">
+            <svg width="18" height="18" fill="none" viewBox="0 0 20 20"><path d="M6 7v7a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V7M9 10v3m2-3v3M4 7h12M9 3h2a1 1 0 0 1 1 1v1H8V4a1 1 0 0 1 1-1z" stroke="#dc2626" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        `;
+       }
 
        const tr = document.createElement("tr");
+       if (isActive) {
+         tr.classList.add("new-user-highlight");
+       }
        tr.innerHTML = `
          <td>${serial++}</td>
          <td>${user.username || ""}</td>
@@ -1658,6 +1887,17 @@ form.addEventListener("submit", async function (e) {
        tbody.appendChild(tr);
      });
    }
+   
+   document.addEventListener('click', function(e) {
+      const chip = e.target.closest('.clickable-module-chip');
+      if (chip) {
+         const name = chip.getAttribute('data-module-name');
+         const headings = chip.getAttribute('data-module-headings');
+         if (name && headings) {
+            showModuleDetails(name, headings);
+         }
+      }
+   });
 
    // Add this helper function (anywhere in your script tags, outside renderUsersTable)
    function toggleModuleList(id) {
@@ -1754,6 +1994,16 @@ form.addEventListener("submit", async function (e) {
          }
        }
      });
+   }
+
+   function completeUserFlow() {
+     window.latestCreatedUser = null;
+     window.editingUserId = null;
+     
+     // Reload page to clear URL params and reset state fully (requested by user)
+     const url = new URL(window.location);
+     url.searchParams.delete("edit_user_id");
+     window.location.href = url.toString();
    }
 
    function renderPaginationControls(current, total) {
@@ -2104,6 +2354,17 @@ document.getElementById("btn-module-save-next").onclick = async function () {
       icon: 'error',
       title: 'Missing Info',
       text: 'Please create a user and select a user category before assigning modules.'
+    });
+
+    return;
+  }
+  
+  // Enforce at least one module is assigned
+  if (!droppedModules || droppedModules.length === 0) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'No Modules Selected',
+      text: 'Please assign at least one module to the user before saving.'
     });
     return;
   }
@@ -2947,9 +3208,92 @@ document.getElementById("btn-module-save-next").onclick = async function () {
    ];
    
    // State
-   let droppedModules = []; // [{name, headings: [checked]}]
+   window.droppedModules = []; // [{name, headings: [checked]}]
    
    // Render module buttons
+   
+   // Drop Logic
+   function processModuleDrop(modName) {
+      if (!droppedModules.find((m) => m.name === modName)) {
+         const mod = modulesList.find((m) => m.name === modName);
+         if (mod) {
+            droppedModules.push({
+               name: mod.name,
+               headings: [...mod.headings],
+               file_name: mod.file_name
+            });
+            renderModuleBtnGrid();
+            renderSelectedModulesContainer();
+         }
+      }
+   }
+
+   // Touch Drag Handler
+   function enableTouchDrag(el, modName) {
+      let ghost = null;
+      
+      el.addEventListener("touchstart", function(e) {
+         const touch = e.touches[0];
+         ghost = el.cloneNode(true);
+         ghost.style.position = "absolute";
+         ghost.style.opacity = "0.8";
+         ghost.style.zIndex = "9999";
+         ghost.style.width = el.offsetWidth + "px";
+         ghost.style.height = el.offsetHeight + "px";
+         ghost.style.pointerEvents = "none";
+         // Center ghost on finger
+         const rect = el.getBoundingClientRect();
+         const offsetX = touch.clientX - rect.left;
+         const offsetY = touch.clientY - rect.top;
+         
+         ghost.dataset.offsetX = offsetX;
+         ghost.dataset.offsetY = offsetY;
+
+         ghost.style.left = (touch.clientX - offsetX) + "px";
+         ghost.style.top = (touch.clientY - offsetY) + "px";
+         document.body.appendChild(ghost);
+      }, { passive: false });
+
+      el.addEventListener("touchmove", function(e) {
+         if (!ghost) return;
+         e.preventDefault();
+         const touch = e.touches[0];
+         const offsetX = parseFloat(ghost.dataset.offsetX) || 0;
+         const offsetY = parseFloat(ghost.dataset.offsetY) || 0;
+         
+         ghost.style.left = (touch.clientX - offsetX) + "px";
+         ghost.style.top = (touch.clientY - offsetY) + "px";
+         
+         const dropZone = document.getElementById("dropZone");
+         const elemBelow = document.elementFromPoint(touch.clientX, touch.clientY);
+         if (dropZone && (elemBelow === dropZone || dropZone.contains(elemBelow))) {
+            dropZone.style.background = "#f1f5f9";
+         } else if (dropZone) {
+             dropZone.style.background = "#f8fafc";
+         }
+      }, { passive: false });
+
+      el.addEventListener("touchend", function(e) {
+         if (!ghost) return;
+         
+         // Final check for drop
+         const touch = e.changedTouches[0];
+         const elemBelow = document.elementFromPoint(touch.clientX, touch.clientY);
+         const dropZone = document.getElementById("dropZone");
+         
+         if (dropZone && (elemBelow === dropZone || dropZone.contains(elemBelow))) {
+            processModuleDrop(modName);
+            dropZone.style.background = "#f8fafc";
+         } else if (dropZone) {
+            dropZone.style.background = "#f8fafc";
+         }
+         
+         if (ghost.parentNode) {
+            document.body.removeChild(ghost);
+         }
+         ghost = null;
+      });
+   }
    function renderModuleBtnGrid() {
      const grid = document.getElementById("moduleBtnGrid");
      grid.innerHTML = "";
@@ -3069,6 +3413,9 @@ document.getElementById("btn-module-save-next").onclick = async function () {
          e.dataTransfer.setData("text/plain", mod.name);
          setTimeout(() => btn.classList.add("dragging"), 0);
        };
+       // Enable touch support
+       enableTouchDrag(btn, mod.name);
+
        btn.ondragend = function () {
          btn.classList.remove("dragging");
        };
@@ -3131,28 +3478,12 @@ document.getElementById("btn-module-save-next").onclick = async function () {
      dropZone.ondragleave = function () {
        dropZone.style.background = "#f8fafc";
      };
-     dropZone.ondrop = function (e) {
-       e.preventDefault();
-       dropZone.style.background = "#f8fafc";
-       const modName = e.dataTransfer.getData("text/plain");
-       if (!droppedModules.find((m) => m.name === modName)) {
-         const mod = modulesList.find((m) => m.name === modName);
-          if (mod) {
-            droppedModules.push({
-              name: mod.name,
-              headings: [...mod.headings],
-              file_name: mod.file_name // <-- Store file name
-            });
-            renderModuleBtnGrid();
-           renderSelectedModulesContainer();
-          }
-/*          if (droppedModules.length < modulesList.length) {
-           droppedModules.push({ name: mod.name, headings: [...mod.headings] });
-           renderModuleBtnGrid();
-           renderSelectedModulesContainer();
-         } */
-       }
-     };
+      dropZone.ondrop = function (e) {
+        e.preventDefault();
+        dropZone.style.background = "#f8fafc";
+        const modName = e.dataTransfer.getData("text/plain");
+        processModuleDrop(modName);
+      };
    
      // Show dropped modules with heading checkboxes
      droppedModules.forEach((mod, idx) => {
@@ -3268,6 +3599,15 @@ document.getElementById("btn-module-save-next").onclick = async function () {
     if (role) role.value = "";
     const cat = document.getElementById("userCategorySelect");
     if (cat) cat.value = "";
+
+    // Clear module state
+    droppedModules = [];
+    renderSelectedModulesContainer();
+    renderModuleBtnGrid();
+
+    // Reset creation state
+    window.latestCreatedUser = null;
+    if (typeof updateBreadcrumbAccess === "function") updateBreadcrumbAccess();
 
     // Make password required for create mode
     const pwd = document.getElementById("password");
@@ -3389,18 +3729,42 @@ document.getElementById("btn-module-save-next").onclick = async function () {
 <script nonce="{{ csp_nonce }}">
    // filepath: a:\Workspace\Server_Setup_TTT\New_TTT_V2\static\templates\Settings.html
    
+   function updateBreadcrumbAccess() {
+     const canNavigateModules = !!(window.editingUserId || window.latestCreatedUser);
+     const bcModules = document.getElementById("bc-modules");
+     
+     if (bcModules) {
+       bcModules.style.cursor = canNavigateModules ? "pointer" : "not-allowed";
+       bcModules.style.opacity = canNavigateModules ? "1" : "0.6";
+     }
+     
+     // User Table is always accessible
+     const bcTable = document.getElementById("bc-table");
+     if (bcTable) {
+       bcTable.style.cursor = "pointer";
+       bcTable.style.opacity = "1";
+     }
+   }
+
    document.getElementById("bc-user").style.cursor = "pointer";
-   document.getElementById("bc-modules").style.cursor = "pointer";
-   document.getElementById("bc-table").style.cursor = "pointer";
+   
    document.getElementById("bc-user").onclick = function () {
-   showStep(1);
+     showStep(1);
    };
+   
    document.getElementById("bc-modules").onclick = function () {
-   showStep(2);
+     if (window.editingUserId || window.latestCreatedUser) {
+        showStep(2);
+     }
    };
+   
    document.getElementById("bc-table").onclick = function () {
-   showStep(3);
+     // Always allow navigation to user table
+     showStep(3);
    };
+   
+   // Initialize
+   updateBreadcrumbAccess();
 </script>
 <!-- // Script for dynamically fetching and populating the Department and 
    Role dropdowns (departmentSelect and roleSelect) 
@@ -3476,6 +3840,20 @@ document.getElementById("btn-module-save-next").onclick = async function () {
      populateDepartments();
      populateRoles();
      populateUserCategories();
+
+     // Check for persisted edit state
+     const url = new URL(window.location);
+     const editId = url.searchParams.get("edit_user_id");
+     if (editId) {
+         // Small delay to ensure dependencies are loaded
+         setTimeout(() => {
+             editUser(editId).then(() => {
+                 console.log("[DOMContentLoaded] Reload edit setup complete. Re-rendering table.");
+                 // Re-render table again now that editingUserId is set
+                 fetchAndRenderUsers(1);
+             });
+         }, 100);
+     }
    });
 </script>
 

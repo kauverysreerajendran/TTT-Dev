@@ -277,7 +277,7 @@ class BrassAuditPickTableView(APIView):
             # Fallbacks: if audit-specific fields are not set, prefer QC-level values so the UI
             # still shows meaningful Lot / Missing / Physical quantities to the user
             if not data.get('brass_audit_physical_qty'):
-                data['brass_audit_physical_qty'] = data.get('brass_physical_qty', 0)
+                data['brass_audit_physical_qty'] = data.get('brass_qc_accepted_qty', 0)
 
             if not data.get('brass_audit_missing_qty'):
                 data['brass_audit_missing_qty'] = data.get('brass_missing_qty', 0)

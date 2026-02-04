@@ -3829,6 +3829,19 @@ function showAcceptedTrayModal(rescanData, lotId, isDraft, delinkOnlyMode = fals
   console.log('🔍 Input lotId:', lotId);
   console.log('🔍 Input isDraft:', isDraft);
 
+  // Highlight the row for this lot
+  const rows = document.querySelectorAll('#order-listing tbody tr');
+  for (const row of rows) {
+    const lotCell = row.querySelector('td:nth-child(4)'); // Polishing Stk No column (lot_id)
+    if (lotCell && lotCell.textContent.trim() === lotId) {
+      // Remove active from all rows
+      document.querySelectorAll('#order-listing tbody tr').forEach(r => r.classList.remove('active-row'));
+      // Add to this row
+      row.classList.add('active-row');
+      break;
+    }
+  }
+
   let modelNo = rescanData.model_no;
   let topTrayQty = rescanData.top_tray_qty;
   let draftTrayId = rescanData.draft_tray_id || '';
@@ -9149,6 +9162,20 @@ function handleAcceptButtonClick(acceptBtn) {
     
     console.log('✅ Using Lot ID:', lotId);
     
+    const checkbox = row.querySelector('.brass-checkbox');
+    if (checkbox && checkbox.checked) {
+        console.log('✅ Checkbox checked, opening trayScanModal');
+        const viewBtn = row.querySelector('a[href="#"]');
+        if (viewBtn) {
+            viewBtn.click();
+            return;
+        } else {
+            console.error('❌ View button not found');
+            showAlert('Error', 'View button not found', 'error');
+            return;
+        }
+    }
+    
     const missingQtyInput = row ? row.querySelector('.missing-qty-input') : null;
     const missingQty = missingQtyInput ? parseInt(missingQtyInput.value) || 0 : 0;
     console.log('📊 Missing quantity:', missingQty);
@@ -10980,27 +11007,39 @@ document.addEventListener("DOMContentLoaded", function () {
   function validateBarcode(trayId) {
     console.log("🔍 [BRASS SCANNER] Processing tray ID:", trayId);
     
-    // Find priority row (Draft first, then first available)
-    openPriorityRowModal(trayId);
-    
-    // Optional: Log API response for debugging (doesn't affect modal opening)
-    fetch(`/brass_qc/brass_qc_get_lot_id_for_tray/?tray_id=${encodeURIComponent(trayId)}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          console.log("✅ [BRASS SCANNER] Tray found in system - ID:", trayId, "Lot:", data.lot_id);
-        } else {
-          console.log("⚠️ [BRASS SCANNER] Tray not in system, manual entry required:", trayId);
-        }
-      })
-      .catch((error) => {
-        console.log("⚠️ [BRASS SCANNER] API error (modal still opened):", error);
-      });
+    // Check if a modal is already open (assume it's the Brass QC modal)
+    const activeModal = document.querySelector('.modal:not([style*="display: none"])');
+    if (activeModal) {
+      console.log("🎯 [BRASS SCANNER] Modal already open, filling tray ID");
+      fillTrayIdInBrassModal(trayId);
+      scanStatus.style.color = "#28a745";
+      scanStatus.textContent = "Tray ID filled in modal!";
+      setTimeout(() => {
+        stopScanning();
+      }, 2000);
+    } else {
+      // Modal not open, get lot_id and open modal
+      fetch(`/brass_qc/brass_qc_get_lot_id_for_tray/?tray_id=${encodeURIComponent(trayId)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            console.log("✅ [BRASS SCANNER] Tray found in system - ID:", trayId, "Lot:", data.lot_id);
+            openModalForLot(data.lot_id, trayId);
+          } else {
+            console.log("⚠️ [BRASS SCANNER] Tray not in system:", trayId);
+            showScanError("Tray ID not found in system!");
+          }
+        })
+        .catch((error) => {
+          console.log("⚠️ [BRASS SCANNER] API error:", error);
+          showScanError("Error validating tray ID!");
+        });
+    }
   }
   
-  // Function to find and open priority row modal (Draft first, then first available)
-  function openPriorityRowModal(trayId) {
-    console.log("🎯 [BRASS SCANNER] Finding priority row for tray ID:", trayId);
+  // Function to find and open modal for specific lot
+  function openModalForLot(lotId, trayId) {
+    console.log("🎯 [BRASS SCANNER] Finding row for lot ID:", lotId);
     
     const allDataRows = document.querySelectorAll('#order-listing tbody tr');
     
@@ -11010,34 +11049,24 @@ document.addEventListener("DOMContentLoaded", function () {
     }
     
     let targetRow = null;
-    let rowType = "";
     
-    // Step 1: Look for the first "Draft" status row
+    // Find the row with matching lot_id (column 4: Polishing Stk No)
     for (let i = 0; i < allDataRows.length; i++) {
       const row = allDataRows[i];
-      const lotStatusCell = row.cells[14]; // Lot Status is the 15th column (index 14)
-      
-      if (lotStatusCell) {
-        const statusText = lotStatusCell.textContent.trim();
-        console.log(`🔍 [BRASS SCANNER] Row ${i + 1} lot status:`, statusText);
-        
-        if (statusText.includes('Draft')) {
-          console.log("✨ [BRASS SCANNER] Found Draft row at position", i + 1);
-          targetRow = row;
-          rowType = "Draft";
-          break;
-        }
+      const lotCell = row.querySelector('td:nth-child(4)');
+      if (lotCell && lotCell.textContent.trim() === lotId) {
+        targetRow = row;
+        console.log(`✨ [BRASS SCANNER] Found matching row at position ${i + 1} for lot ${lotId}`);
+        break;
       }
     }
     
-    // Step 2: If no Draft found, use the first available row
     if (!targetRow) {
-      console.log("📝 [BRASS SCANNER] No Draft rows found, using first available row");
-      targetRow = allDataRows[0];
-      rowType = "First Available";
+      showScanError(`Lot ${lotId} not found in current table view!`);
+      return;
     }
     
-    // Find the View button in the target row (in Action column)
+    // Find the View button in the target row
     const viewBtn = targetRow.querySelector('a[href="#"]');
     
     if (!viewBtn) {
@@ -11046,9 +11075,9 @@ document.addEventListener("DOMContentLoaded", function () {
     }
     
     const rowIndex = Array.from(allDataRows).indexOf(targetRow) + 1;
-    console.log(`🎯 [BRASS SCANNER] Opening ${rowType} modal for row ${rowIndex}`);
+    console.log(`🎯 [BRASS SCANNER] Opening modal for row ${rowIndex} (lot: ${lotId})`);
     
-    // Store the scanned tray ID globally so it can be used when modal opens
+    // Store the scanned tray ID globally
     window.scannedTrayIdForBrassModal = trayId;
     
     // Click the View button to open modal
@@ -11060,7 +11089,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }, 500);
     
     scanStatus.style.color = "#28a745";
-    scanStatus.textContent = `${rowType} modal opened!`;
+    scanStatus.textContent = `Modal opened for lot ${lotId}!`;
     
     // Stop scanning after successful modal opening
     setTimeout(() => {
@@ -11128,6 +11157,20 @@ document.addEventListener("DOMContentLoaded", function () {
       
       // Update scan status with slot information
       scanStatus.textContent = `Brass Draft slot ${targetSlotIndex} filled!`;
+      
+      // Move focus to the next empty input
+      let nextEmptyIndex = -1;
+      for (let j = targetSlotIndex; j < trayIdInputs.length; j++) {
+        const input = trayIdInputs[j];
+        const val = input.value ? input.value.trim() : '';
+        if (!val) {
+          nextEmptyIndex = j;
+          break;
+        }
+      }
+      if (nextEmptyIndex !== -1) {
+        trayIdInputs[nextEmptyIndex].focus();
+      }
     } else {
       // All slots are filled - warn user instead of overwriting
       console.log("⚠️ [BRASS DRAFT] All slots are filled - cannot add more tray IDs");
@@ -11189,6 +11232,21 @@ document.addEventListener("DOMContentLoaded", function () {
         // Trigger input event for any validation
         trayIdInput.dispatchEvent(new Event('input', { bubbles: true }));
         trayIdInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+        // Find and highlight the row for this tray ID in the modal table
+        const modalTable = activeModal.querySelector('table');
+        if (modalTable) {
+          const rows = modalTable.querySelectorAll('tbody tr');
+          for (const r of rows) {
+            const trayCell = r.querySelector('td:nth-child(2)'); // Tray ID is second column
+            if (trayCell && trayCell.textContent.trim() === trayId) {
+              // Remove from others
+              rows.forEach(rr => rr.classList.remove('active-row'));
+              r.classList.add('active-row');
+              break;
+            }
+          }
+        }
       }
     }
   }

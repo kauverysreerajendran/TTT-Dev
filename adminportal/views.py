@@ -13,6 +13,9 @@ from .serializers import *
 import datetime
 from InputScreening import *
 from django.db import transaction
+from django.db.models import Sum, Q
+from django.db.models.functions import Cast
+from django.db.models import IntegerField
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from adminportal.models import *
@@ -82,108 +85,44 @@ class IndexView(APIView):
         return response
     
     def get_dashboard_stats(self, allowed_modules):
-        """Fetch statistics for each module dynamically"""
+        """Fetch statistics for Day Planning module"""
         stats = []
         
-        # Map of module name patterns to their data sources
-        module_patterns = {
-            'DP': {
-                'label': 'Day Planning',
-                'models': ['modelmasterapp.TrayId', 'modelmasterapp.DPTrayId_History'],
-                'icon': 'mdi-package-variant-closed',
-                'color': '#008080'
-            },
-            'IS': {
-                'label': 'Input Screening',
-                'models': ['InputScreening.IPTrayId', 'InputScreening.IP_Accepted_TrayScan'],
-                'icon': 'mdi-package-variant-closed',
-                'color': '#008080'
-            },
-            'Brass QC': {
-                'label': 'Brass QC',
-                'models': ['Brass_QC.BrassTrayId', 'Brass_QC.Brass_Qc_Accepted_TrayScan'],
-                'icon': 'mdi-package-variant-closed',
-                'color': '#008080'
-            },
-            'Brass Audit': {
-                'label': 'Brass Audit',
-                'models': ['BrassAudit.BrassAuditTrayId', 'BrassAudit.Brass_Audit_Accepted_TrayScan'],
-                'icon': 'mdi-package-variant-closed',
-                'color': '#008080'
-            },
-            'IQF': {
-                'label': 'IQF',
-                'models': ['IQF.IQFTrayId', 'IQF.IQF_Accepted_TrayScan'],
-                'icon': 'mdi-package-variant-closed',
-                'color': '#008080'
-            },
-            'Jig': {
-                'label': 'Jig Loading',
-                'models': ['modelmasterapp.TrayId'],
-                'icon': 'mdi-package-variant-closed',
-                'color': '#008080'
-            },
-        }
-        
         for module_name in allowed_modules:
-            # Try to find a matching pattern
-            config = None
-            for pattern, pattern_config in module_patterns.items():
-                if pattern.lower() in module_name.lower():
-                    config = pattern_config
-                    break
-            
-            if not config:
-                # Create a default config
-                config = {
-                    'label': module_name,
-                    'models': ['modelmasterapp.TrayId'],
-                    'icon': 'mdi-package-variant-closed',
-                    'color': '#95a5a6'
-                }
-            
-            try:
+            if 'DAYPLANNING' in module_name.upper().replace(' ', '') or 'DP' in module_name.upper():
                 from modelmasterapp.models import ModelMasterCreation
                 
-                # For Day Planning, count only active batches
-                if 'DP' in module_name.upper():
-                    # Total lots = total batches with Moved_to_D_Picker = True and hold_lot=False
-                    total_lots = ModelMasterCreation.objects.filter(
-                        Moved_to_D_Picker=True, 
-                        hold_lot=False
-                    ).count()
-                    
-                    # Yet to Start = Moved_to_D_Picker=True, hold_lot=False, Draft_Saved=False
-                    yet_to_start = ModelMasterCreation.objects.filter(
-                        Moved_to_D_Picker=True, 
-                        hold_lot=False,
-                        Draft_Saved=False
-                    ).count()
-                    
-                    # Drafted = Moved_to_D_Picker=True, hold_lot=False, Draft_Saved=True
-                    drafted = ModelMasterCreation.objects.filter(
-                        Moved_to_D_Picker=True,
-                        hold_lot=False,
-                        Draft_Saved=True
-                    ).count()
-                    
-                    # Processed/Released = Moved_to_D_Picker=True, hold_lot=False, release_lot=True
-                    processed = ModelMasterCreation.objects.filter(
-                        Moved_to_D_Picker=True,
-                        hold_lot=False,
-                        release_lot=True
-                    ).count()
-                    
-                    # In Progress = Moved_to_D_Picker=True, hold_lot=False, not released
-                    in_progress = total_lots - processed
-                    
-                else:
-                    # For other modules, use general active lots count
-                    total_lots = ModelMasterCreation.objects.filter(hold_lot=False).count()
-                    yet_to_start = 0
-                    drafted = 0
-                    processed = 0
-                    in_progress = total_lots
+                # Total lots = total batches with Draft_Saved=False
+                total_lots = ModelMasterCreation.objects.filter(Draft_Saved=False).count()
+                
+                # Yet to Start = Draft_Saved=False
+                yet_to_start = ModelMasterCreation.objects.filter(Draft_Saved=False).count()
+                
+                # Jumbo tray count
+                jumbo_count = ModelMasterCreation.objects.filter(Draft_Saved=False, tray_type__icontains='Jumbo').count()
+                
+                # Normal tray count
+                normal_count = ModelMasterCreation.objects.filter(Draft_Saved=False, tray_type__icontains='Normal').count()
+                
+                # Processed/Released = count of batches with "Released" status from completed table
+                # "Released" if ip_person_qty_verified or draft_tray_verify or accepted_Ip_stock or few_cases_accepted_Ip_stock or rejected_ip_stock
+                from modelmasterapp.models import TotalStockModel
+                processed = TotalStockModel.objects.filter(
+                    Q(ip_person_qty_verified=True) |
+                    Q(draft_tray_verify=True) |
+                    Q(accepted_Ip_stock=True) |
+                    Q(few_cases_accepted_Ip_stock=True) |
+                    Q(rejected_ip_stock=True)
+                ).count()
+                
+                # In Progress = Jumbo count
+                in_progress = jumbo_count
+                
+                # Drafted = Normal count
+                drafted = normal_count
+                
+                # Calculate total lots as yet_to_start + processed
+                total_lots = yet_to_start + processed
                 
                 # Calculate progress percentage
                 progress_percent = int((processed / max(total_lots, 1)) * 100) if total_lots > 0 else 0
@@ -191,9 +130,16 @@ class IndexView(APIView):
                 drafted_percent = int((drafted / max(total_lots, 1)) * 100) if total_lots > 0 else 0
                 in_progress_percent = int((in_progress / max(total_lots, 1)) * 100) if total_lots > 0 else 0
                 
+                labels = {
+                    'total_lots': 'Total Rows (Yet to Start)',
+                    'progress': 'Total Processed in Complete Table',
+                    'in_progress': 'Jumbo Tray Count',
+                    'status_overview': 'Status Overview'
+                }
+                
                 stats.append({
                     'module': module_name,
-                    'label': config['label'],
+                    'label': 'Day Planning',
                     'total_lot': total_lots,
                     'yet_to_start': yet_to_start,
                     'yet_to_start_percent': yet_to_start_percent,
@@ -206,52 +152,42 @@ class IndexView(APIView):
                     'progress': progress_percent,
                     'completed_percent': progress_percent,
                     'moved_to_next_percent': in_progress_percent,
-                    'color': config['color'],
-                    'icon': config['icon'],
+                    'color': '#008080',
+                    'icon': 'mdi-package-variant-closed',
+                    'labels': labels,
                 })
-            except Exception as e:
-                print(f"Error getting stats for {module_name}: {str(e)}")
-                import traceback
-                traceback.print_exc()
-                continue
+                break  # Only add once
+        
+        for module_name in allowed_modules:
+            if 'INPUTSCREENING' in module_name.upper().replace(' ', '') or 'IS' in module_name.upper():
+                from modelmasterapp.models import ModelMasterCreation
+                from InputScreening.models import IP_Accepted_TrayScan, IP_Rejected_TrayScan, IP_Accepted_TrayID_Store
+                
+                # Total rows in pick table = count of batches moved to D Picker
+                total_input_qty = ModelMasterCreation.objects.filter(Moved_to_D_Picker=True).count()
+                
+                # Accepted count from accept table
+                accepted_qty = IP_Accepted_TrayScan.objects.count()
+                
+                # Rejected count from reject table
+                rejected_qty = IP_Rejected_TrayScan.objects.count()
+                
+                # Completed data from complete table
+                completed_qty = IP_Accepted_TrayID_Store.objects.filter(is_save=True).count()
+                
+                stats.append({
+                    'module': module_name,
+                    'label': 'Input Screening',
+                    'total_input_qty': total_input_qty,
+                    'accepted_qty': accepted_qty,
+                    'rejected_qty': rejected_qty,
+                    'completed_qty': completed_qty,
+                    'color': '#20b2aa',
+                    'icon': 'mdi-magnify',
+                })
+                break  # Only add once
         
         return stats
-    
-    def get_model_count(self, model_path):
-        """Dynamically get model count"""
-        try:
-            app, model = model_path.rsplit('.', 1)
-            if app == 'modelmasterapp':
-                from modelmasterapp import models as mm
-                return getattr(mm, model).objects.count()
-            elif app == 'InputScreening':
-                from InputScreening import models as ism
-                return getattr(ism, model).objects.count()
-            elif app == 'Brass_QC':
-                from Brass_QC import models as bqm
-                return getattr(bqm, model).objects.count()
-            elif app == 'BrassAudit':
-                from BrassAudit import models as bam
-                return getattr(bam, model).objects.count()
-            elif app == 'IQF':
-                from IQF import models as iqm
-                return getattr(iqm, model).objects.count()
-            return 0
-        except:
-            return 0
-    
-    def get_module_color(self, module_name):
-        """Return color code for each module"""
-        colors = {
-            'DayPlanning': '#0b52bc',
-            'InputScreening': '#29c17a',
-            'Brass_QC': '#38c1dc',
-            'BrassAudit': '#cf8935',
-            'IQF': '#e74c3c',
-            'Jig_Loading': '#9b59b6',
-            'Jig_Unloading': '#f39c12',
-        }
-        return colors.get(module_name, '#95a5a6')
     
 @method_decorator(login_required(login_url='login-api'), name='dispatch')
 class Visual_AidView(APIView):
@@ -2232,7 +2168,7 @@ def create_user(request):
 class UserListAPIView(APIView):
     def get(self, request):
         users = User.objects.all().order_by('id')
-        paginator = Paginator(users, 10)  # 10 users per page
+        paginator = Paginator(users, 8)
         page_number = request.GET.get('page', 1)
         page_obj = paginator.get_page(page_number)
         user_list = []
@@ -2266,7 +2202,8 @@ class UserListAPIView(APIView):
                 "manager": manager,
                 "employment_status": employment_status,
                 "modules": modules,
-                "created": created
+                "created": created,
+                "is_superuser": user.is_superuser
             })
         return Response({
             "results": user_list,
@@ -2335,8 +2272,13 @@ def user_allowed_modules(request):
             return Response({'success': False, 'error': str(e)}, status=500)
 
     # ----- GET logic -----
-    # If user is superuser OR in Admin group OR department is Admin → full access
-    if (
+    # ----- GET logic -----
+    # Check if a specific user_id is requested (for Admin editing)
+    target_user = user
+    requested_user_id = request.GET.get('user_id')
+    
+    # Permission check for fetching other users
+    is_admin = (
         user.is_superuser
         or user.groups.filter(name__iexact="Admin").exists()
         or (
@@ -2344,13 +2286,31 @@ def user_allowed_modules(request):
             and user.userprofile.department
             and user.userprofile.department.name.lower() == "admin"
         )
+    )
+
+    if requested_user_id and is_admin:
+        try:
+            target_user = User.objects.get(id=requested_user_id)
+        except User.DoesNotExist:
+            return Response({'allowed_modules': []}, status=404)
+
+    # 1. If target is Admin/Superuser -> Full Access
+    # (We check target_user properties here)
+    if (
+        target_user.is_superuser
+        or target_user.groups.filter(name__iexact="Admin").exists()
+        or (
+            hasattr(target_user, 'userprofile')
+            and target_user.userprofile.department
+            and target_user.userprofile.department.name.lower() == "admin"
+        )
     ):
         all_modules = Module.objects.all()
         modules = [{"name": mod.name, "headings": mod.headings} for mod in all_modules]
         return Response({"modules": modules})
 
-    # Normal users: use UserModuleProvision
-    provisions = UserModuleProvision.objects.filter(user=user)
+    # 2. Normal users: use UserModuleProvision for target_user
+    provisions = UserModuleProvision.objects.filter(user=target_user)
     modules = [{"name": p.module_name, "headings": p.headings} for p in provisions]
     return Response({"modules": modules})
 
@@ -2431,6 +2391,12 @@ class UserDetailAPIView(APIView):
             user.first_name = data.get('first_name', user.first_name)
             user.last_name = data.get('last_name', user.last_name)
             user.email = data.get('email', user.email)
+            
+            # Update password only if provided
+            password = data.get('password')
+            if password and password.strip():
+                user.set_password(password)
+                
             user.save()
 
             profile = getattr(user, 'userprofile', None)
@@ -2578,3 +2544,22 @@ def is_admin_user(user):
             and user.userprofile.department.name.lower() == "admin"
         )
     )
+
+class UserPageAPIView(APIView):
+    def get(self, request):
+        user_id = request.GET.get('user_id')
+        if not user_id:
+            return Response({'error': 'User ID required'}, status=400)
+        
+        try:
+            target_user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=404)
+            
+        # Must match UserListAPIView ordering (id ascending)
+        position = User.objects.filter(id__lt=user_id).count() 
+        
+        page_size = 6 # Must match UserListAPIView
+        page_number = (position // page_size) + 1
+        
+        return Response({'page': page_number})

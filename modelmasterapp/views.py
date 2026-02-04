@@ -231,7 +231,6 @@ def delete_all_tables(request):
     Brass_Audit_Accepted_TrayScan,
     Brass_Audit_Accepted_TrayID_Store,
     IQF_Accepted_TrayID_Store,
-    JigDetails,
     JigLoadTrayId,
     JigUnload_TrayId,
     JigUnloadAfterTable,
@@ -282,7 +281,6 @@ def delete_all_tables(request):
     RecoveryIQF_Rejection_ReasonStore,
     RecoveryIQF_Rejected_TrayScan,
     RecoveryIQF_OptimalDistribution_Draft
-
 ]
     for model in model_list:
         model.objects.all().delete()

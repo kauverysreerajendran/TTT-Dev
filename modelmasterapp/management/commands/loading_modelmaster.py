@@ -1,17 +1,16 @@
-# load_plating_colors.py
-# Place this in: your_app/management/commands/load_plating_colors.py
-
 from django.core.management.base import BaseCommand
 from django.db import transaction
-import random
+from django.contrib.auth.models import User
 
 class Command(BaseCommand):
-    help = 'Load plating colors and rejection reasons data into multiple tables across different apps'
+    help = 'Load plating colors, rejection reasons, and generate tray IDs with color-based routing into multiple tables across different apps'
 
     def handle(self, *args, **options):
         # Dictionary to store imported models
         models_to_import = {
             'Plating_Color': None,
+            'TrayId': None,
+            'TrayType': None,
             'IP_Rejection_Table': None,
             'Brass_QC_Rejection_Table': None,
             'Brass_Audit_Rejection_Table': None,
@@ -27,6 +26,8 @@ class Command(BaseCommand):
         # Try to import each model from its respective app
         model_app_mapping = [
             ('Plating_Color', 'modelmasterapp'),
+            ('TrayId', 'modelmasterapp'),
+            ('TrayType', 'modelmasterapp'),
             ('IP_Rejection_Table', 'InputScreening'),
             ('Brass_QC_Rejection_Table', 'Brass_QC'),
             ('Brass_Audit_Rejection_Table', 'BrassAudit'),
@@ -70,10 +71,10 @@ class Command(BaseCommand):
             )
         )
 
-        # Data definitions
+        # Data definitions - Following TTT color-wise routing requirement
         plating_colors_data = [
             ("BLACK", "N"),
-            ("IPS", "S"),
+            ("IPS", "S"),  # Zone 1 - IPS only
             ("IPG", "Y"),
             ("IP-GUN", "GUN"),
             ("IP-BROWN", "BRN"),
@@ -98,6 +99,13 @@ class Command(BaseCommand):
             ("IP-ICE BLUE", "IBL"),
             ("IP-PLUM", "PM01"),
             ("IP-TITANIUM BLUE", "TIN"),
+            # Zone 2 - Additional colors mentioned in requirements
+            ("3N", "3N"),
+            ("2N", "2N"),
+            ("J-BLUE", "JBL"),
+            ("BR", "BR"),
+            ("PLUM", "PLUM"),
+            ("BIC", "BIC"),
         ]
 
         ip_rejection_reasons = [
@@ -149,11 +157,15 @@ class Command(BaseCommand):
         # Load data for each available table
         total_created = 0
 
-        # 1. Load Plating Colors
+        # 1. Load Plating Colors with TTT routing logic
         if models_to_import['Plating_Color']:
             total_created += self.load_plating_colors(models_to_import['Plating_Color'], plating_colors_data)
 
-        # 2. Load IP Rejection Reasons (Main and Recovery)
+        # 2. Generate Tray IDs with color-based prefixes
+        if models_to_import['TrayId'] and models_to_import['TrayType'] and models_to_import['Plating_Color']:
+            total_created += self.generate_tray_ids(models_to_import['TrayId'], models_to_import['TrayType'], models_to_import['Plating_Color'])
+
+        # 3. Load IP Rejection Reasons (Main and Recovery)
         ip_tables = [
             ('IP_Rejection_Table', 'IP Rejection'),
             ('RecoveryIP_Rejection_Table', 'Recovery IP Rejection')
@@ -167,7 +179,7 @@ class Command(BaseCommand):
                     display_name
                 )
 
-        # 3. Load Brass QC/Audit/IQF Rejection Reasons (Main and Recovery)
+        # 4. Load Brass QC/Audit/IQF Rejection Reasons (Main and Recovery)
         brass_tables = [
             ('Brass_QC_Rejection_Table', 'Brass QC'),
             ('Brass_Audit_Rejection_Table', 'Brass Audit'),
@@ -185,7 +197,7 @@ class Command(BaseCommand):
                     display_name
                 )
 
-        # 4. Load Nickel QC/Audit Rejection Reasons
+        # 5. Load Nickel QC/Audit Rejection Reasons
         nickel_tables = [
             ('Nickel_QC_Rejection_Table', 'Nickel QC'),
             ('Nickel_Audit_Rejection_Table', 'Nickel Audit')
@@ -211,7 +223,7 @@ class Command(BaseCommand):
         
         # Group tables by category for better display
         table_categories = {
-            'Master Data': ['Plating_Color'],
+            'Master Data': ['Plating_Color', 'TrayId'],
             'IP Rejection': ['IP_Rejection_Table', 'RecoveryIP_Rejection_Table'],
             'Brass Rejection': ['Brass_QC_Rejection_Table', 'Brass_Audit_Rejection_Table', 'IQF_Rejection_Table',
                                'RecoveryBrass_QC_Rejection_Table', 'RecoveryBrass_Audit_Rejection_Table', 'RecoveryIQF_Rejection_Table'],
@@ -224,19 +236,36 @@ class Command(BaseCommand):
                 self.stdout.write(f"   📂 {category}: {', '.join(loaded_in_category)}")
 
     def load_plating_colors(self, Plating_Color, plating_colors_data):
-        """Load plating colors data"""
+        """
+        Load plating colors with TTT color-wise routing logic:
+        - Zone 1: IPS only
+        - Zone 2: All other colors (3N, 2N, RG, CHG, CN, J-BLUE, BR, BRN, GUN, BLU, PLUM, BIC, etc.)
+        """
         try:
             with transaction.atomic():
-                # Clear existing data
-                Plating_Color.objects.all().delete()
-                self.stdout.write("🗑️  Cleared existing Plating_Color data.")
+                # Clear existing data if --force flag is used
+                if '--force' in self.style.__dict__ or True:  # Always force for color routing update
+                    Plating_Color.objects.all().delete()
+                    self.stdout.write("🗑️  Cleared existing Plating_Color data for routing update.")
 
                 created_count = 0
+                zone_1_colors = []
+                zone_2_colors = []
                 
                 for plating_color, plating_color_internal in plating_colors_data:
-                    # Random zone assignment
-                    zone_1 = random.choice([True, False])
-                    zone_2 = random.choice([True, False])
+                    # TTT Color-wise routing logic implementation
+                    if plating_color == "IPS":
+                        # IPS goes to Zone 1 ONLY
+                        zone_1 = True
+                        zone_2 = False
+                        zone_1_colors.append(plating_color)
+                        routing_info = "→ Zone 1 (IPS Only)"
+                    else:
+                        # All other colors go to Zone 2 ONLY  
+                        zone_1 = False
+                        zone_2 = True
+                        zone_2_colors.append(plating_color)
+                        routing_info = "→ Zone 2 (Non-IPS)"
                     
                     plating_color_obj, created = Plating_Color.objects.get_or_create(
                         plating_color=plating_color,
@@ -249,16 +278,109 @@ class Command(BaseCommand):
                     
                     if created:
                         created_count += 1
-                        self.stdout.write(
-                            f"   ✅ {plating_color} ({plating_color_internal}) - Zone1: {zone_1}, Zone2: {zone_2}"
-                        )
+                        self.stdout.write(f"   ✅ {plating_color} ({plating_color_internal}) {routing_info}")
+                    else:
+                        # Update existing record with correct routing
+                        plating_color_obj.jig_unload_zone_1 = zone_1
+                        plating_color_obj.jig_unload_zone_2 = zone_2
+                        plating_color_obj.save()
+                        self.stdout.write(f"   🔄 Updated {plating_color} ({plating_color_internal}) {routing_info}")
 
-                self.stdout.write(f"🎨 Plating Colors: {created_count} records created\n")
+                self.stdout.write(f"\n🎨 Plating Colors: {created_count} new records created")
+                
+                # TTT Color routing summary
+                self.stdout.write("\n🚦 TTT COLOR-WISE ROUTING IMPLEMENTATION:")
+                self.stdout.write(f"   🔵 Zone 1 (Jig Unloading): {', '.join(zone_1_colors)}")
+                self.stdout.write(f"   🟢 Zone 2 (Jig Unloading Zone 2): {', '.join(zone_2_colors[:8])}{'...' if len(zone_2_colors) > 8 else ''}")
+                self.stdout.write(f"   📊 Zone 1 colors: {len(zone_1_colors)} | Zone 2 colors: {len(zone_2_colors)}")
+                self.stdout.write("")
                 return created_count
                 
         except Exception as e:
             self.stdout.write(
                 self.style.ERROR(f'❌ Error loading Plating_Color: {str(e)}')
+            )
+            return 0
+
+    def generate_tray_ids(self, TrayId, TrayType, Plating_Color):
+        """
+        Generate TrayId records with color-based prefixes according to TTT requirements:
+        - IPS: Red Color Tray - NR-A00001 or JR-A00001  
+        - Other Colors: Dark Green Tray - ND-A00001 OR JD-A00001
+        - Bi Color: Light Green - NL-A00001 OR JL-A00001
+        """
+        try:
+            with transaction.atomic():
+                # Get admin user for created_by field
+                admin_user = User.objects.filter(is_superuser=True).first()
+                if not admin_user:
+                    self.stdout.write("⚠️  No admin user found. Creating tray IDs without user assignment.")
+                
+                # Get tray types
+                normal_tray = TrayType.objects.filter(tray_type="Normal").first()
+                jumbo_tray = TrayType.objects.filter(tray_type="Jumbo").first()
+                
+                if not normal_tray or not jumbo_tray:
+                    self.stdout.write("⚠️  Normal or Jumbo tray types not found. Please ensure TrayType records exist.")
+                    return 0
+                
+                created_count = 0
+                
+                # Define tray generation parameters
+                tray_configs = [
+                    # IPS - Red Color Trays (Zone 1)
+                    {"color_match": "IPS", "prefix": "NR", "tray_type": normal_tray, "color": "Red", "count": 300},
+                    {"color_match": "IPS", "prefix": "JR", "tray_type": jumbo_tray, "color": "Red", "count": 300},
+                    
+                    # Other Colors - Dark Green Trays (Zone 2)  
+                    {"color_match": "OTHER", "prefix": "ND", "tray_type": normal_tray, "color": "Dark Green", "count": 100},
+                    {"color_match": "OTHER", "prefix": "JD", "tray_type": jumbo_tray, "color": "Dark Green", "count": 100},
+                    
+                    # Bi Color - Light Green Trays
+                    {"color_match": "BICOLOR", "prefix": "NL", "tray_type": normal_tray, "color": "Light Green", "count": 50},
+                    {"color_match": "BICOLOR", "prefix": "JL", "tray_type": jumbo_tray, "color": "Light Green", "count": 25},
+                ]
+                
+                for config in tray_configs:
+                    self.stdout.write(f"\n🎨 Generating {config['color']} {config['tray_type'].tray_type} trays with prefix {config['prefix']}...")
+                    
+                    for i in range(1, config['count'] + 1):
+                        tray_id = f"{config['prefix']}-A{i:05d}"  # Format: NR-A00001, JR-A00001, etc.
+                        
+                        # Check if tray already exists
+                        if TrayId.objects.filter(tray_id=tray_id).exists():
+                            continue
+                            
+                        # Create tray record
+                        tray_obj = TrayId.objects.create(
+                            tray_id=tray_id,
+                            tray_type=config['tray_type'].tray_type,
+                            tray_capacity=config['tray_type'].tray_capacity,
+                            new_tray=True,
+                            scanned=False,
+                            user=admin_user,
+                        )
+                        
+                        created_count += 1
+                        
+                        if i <= 5 or i % 25 == 0:  # Show first 5 and every 25th
+                            self.stdout.write(f"   ✅ {tray_id} ({config['color']} {config['tray_type'].tray_type})")
+                    
+                    self.stdout.write(f"   📦 Generated {config['count']} {config['color']} {config['tray_type'].tray_type} trays")
+                
+                self.stdout.write(f"\n🆔 TrayId Generation: {created_count} new tray IDs created")
+                
+                # TTT Tray ID Color mapping summary
+                self.stdout.write("\n🎨 TTT TRAY ID COLOR MAPPING:")
+                self.stdout.write("   🔴 IPS Colors → Red Trays (NR-A00001, JR-A00001)")
+                self.stdout.write("   🟢 Other Colors → Dark Green Trays (ND-A00001, JD-A00001)")  
+                self.stdout.write("   🟢 Bi Colors → Light Green Trays (NL-A00001, JL-A00001)")
+                self.stdout.write("")
+                return created_count
+                
+        except Exception as e:
+            self.stdout.write(
+                self.style.ERROR(f'❌ Error generating TrayId: {str(e)}')
             )
             return 0
 

@@ -464,11 +464,90 @@
       </div>
 
       <!-- Stat Cards -->
+      {% if stat.label == "Day Planning" %}
       <div class="stat-cards-container">
         <!-- Total Lot Card -->
         <div class="stat-card">
           <div class="stat-label">
-            <i class="mdi mdi-folder-multiple"></i> Total Lots
+            <i class="mdi mdi-folder-multiple"></i> {{ stat.labels.total_lots }}
+          </div>
+          <div class="stat-value">{{ stat.yet_to_start }}</div>
+          <div class="stat-unit">
+            Total Batches - {{ stat.yet_to_start }}/{{ stat.total_lot }}
+          </div>
+        </div>
+
+        <!-- Processed Card -->
+        <div class="stat-card">
+          <div class="stat-label">
+            <i class="mdi mdi-check-circle"></i> Processed
+          </div>
+          <div class="stat-value">{{ stat.processed }}</div>
+          <div class="stat-unit">Completed</div>
+        </div>
+
+        <!-- Jumbo Tray Count Card -->
+        <div class="stat-card">
+          <div class="stat-label">
+            <i class="mdi mdi-arrow-right-circle"></i> Jumbo Tray Count
+          </div>
+          <div class="stat-value">{{ stat.in_progress }}</div>
+          <div class="stat-unit">Loaded batches</div>
+        </div>
+
+        <!-- Normal Tray Count Card -->
+        <div class="stat-card">
+          <div class="stat-label">
+            <i class="mdi mdi-package-variant"></i> Normal Tray Count
+          </div>
+          <div class="stat-value">{{ stat.drafted }}</div>
+          <div class="stat-unit">Loaded batches</div>
+        </div>
+      </div>
+      {% elif stat.label == "Input Screening" %}
+      <div class="stat-cards-container">
+        <!-- Total Rows in Pick Table -->
+        <div class="stat-card">
+          <div class="stat-label">
+            <i class="mdi mdi-table"></i> Total Rows in Pick Table
+          </div>
+          <div class="stat-value">{{ stat.total_input_qty }}</div>
+          <div class="stat-unit">Rows</div>
+        </div>
+
+        <!-- Accepted Count -->
+        <div class="stat-card">
+          <div class="stat-label">
+            <i class="mdi mdi-check-circle"></i> Accepted Count
+          </div>
+          <div class="stat-value">{{ stat.accepted_qty }}</div>
+          <div class="stat-unit">Count</div>
+        </div>
+
+        <!-- Rejected Count -->
+        <div class="stat-card">
+          <div class="stat-label">
+            <i class="mdi mdi-close-circle"></i> Rejected Count
+          </div>
+          <div class="stat-value">{{ stat.rejected_qty }}</div>
+          <div class="stat-unit">Count</div>
+        </div>
+
+        <!-- Completed Count -->
+        <div class="stat-card">
+          <div class="stat-label">
+            <i class="mdi mdi-check-all"></i> Completed Count
+          </div>
+          <div class="stat-value">{{ stat.completed_qty }}</div>
+          <div class="stat-unit">Count</div>
+        </div>
+      </div>
+      {% else %}
+      <div class="stat-cards-container">
+        <!-- Total Lot Card -->
+        <div class="stat-card">
+          <div class="stat-label">
+            <i class="mdi mdi-folder-multiple"></i> {{ stat.labels.total_lots }}
           </div>
           <div class="stat-value">{{ stat.total_lot }}</div>
           <div class="stat-unit">Active batches</div>
@@ -477,7 +556,7 @@
         <!-- Progress Card with Detailed Breakdown -->
         <div class="stat-card">
           <div class="stat-label">
-            <i class="mdi mdi-progress-check"></i> Progress
+            <i class="mdi mdi-progress-check"></i> {{ stat.labels.progress }}
           </div>
           <div class="stat-value">{{ stat.processed }}</div>
           <div class="stat-unit">Released/Processed</div>
@@ -503,7 +582,8 @@
         <!-- In Progress Card -->
         <div class="stat-card">
           <div class="stat-label">
-            <i class="mdi mdi-arrow-right-circle"></i> In Progress
+            <i class="mdi mdi-arrow-right-circle"></i> {{
+            stat.labels.in_progress }}
           </div>
           <div class="stat-value">{{ stat.in_progress }}</div>
           <div class="stat-unit">Processing queue</div>
@@ -518,7 +598,7 @@
         <!-- Status Summary Card -->
         <div class="stat-card">
           <div class="stat-label">
-            <i class="mdi mdi-chart-pie"></i> Status Overview
+            <i class="mdi mdi-chart-pie"></i> {{ stat.labels.status_overview }}
           </div>
           <div style="font-size: 0.9rem; color: #2c3e50; margin-bottom: 0.5rem">
             <div
@@ -529,7 +609,7 @@
               "
             >
               <span>Released:</span>
-              <strong>{{ stat.processed_percent }}%</strong>
+              <strong>{{ stat.processed }}</strong>
             </div>
             <div
               style="
@@ -539,46 +619,12 @@
               "
             >
               <span>In Queue:</span>
-              <strong>{{ stat.in_progress_percent }}%</strong>
+              <strong>{{ stat.in_progress }}</strong>
             </div>
           </div>
         </div>
       </div>
-
-      <!-- Minimal Graph -->
-      <div class="graph-container">
-        <h5>Status Distribution</h5>
-        <div class="mini-bar-chart">
-          <div class="bar-item">
-            <div
-              class="bar"
-              style="height: {{ stat.yet_to_start_percent }}%; background: linear-gradient(to top, #5f9ea0, #778899);"
-            ></div>
-            <span>Yet to Start</span>
-          </div>
-          <div class="bar-item">
-            <div
-              class="bar"
-              style="height: {{ stat.drafted_percent }}%; background: linear-gradient(to top, #20b2aa, #48d1cc);"
-            ></div>
-            <span>Draft</span>
-          </div>
-          <div class="bar-item">
-            <div
-              class="bar"
-              style="height: {{ stat.processed_percent }}%; background: linear-gradient(to top, #008080, #20b2aa);"
-            ></div>
-            <span>Released</span>
-          </div>
-          <div class="bar-item">
-            <div
-              class="bar"
-              style="height: {{ stat.in_progress_percent }}%; background: linear-gradient(to top, #40e0d0, #00ced1);"
-            ></div>
-            <span>In Progress</span>
-          </div>
-        </div>
-      </div>
+      {% endif %}
     </div>
     {% endfor %} {% else %}
     <div class="empty-state">
@@ -600,7 +646,7 @@
 </div>
 
 <!-- Scripts -->
-<script>
+<script nonce="{{ csp_nonce }}">
   // Smooth scroll navigation for carousel dots
   document.querySelectorAll(".carousel-dot").forEach((dot, index) => {
     dot.addEventListener("click", () => {
@@ -635,7 +681,7 @@
       let currentIndex = Array.from(dots).findIndex((dot) =>
         dot.classList.contains("active"),
       );
-      let nextIndex = (currentIndex + 1) % cards.length;
+      let nextIndex = (currentIndex - 1 + cards.length) % cards.length;
 
       cards[nextIndex].scrollIntoView({ behavior: "smooth", block: "nearest" });
       updateActiveDot(nextIndex);
