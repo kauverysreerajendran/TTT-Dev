@@ -2764,7 +2764,8 @@ class IQFRejectTableView(APIView):
                 'iqf_last_process_date_time': stock_obj.iqf_last_process_date_time,
                 'brass_rejection_total_qty': stock_obj.brass_rejection_total_qty,
                 'iqf_physical_qty': stock_obj.iqf_physical_qty,
-                'iqf_missing_qty': stock_obj.iqf_missing_qty
+                'iqf_missing_qty': stock_obj.iqf_missing_qty,
+                'lot_qty': batch.total_batch_quantity if hasattr(batch, 'total_batch_quantity') else 0
             }
 
             # --- Add lot rejection remarks ---

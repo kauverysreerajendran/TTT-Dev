@@ -733,7 +733,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                       <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
                     <th class="sortable" data-column-index="9"> 
-                      Tray Cate- <br> Capacity
+                      Lot Qty
                       <i class="fa fa-sort" aria-hidden="true"></i>
                     </th>
                     <th class="sortable" data-column-index="10">
@@ -802,7 +802,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                     <td>{{data.polish_finish}}</td>
                     <td>{{data.location__location_name}}</td>
                     <td>{{data.tray_type}} {{data.tray_capacity}}</td>
-                    <td>{{data.no_of_trays}}</td>
+                    <td>{{data.lot_qty|default:0}}</td>
                     <td>
                       {{data.iqf_rejection_total_qty}}
                                                 <a href="#"

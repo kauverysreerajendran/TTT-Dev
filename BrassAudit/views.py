@@ -3216,15 +3216,37 @@ def brass_audit_view_tray_list(request):
 
         # ✅ PRIORITY 1: Always check BrassAuditTrayId first (transferred from Brass QC)
         # This table is populated when Brass QC transfers accepted data to Brass Audit
-        brass_audit_trays = BrassAuditTrayId.objects.filter(lot_id=lot_id).order_by('id')
+        brass_audit_trays = BrassAuditTrayId.objects.filter(lot_id=lot_id, rejected_tray=False, delink_tray=False).order_by('id')
         if brass_audit_trays.exists():
-            for idx, tray_obj in enumerate(brass_audit_trays):
+            # ✅ FIXED: Identify the top tray first
+            # Priority: 1. Tray marked as top_tray=True, 2. Tray with smallest quantity
+            top_tray_obj = brass_audit_trays.filter(top_tray=True).first()
+            if not top_tray_obj:
+                # Fallback: Find tray with smallest quantity
+                top_tray_obj = brass_audit_trays.order_by('tray_quantity').first()
+            
+            # ✅ Build tray list with top tray first
+            sno = 1
+            if top_tray_obj:
                 tray_list.append({
-                    'sno': idx + 1,
+                    'sno': sno,
+                    'tray_id': top_tray_obj.tray_id,
+                    'tray_qty': top_tray_obj.tray_quantity,
+                    'top_tray': True,
+                })
+                sno += 1
+            
+            # Add remaining trays (excluding the top tray)
+            for tray_obj in brass_audit_trays:
+                if top_tray_obj and tray_obj.tray_id == top_tray_obj.tray_id:
+                    continue  # Skip the top tray, already added
+                tray_list.append({
+                    'sno': sno,
                     'tray_id': tray_obj.tray_id,
                     'tray_qty': tray_obj.tray_quantity,
-                    'top_tray': getattr(tray_obj, 'top_tray', False),
+                    'top_tray': False,
                 })
+                sno += 1
             
             print(f"✅ [brass_audit_view_tray_list] Found {len(tray_list)} trays from BrassAuditTrayId for lot: {lot_id}")
             
