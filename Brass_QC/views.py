@@ -4700,12 +4700,24 @@ class BrassCompletedView(APIView):
                 lot_id=lot_id
             ).select_related('rejection_reason')
             
-            rejection_remarks_list = []
+            # ✅ FIXED: Aggregate rejection remarks by reason to avoid duplicate blobs
+            reason_qty_map = {}
             for scan in rejection_scans:
+                reason_name = scan.rejection_reason.rejection_reason if scan.rejection_reason else 'Unknown'
+                reason_name = reason_name.strip()
+                qty = int(scan.rejected_tray_quantity or 0)
+                
+                if reason_name in reason_qty_map:
+                    reason_qty_map[reason_name] += qty
+                else:
+                    reason_qty_map[reason_name] = qty
+            
+            # Convert aggregated map to list format
+            rejection_remarks_list = []
+            for reason_name, total_qty in reason_qty_map.items():
                 rejection_remarks_list.append({
-                    'reason': scan.rejection_reason.rejection_reason if scan.rejection_reason else 'Unknown',
-                    'qty': scan.rejected_tray_quantity or 0,
-                    'tray_id': scan.rejected_tray_id or '',
+                    'reason': reason_name,
+                    'qty': total_qty
                 })
             
             data['rejection_remarks_list'] = rejection_remarks_list
@@ -6122,7 +6134,8 @@ def brass_get_rejection_remarks(request):
     """
     API endpoint used by the Brass_Completed template to return rejection remarks
     for a given lot_id. Returns JSON:
-      { success: True, rejection_remarks: [{ reason, qty, tray_id }, ...] }
+      { success: True, rejection_remarks: [{ reason, qty }, ...] }
+    Quantities are aggregated by rejection reason to avoid split display.
     """
     lot_id = request.GET.get('lot_id') or request.GET.get('lotid') or request.GET.get('stock_lot_id')
     if not lot_id:
@@ -6130,22 +6143,31 @@ def brass_get_rejection_remarks(request):
 
     try:
         scans = Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id).select_related('rejection_reason').order_by('id')
-        remarks = []
-        seen = set()
+        
+        # ✅ FIXED: Aggregate quantities by rejection reason to avoid split display
+        reason_qty_map = {}
+        
         for s in scans:
             reason = (s.rejection_reason.rejection_reason if getattr(s, 'rejection_reason', None) else '') or ''
-            qty = s.rejected_tray_quantity or 0
-            tray = s.rejected_tray_id or ''
-            # Use tuple key to deduplicate while preserving first-seen order
-            key = (reason.strip(), int(qty) if qty is not None else 0, str(tray).strip())
-            if key in seen:
-                continue
-            seen.add(key)
+            reason = reason.strip()
+            # ✅ FIX: Convert to int to prevent string concatenation ("1" + "12" = "112")
+            qty = int(s.rejected_tray_quantity or 0)
+            
+            if reason in reason_qty_map:
+                # Add to existing quantity for this reason
+                reason_qty_map[reason] += qty
+            else:
+                # First occurrence of this reason
+                reason_qty_map[reason] = qty
+        
+        # Convert aggregated map to list format
+        remarks = []
+        for reason_name, total_qty in reason_qty_map.items():
             remarks.append({
-                'reason': reason,
-                'qty': qty,
-                'tray_id': tray
+                'reason': reason_name,
+                'qty': total_qty
             })
+        
         return Response({'success': True, 'rejection_remarks': remarks})
     except Exception as e:
         # Keep error message concise for UI

@@ -4077,6 +4077,7 @@ def get_rejection_details(request):
     Get rejection reasons for a lot:
     - If batch_rejection=True, show Lot Rejection, total qty, and lot_rejected_comment from IP_Rejection_ReasonStore.
     - Else, show reasons from IP_Rejected_TrayScan (rejection_reason, rejected_tray_quantity).
+    - Quantities are aggregated by rejection reason to avoid split display.
     """
     lot_id = request.GET.get('lot_id')
     if not lot_id:
@@ -4094,11 +4095,28 @@ def get_rejection_details(request):
             })
         else:
             # Not batch rejection: show all tray scan rejections
+            # ✅ FIXED: Aggregate quantities by rejection reason to avoid split display
             tray_scans = IP_Rejected_TrayScan.objects.filter(lot_id=lot_id)
+            
+            # Dictionary to aggregate quantities by reason name
+            reason_qty_map = {}
+            
             for scan in tray_scans:
+                reason_name = scan.rejection_reason.rejection_reason if scan.rejection_reason else 'Unknown'
+                qty = scan.rejected_tray_quantity or 0
+                
+                if reason_name in reason_qty_map:
+                    # Add to existing quantity for this reason
+                    reason_qty_map[reason_name] += qty
+                else:
+                    # First occurrence of this reason
+                    reason_qty_map[reason_name] = qty
+            
+            # Convert aggregated map to list format
+            for reason_name, total_qty in reason_qty_map.items():
                 data.append({
-                    'reason': scan.rejection_reason.rejection_reason if scan.rejection_reason else 'Unknown',
-                    'qty': scan.rejected_tray_quantity
+                    'reason': reason_name,
+                    'qty': total_qty
                 })
 
         if not data:
