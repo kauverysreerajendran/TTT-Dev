@@ -9579,6 +9579,7 @@ function showAcceptedTrayModal(rescanData, lotId, isDraft) {
                  id="topTrayIdInput" 
                  placeholder="Scan Tray ID..." 
                  value="${draftTrayId}"
+                 autocomplete="off"
                  style="width: 100%; max-width: 280px; padding: 8px 12px; border: 2px solid #ddd; border-radius: 6px; font-size: 14px; transition: all 0.3s ease; background: #fff; ${inputStyle} ${draftTrayId ? 'background-color: #d4edda; border-color: #28a745;' : ''}" 
                  class="top-tray-id-input" 
                  ${(!isDraft && draftTrayId) ? 'readonly' : ''} />
@@ -10335,6 +10336,69 @@ function addInstantTopTrayValidation(lotId) {
         errorDiv.style.border = '1px solid #c3e6cb';
         
         console.log('🔧 [addInstantTopTrayValidation] ✅ Valid tray');
+        
+        // ✅ NEW: Auto-move focus to next available delink input
+        setTimeout(() => {
+          const moveToNextDelink = () => {
+            const delinkInputs = document.querySelectorAll('.delink-tray-input');
+            console.log('🔧 [addInstantTopTrayValidation] Found delink inputs:', delinkInputs.length);
+            
+            let nextInput = null;
+            
+            // Find the first empty delink input
+            for (let input of delinkInputs) {
+              console.log('🔧 [addInstantTopTrayValidation] Checking delink input value:', input.value.trim());
+              if (!input.value.trim()) {
+                nextInput = input;
+                break;
+              }
+            }
+            
+            if (nextInput) {
+              console.log('🔧 [addInstantTopTrayValidation] Moving focus to empty delink input');
+              // Blur the current input first
+              topTrayInput.blur();
+              // Give a tiny delay for blur to register
+              setTimeout(() => {
+                nextInput.focus();
+                nextInput.select();
+                console.log('🔧 [addInstantTopTrayValidation] ✅ Focus moved to delink input');
+              }, 50);
+              return true;
+            } else if (delinkInputs.length > 0) {
+              // If no empty inputs but delink inputs exist, focus on first one
+              console.log('🔧 [addInstantTopTrayValidation] No empty inputs, focusing on first delink input');
+              topTrayInput.blur();
+              setTimeout(() => {
+                delinkInputs[0].focus();
+                delinkInputs[0].select();
+                console.log('🔧 [addInstantTopTrayValidation] ✅ Focus moved to first delink input');
+              }, 50);
+              return true;
+            } else {
+              console.log('🔧 [addInstantTopTrayValidation] No delink inputs found yet, will retry');
+              return false;
+            }
+          };
+          
+          // Try immediately
+          if (!moveToNextDelink()) {
+            // If not found, wait for delink table to be ready
+            const handleDelinkReady = (event) => {
+              console.log('🔧 [addInstantTopTrayValidation] Delink table ready event, trying focus again');
+              moveToNextDelink();
+              document.removeEventListener('delinkTableReady', handleDelinkReady);
+            };
+            document.addEventListener('delinkTableReady', handleDelinkReady);
+            
+            // Also retry after a short delay in case event was missed
+            setTimeout(() => {
+              if (!moveToNextDelink()) {
+                console.log('🔧 [addInstantTopTrayValidation] Still no delink inputs after retry');
+              }
+            }, 1000);
+          }
+        }, 500); // Small delay to allow user to see validation result
       } else {
         // Invalid tray
         this.classList.add('top-tray-invalid');
@@ -11203,6 +11267,12 @@ document.querySelectorAll('.delink-tray-input').forEach(function(input, idx, all
   // Input event for counter update
 
   input._inputHandler = function() {
+    // ✅ NEW: Limit input to 9 digits max
+    if (this.value.length > 9) {
+      this.value = this.value.substring(0, 9);
+      console.log('🔧 [Delink Input] Limited input to 9 characters');
+    }
+    
     this._hasError = false;
     const errorSpan = this.parentElement.querySelector('.delink-tray-error');
     if (errorSpan) {
@@ -11252,16 +11322,41 @@ document.querySelectorAll('.delink-tray-input').forEach(function(input, idx, all
               this.style.backgroundColor = '#d4edda';
               this.style.borderColor = '#28a745';
               this.style.color = '#155724';
-              // --- IMMEDIATE FOCUS MOVE ON VALID ---
+              
+              // ✅ NEW: Auto-move focus to next delink input or top tray input
               const currentInput = this;
-              const allInputs = document.querySelectorAll('.delink-tray-input');
-              const currentIndex = Array.from(allInputs).indexOf(currentInput);
-              for (let i = currentIndex + 1; i < allInputs.length; i++) {
-                if (!allInputs[i].value.trim()) {
-                  allInputs[i].focus();
-                  allInputs[i].scrollIntoView({ behavior: 'smooth', block: 'center' });
+              const allDelinkInputs = document.querySelectorAll('.delink-tray-input');
+              const currentIndex = Array.from(allDelinkInputs).indexOf(currentInput);
+              
+              // Try to find next empty delink input
+              let focusMoved = false;
+              for (let i = currentIndex + 1; i < allDelinkInputs.length; i++) {
+                if (!allDelinkInputs[i].value.trim()) {
+                  setTimeout(() => {
+                    allDelinkInputs[i].focus();
+                    allDelinkInputs[i].select();
+                    allDelinkInputs[i].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    console.log('🔧 [Delink Input] Focus moved to next empty delink input');
+                  }, 300);
+                  focusMoved = true;
                   break;
                 }
+              }
+              
+              // If no empty delink inputs, move to top tray input
+              if (!focusMoved) {
+                console.log('🔧 [Delink Input] All delink inputs filled, moving to top tray input');
+                setTimeout(() => {
+                  const topTrayInput = document.getElementById('topTrayIdInput');
+                  if (topTrayInput) {
+                    topTrayInput.focus();
+                    topTrayInput.select();
+                    topTrayInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    console.log('🔧 [Delink Input] ✅ Focus moved to top tray input');
+                  } else {
+                    console.log('❌ [Delink Input] Top tray input not found');
+                  }
+                }, 300);
               }
             } else {
               errorSpan.innerHTML = `❌ ${data.status_message || 'Invalid for Delink'}`;
@@ -11416,19 +11511,39 @@ document.querySelectorAll('.delink-tray-input').forEach(function(input, idx, all
                    this.style.borderColor = '#28a745';
                    this.style.color = '#155724';
                    
-                   // ✅ Move focus to next empty input box after successful validation
+                   // ✅ NEW: Auto-move focus to next delink input or top tray input when valid
                    const currentInput = this;
                    setTimeout(() => {
                      if (errorSpan) errorSpan.style.display = 'none';
                      updateDelinkScanCounter();
                      
-                     const allInputs = document.querySelectorAll('.delink-tray-input');
-                     const currentIndex = Array.from(allInputs).indexOf(currentInput);
-                     for (let i = currentIndex + 1; i < allInputs.length; i++) {
-                       if (!allInputs[i].value.trim()) {
-                         allInputs[i].focus();
-                         allInputs[i].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                     const allDelinkInputs = document.querySelectorAll('.delink-tray-input');
+                     const currentIndex = Array.from(allDelinkInputs).indexOf(currentInput);
+                     
+                     // Try to find next empty delink input
+                     let focusMoved = false;
+                     for (let i = currentIndex + 1; i < allDelinkInputs.length; i++) {
+                       if (!allDelinkInputs[i].value.trim()) {
+                         allDelinkInputs[i].focus();
+                         allDelinkInputs[i].select();
+                         allDelinkInputs[i].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                         console.log('🔧 [Delink Blur] ✅ Focus moved to next empty delink input');
+                         focusMoved = true;
                          break;
+                       }
+                     }
+                     
+                     // If no empty delink inputs found, move to top tray input
+                     if (!focusMoved) {
+                       console.log('🔧 [Delink Blur] All delink inputs filled, moving to top tray input');
+                       const topTrayInput = document.getElementById('topTrayIdInput');
+                       if (topTrayInput) {
+                         topTrayInput.focus();
+                         topTrayInput.select();
+                         topTrayInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                         console.log('🔧 [Delink Blur] ✅ Focus moved to top tray input');
+                       } else {
+                         console.log('❌ [Delink Blur] Top tray input not found');
                        }
                      }
                    }, 100);
