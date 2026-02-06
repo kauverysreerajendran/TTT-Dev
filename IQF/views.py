@@ -918,6 +918,19 @@ class IQFRejectTableTrayIdListAPIView(APIView):
                 else:
                     unassigned_quantities.append(rej_qty_info)
             
+            # ============================
+            # STEP 3: Smart matching - map rejection quantities to tray IDs
+            # ============================
+            # Create explicit mappings for records that already have tray_ids
+            explicit_mappings = {}
+            unassigned_quantities = []
+            
+            for rej_qty_info in rejection_quantities:
+                if rej_qty_info['tray_id']:
+                    explicit_mappings[rej_qty_info['tray_id']] = rej_qty_info
+                else:
+                    unassigned_quantities.append(rej_qty_info)
+            
             print(f"   📊 Explicit mappings: {len(explicit_mappings)}, Unassigned quantities: {len(unassigned_quantities)}")
             
             # Get list of available tray IDs that don't have explicit mappings
@@ -930,6 +943,21 @@ class IQFRejectTableTrayIdListAPIView(APIView):
                     explicit_mappings[tray_id] = unassigned_quantities[unassigned_idx]
                     print(f"   🔗 Auto-assigned: {tray_id} -> Qty: {unassigned_quantities[unassigned_idx]['qty']}")
                     unassigned_idx += 1
+            
+            # ============================
+            # STEP 3.5: Assign remaining unassigned to lot trays
+            # ============================
+            all_lot_trays = list(IQFTrayId.objects.filter(lot_id=lot_id).values_list('tray_id', flat=True))
+            print(f"   🗂️ Found {len(all_lot_trays)} lot trays: {all_lot_trays}")
+            
+            for idx, unassigned in enumerate(unassigned_quantities[unassigned_idx:], start=1):
+                # Assign to lot trays if available, otherwise use virtual
+                if idx-1 < len(all_lot_trays):
+                    assigned_tray_id = all_lot_trays[idx-1]
+                else:
+                    assigned_tray_id = f"Rejection {idx}"
+                explicit_mappings[assigned_tray_id] = unassigned
+                print(f"   🔗 Assigned to lot/virtual: {assigned_tray_id} -> Qty: {unassigned['qty']}")
             
             # ============================
             # STEP 4: Build rejected tray list using the mappings
@@ -963,6 +991,24 @@ class IQFRejectTableTrayIdListAPIView(APIView):
                     "rejection_reason": rejection_reason,
                     "rejection_reason_id": rejection_reason_id
                 })
+            
+            # Add assigned unassigned rejection quantities as rejected trays
+            for assigned_tray_id, unassigned in explicit_mappings.items():
+                if assigned_tray_id not in [t['tray_id'] for t in rejected_trays]:
+                    rejected_trays.append({
+                        "tray_id": assigned_tray_id,
+                        "tray_quantity": unassigned['qty'],
+                        "rejected_tray": True,
+                        "delink_tray": False,
+                        "iqf_reject_verify": False,
+                        "new_tray": False,
+                        "IP_tray_verified": True,
+                        "top_tray": unassigned['top_tray'],
+                        "is_top_tray": unassigned['top_tray'],
+                        "rejection_reason": unassigned.get('rejection_reason', 'N/A'),
+                        "rejection_reason_id": unassigned.get('rejection_reason_id', '')
+                    })
+                    print(f"   ➕ Added assigned rejected tray: ID={assigned_tray_id}, Qty={unassigned['qty']}, Top={unassigned['top_tray']}")
             
             # ============================
             # STEP 5: Get delinked trays
@@ -1819,7 +1865,7 @@ class IQFTrayRejectionAPIView(APIView):
             accepted_trays = data.get('accepted_trays', [])    # [{tray_id, qty, sequence}]
             acceptance_remarks = data.get('acceptance_remarks', '').strip()
 
-            if not lot_id or not tray_rejections or not accepted_trays:
+            if not lot_id:
                 return Response({'success': False, 'error': 'Missing required fields'}, status=400)
 
             # Get physical_qty from TotalStockModel
@@ -1829,8 +1875,27 @@ class IQFTrayRejectionAPIView(APIView):
             # Calculate total entered rejection qty
             total_entered_qty = sum(int(item['quantity']) for item in tray_rejections if int(item['quantity']) > 0)
 
+            is_brass_rejection = False
+            if total_entered_qty == 0:
+                use_audit = getattr(total_stock_obj, 'send_brass_audit_to_iqf', False)
+                if use_audit:
+                    brass_rejection_store = Brass_Audit_Rejection_ReasonStore.objects.filter(lot_id=lot_id).first()
+                    brass_rejected_trays = Brass_Audit_Rejected_TrayScan.objects.filter(lot_id=lot_id)
+                else:
+                    brass_rejection_store = Brass_QC_Rejection_ReasonStore.objects.filter(lot_id=lot_id).first()
+                    brass_rejected_trays = Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id)
+                if brass_rejection_store and brass_rejection_store.total_rejection_quantity > 0:
+                    total_entered_qty = brass_rejection_store.total_rejection_quantity
+                    is_brass_rejection = True
+                    reason_qty = {}
+                    for tray in brass_rejected_trays:
+                        reason_id = tray.rejection_reason.rejection_reason_id
+                        qty = int(tray.rejected_tray_quantity or 0)
+                        reason_qty[reason_id] = reason_qty.get(reason_id, 0) + qty
+                    tray_rejections = [{'reason_id': rid, 'quantity': str(qty)} for rid, qty in reason_qty.items()]
+
             # If all qty is rejected, skip acceptance remarks and save as full rejection
-            if physical_qty == total_entered_qty:
+            if physical_qty == total_entered_qty or is_brass_rejection:
                 # Save as full lot rejection
                 total_stock_obj.iqf_rejection = True
                 total_stock_obj.last_process_module = "IQF"
@@ -1905,7 +1970,7 @@ class IQFTrayRejectionAPIView(APIView):
                     return Response({'success': True, 'message': 'Full lot rejection saved.'})
 
             # Else, require acceptance remarks and save as few cases acceptance
-            if not acceptance_remarks:
+            if total_entered_qty > 0 and not acceptance_remarks:
                 return Response({'success': False, 'error': 'Acceptance remarks are required.'}, status=400)
 
             # Save rejection reasons and qty (no tray_id) in IQF_Rejection_ReasonStore
@@ -3201,7 +3266,6 @@ def iqf_get_remaining_trays(request):
         # 1. Get all initial IQF tray IDs for this lot (original trays after IP verification)
         iqf_trays = IQFTrayId.objects.filter(
             lot_id=lot_id,
-            new_tray=False,  # Original trays after IP verification
             IP_tray_verified=True
             # Removed rejected_tray=True filter to include all original trays
         ).order_by('id')
