@@ -10524,6 +10524,8 @@ function addAcceptedTrayFormInterceptor() {
         // Show appropriate user feedback
         if (!hasInput) {
           alert('Please enter a top tray ID before proceeding.');
+        } else if (!isValid) {
+          alert('Please wait for tray validation to complete and fix any invalid tray IDs before proceeding.');
         }
         return false;
       }
