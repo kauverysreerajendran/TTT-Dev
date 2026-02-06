@@ -458,35 +458,46 @@
     max-width: 75px;
   }
 
-  /* Freeze 2nd column - Last Updated*/
+  /* Freeze 2nd column - Info */
   #order-listing th:nth-child(2),
   #order-listing td:nth-child(2) {
     position: sticky;
     left: 75px; /* Match min-width of 1st col */
     z-index: 12;
     background: #f7fafd;
+    min-width: 45px;
+    max-width: 45px;
+  }
+
+  /* Freeze 3rd column - Last Updated*/
+  #order-listing th:nth-child(3),
+  #order-listing td:nth-child(3) {
+    position: sticky;
+    left: 120px; /* 75px (1st) + 45px (2nd) */
+    z-index: 12;
+    background: #f7fafd;
     min-width: 100px; /* Increased width */
     max-width: 110px; /* Increased width */
   }
 
-  /* Freeze 3rd column */
-  #order-listing th:nth-child(3),
-  #order-listing td:nth-child(3) {
+  /* Freeze 4th column */
+  #order-listing th:nth-child(4),
+  #order-listing td:nth-child(4) {
     position: sticky;
-    left: 175px; /* 100px (1st) + 90px (2nd) */
+    left: 220px; /* 75px (1st) + 45px (2nd) + 110px (3rd) */
     z-index: 12;
     background: #f7fafd;
     min-width: 130px; /* Increased width 100 - old value*/
-    max-width: 100px; /* Increased width  110 - old value*/
+    max-width: 140px; /* Increased width  110 - old value*/
   }
 
   /* ...existing code... */
 
   /* Prevent sticky columns from overlapping sticky header */
-  #order-listing th:nth-child(-n + 3) {
+  #order-listing th:nth-child(-n + 4) {
     z-index: 12;
   }
-  #order-listing td:nth-child(-n + 3) {
+  #order-listing td:nth-child(-n + 4) {
     z-index: 11;
   }
 
@@ -616,6 +627,9 @@
                       <i class="fa fa-sort-asc sort-asc" aria-hidden="true" style="display:none;"></i>
                       <i class="fa fa-sort-desc sort-desc" aria-hidden="true" style="display:none;"></i>
                     </th>
+                    <th style="min-width: 40px; max-width: 45px; text-align: center;">
+                      Info
+                    </th>
                     <th data-column-index="1" class="sortable">
                       Last<br>Updated
                       <i class="fa fa-sort sort-icon" aria-hidden="true"></i>
@@ -713,10 +727,18 @@
                      {% for data in master_data %}
 
                   <tr class="highlighted-tray-scan" data-batch-id="{{ data.batch_id }}">
-                  <td>{{ forloop.counter }}
-                   
-
+                  <td>{{ forloop.counter }}</td>
+                  <!-- Info Column -->
+                  <td style="text-align: center; min-width: 40px; max-width: 45px;">
+                    {% if data.send_brass_audit_to_iqf %}
+                      <i class="fa fa-info-circle" style="color: #028084; font-size:14px; cursor: pointer;" data-bs-toggle="tooltip" data-placement="top" data-bs-original-title="From Brass Audit"></i>
+                    {% elif data.iqf_hold_lot %}
+                      <i class="fa fa-pause-circle" style="color: #ff6b6b; font-size:14px; cursor: pointer;" data-bs-toggle="tooltip" data-placement="top" data-bs-original-title="On Hold"></i>
+                    {% elif data.iqf_few_cases_acceptance %}
+                      <i class="fa fa-check-circle" style="color: #51cf66; font-size:14px; cursor: pointer;" data-bs-toggle="tooltip" data-placement="top" data-bs-original-title="Few Cases Accepted"></i>
+                    {% endif %}
                   </td>
+                  <!-- Last Updated Column -->
                     <td style="white-space:normal;word-break:break-all;">
                               {{ data.iqf_last_process_date_time|date:"d-M-y"  }}<br>
                         <span style="display:inline-block; margin-top:4px;word-break: break-all;">{{ data.iqf_last_process_date_time|date:"h:i A" }}</span>

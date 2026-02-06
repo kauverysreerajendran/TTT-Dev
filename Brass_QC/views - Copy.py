@@ -3899,48 +3899,26 @@ def brass_view_tray_list(request):
                 tray_capacity = stock.batch_id.tray_capacity or 0
 
         tray_list = []
-        
-        # ✅ FIXED: Initialize added_tray_ids set BEFORE any loops to prevent duplicates
-        added_tray_ids = set()
 
         # Include rejected trays from Input Screening if any
         rejected_trays = IP_Rejected_TrayScan.objects.filter(lot_id=lot_id).order_by('id')
         rejected_count = 0
-        print(f"   🔍 [IP Rejected] Found {rejected_trays.count()} IP rejected trays for lot {lot_id}")
         for tray in rejected_trays:
-            tray_id = tray.rejected_tray_id or ''
-            
-            # Skip if already added (prevent duplicates)
-            if tray_id and tray_id in added_tray_ids:
-                print(f"   ⚠️ Skipping duplicate IP rejected tray: {tray_id}")
-                continue
-            
-            # ✅ FIXED: Use actual rejection quantity from IP_Rejected_TrayScan (CharField)
-            raw_qty = tray.rejected_tray_quantity
-            print(f"   🔍 [IP Rejected] Tray {tray_id}: raw_qty='{raw_qty}' (type: {type(raw_qty).__name__})")
-            
-            # Convert string to int
-            try:
-                rejection_qty = int(raw_qty) if raw_qty else 0
-            except (ValueError, TypeError):
-                rejection_qty = 0
-            
             tray_list.append({
                 'sno': rejected_count + 1,
-                'tray_id': tray_id,
-                'tray_qty': rejection_qty,
+                'tray_id': tray.rejected_tray_id or '',
+                'tray_qty': 'REJECTED',
                 'is_rejected': True,
                 'ip_top_tray': False,
                 'brass_top_tray': False,
                 'top_tray': False,
             })
-            if tray_id:
-                added_tray_ids.add(tray_id)
             rejected_count += 1
-            print(f"   📦 Added IP rejected tray: {tray_id} (qty: {rejection_qty})")
         
         # ✅ NEW: Check for Brass QC lot rejection (brass_rejected_tray=True in TrayId)
         # Priority order: 1. BrassTrayId (most recent), 2. TrayId, 3. Brass_QC_Rejected_TrayScan
+        # Use a set to track already-added tray_ids to prevent duplicates
+        added_tray_ids = set()
         
         # ✅ FIXED: Exclude delinked trays - only show actual rejected trays
         brass_rejected_trays_brass = BrassTrayId.objects.filter(
@@ -3965,26 +3943,10 @@ def brass_view_tray_list(request):
             # Priority 1: Get from BrassTrayId table (most authoritative for Brass Audit rejections)
             for tray in brass_rejected_trays_brass:
                 if tray.tray_id and tray.tray_id not in added_tray_ids:
-                    # ✅ FIXED: Multi-level fallback for tray quantity
-                    tray_qty = tray.tray_quantity or 0
-                    if tray_qty == 0:
-                        # Fallback 1: Try to get quantity from Brass_QC_Rejected_TrayScan
-                        rejection_scan = Brass_QC_Rejected_TrayScan.objects.filter(
-                            lot_id=lot_id,
-                            rejected_tray_id=tray.tray_id
-                        ).first()
-                        if rejection_scan and rejection_scan.rejected_tray_quantity:
-                            tray_qty = int(rejection_scan.rejected_tray_quantity)
-                            print(f"   📦 Using quantity from Brass_QC_Rejected_TrayScan: {tray_qty}")
-                        else:
-                            # Fallback 2: Use tray_capacity for batch rejections (full tray)
-                            tray_qty = tray_capacity if tray_capacity > 0 else 0
-                            print(f"   📦 Using tray_capacity as fallback: {tray_qty}")
-                    
                     tray_list.append({
                         'sno': rejected_count + 1,
                         'tray_id': tray.tray_id,
-                        'tray_qty': tray_qty,
+                        'tray_qty': tray.tray_quantity or 0,
                         'is_rejected': True,
                         'rejected_status': 'REJECTED',
                         'ip_top_tray': False,
@@ -3993,31 +3955,15 @@ def brass_view_tray_list(request):
                     })
                     added_tray_ids.add(tray.tray_id)
                     rejected_count += 1
-                    print(f"   ✅ Added rejected tray from BrassTrayId: {tray.tray_id} (qty: {tray_qty})")
+                    print(f"   ✅ Added rejected tray from BrassTrayId: {tray.tray_id} (qty: {tray.tray_quantity})")
             
             # Priority 2: Get from TrayId table (only if not already added from BrassTrayId)
             for tray in brass_rejected_trays_trayid:
                 if tray.tray_id and tray.tray_id not in added_tray_ids:
-                    # ✅ FIXED: Multi-level fallback for tray quantity
-                    tray_qty = tray.tray_quantity or 0
-                    if tray_qty == 0:
-                        # Fallback 1: Try to get quantity from Brass_QC_Rejected_TrayScan
-                        rejection_scan = Brass_QC_Rejected_TrayScan.objects.filter(
-                            lot_id=lot_id,
-                            rejected_tray_id=tray.tray_id
-                        ).first()
-                        if rejection_scan and rejection_scan.rejected_tray_quantity:
-                            tray_qty = int(rejection_scan.rejected_tray_quantity)
-                            print(f"   📦 Using quantity from Brass_QC_Rejected_TrayScan: {tray_qty}")
-                        else:
-                            # Fallback 2: Use tray_capacity for batch rejections (full tray)
-                            tray_qty = tray_capacity if tray_capacity > 0 else 0
-                            print(f"   📦 Using tray_capacity as fallback: {tray_qty}")
-                    
                     tray_list.append({
                         'sno': rejected_count + 1,
                         'tray_id': tray.tray_id,
-                        'tray_qty': tray_qty,
+                        'tray_qty': tray.tray_quantity or 0,
                         'is_rejected': True,
                         'rejected_status': 'REJECTED',
                         'ip_top_tray': tray.ip_top_tray if hasattr(tray, 'ip_top_tray') else False,
@@ -4026,7 +3972,7 @@ def brass_view_tray_list(request):
                     })
                     added_tray_ids.add(tray.tray_id)
                     rejected_count += 1
-                    print(f"   ✅ Added rejected tray from TrayId: {tray.tray_id} (qty: {tray_qty})")
+                    print(f"   ✅ Added rejected tray from TrayId: {tray.tray_id} (qty: {tray.tray_quantity})")
             
             # Priority 3: Get from Brass_QC_Rejected_TrayScan table (only if not already added)
             for scan in brass_rejected_scans:
@@ -4046,66 +3992,16 @@ def brass_view_tray_list(request):
                     rejected_count += 1
                     print(f"   ✅ Added rejected tray from Brass_QC_Rejected_TrayScan: {tray_id} (qty: {scan.rejected_tray_quantity})")
             
-            # ✅ FIXED: For partial rejection (brass_qc_few_cases_accptance), also include accepted trays
-            # Check if this is a partial rejection case
-            is_partial_rejection = stock and stock.brass_qc_few_cases_accptance if stock else False
-            
-            if is_partial_rejection:
-                print(f"   🔄 [PARTIAL REJECTION] Including accepted trays for lot {lot_id}")
-                
-                # Get accepted trays from BrassTrayId (non-rejected, non-delinked)
-                accepted_trays_brass = BrassTrayId.objects.filter(
-                    lot_id=lot_id,
-                    rejected_tray=False,
-                    delink_tray=False
-                ).order_by('tray_id')
-                
-                accepted_count = len(tray_list)  # Start numbering after rejected trays
-                for tray in accepted_trays_brass:
-                    if tray.tray_id and tray.tray_id not in added_tray_ids:
-                        tray_list.append({
-                            'sno': accepted_count + 1,
-                            'tray_id': tray.tray_id,
-                            'tray_qty': tray.tray_quantity or 0,
-                            'is_rejected': False,
-                            'ip_top_tray': False,
-                            'brass_top_tray': tray.top_tray if hasattr(tray, 'top_tray') else False,
-                            'top_tray': tray.top_tray if hasattr(tray, 'top_tray') else False,
-                        })
-                        added_tray_ids.add(tray.tray_id)
-                        accepted_count += 1
-                        print(f"   ✅ Added accepted tray from BrassTrayId: {tray.tray_id} (qty: {tray.tray_quantity})")
-                
-                # Also check Brass_Qc_Accepted_TrayID_Store if no accepted trays found
-                if accepted_count == len(tray_list):
-                    accepted_store = Brass_Qc_Accepted_TrayID_Store.objects.filter(lot_id=lot_id).first()
-                    if accepted_store:
-                        # Add top tray
-                        if accepted_store.top_tray_id and accepted_store.top_tray_id not in added_tray_ids:
-                            tray_list.append({
-                                'sno': accepted_count + 1,
-                                'tray_id': accepted_store.top_tray_id,
-                                'tray_qty': accepted_store.top_tray_qty or 0,
-                                'is_rejected': False,
-                                'ip_top_tray': False,
-                                'brass_top_tray': True,
-                                'top_tray': True,
-                            })
-                            added_tray_ids.add(accepted_store.top_tray_id)
-                            accepted_count += 1
-                            print(f"   ✅ Added accepted top tray from store: {accepted_store.top_tray_id} (qty: {accepted_store.top_tray_qty})")
-            
-            # Return combined rejected + accepted trays
-            print(f"   📊 Total trays to return: {len(tray_list)} (rejected + accepted)")
+            # If we have Brass QC lot rejections, return rejected trays
+            print(f"   📊 Total rejected trays to return: {len(tray_list)}")
             return Response({
                 'success': True,
                 'brass_qc_accptance': brass_qc_accptance,
                 'batch_rejection': True,
                 'total_rejection_qty': 0,
                 'tray_capacity': tray_capacity,
-                'trays': sorted(tray_list, key=lambda x: (not x.get('top_tray', False), not x.get('brass_top_tray', False), not x.get('ip_top_tray', False), x.get('sno'))), # ✅ PRIORITIZE TOP TRAY
+                'trays': tray_list,
                 'is_brass_lot_rejection': True,
-                'is_partial_rejection': is_partial_rejection,
             })
 
         # Condition 1: If brass_qc_accptance is True, get from BrassTrayId table
@@ -4804,24 +4700,12 @@ class BrassCompletedView(APIView):
                 lot_id=lot_id
             ).select_related('rejection_reason')
             
-            # ✅ FIXED: Aggregate rejection remarks by reason to avoid duplicate blobs
-            reason_qty_map = {}
-            for scan in rejection_scans:
-                reason_name = scan.rejection_reason.rejection_reason if scan.rejection_reason else 'Unknown'
-                reason_name = reason_name.strip()
-                qty = int(scan.rejected_tray_quantity or 0)
-                
-                if reason_name in reason_qty_map:
-                    reason_qty_map[reason_name] += qty
-                else:
-                    reason_qty_map[reason_name] = qty
-            
-            # Convert aggregated map to list format
             rejection_remarks_list = []
-            for reason_name, total_qty in reason_qty_map.items():
+            for scan in rejection_scans:
                 rejection_remarks_list.append({
-                    'reason': reason_name,
-                    'qty': total_qty
+                    'reason': scan.rejection_reason.rejection_reason if scan.rejection_reason else 'Unknown',
+                    'qty': scan.rejected_tray_quantity or 0,
+                    'tray_id': scan.rejected_tray_id or '',
                 })
             
             data['rejection_remarks_list'] = rejection_remarks_list
@@ -5767,14 +5651,14 @@ class AfterCheckPickTrayIdList_Complete_APIView(APIView):
                           f"rejected={getattr(record, 'rejected_tray', 'N/A')}, "
                           f"delinked={getattr(record, 'delink_tray', 'N/A')}")
             
-            # Apply full filtering - show ALL trays (accepted + rejected)
+            # Apply full filtering
             queryset = BrassAuditTrayId.objects.filter(
                 batch_id__batch_id=batch_id,
                 tray_quantity__gt=0,
                 lot_id=lot_id,
-                # Removed rejected_tray=True to show ALL trays including accepted
+                rejected_tray=True,
             )
-            print(f"   After applying filters (qty>0, all trays): {queryset.count()}")
+            print(f"   After applying filters (qty>0, rejected): {queryset.count()}")
             tray_model_used = 'BrassAuditTrayId'
             
             # Fallback: If no trays found, use BrassTrayId
@@ -5812,34 +5696,27 @@ class AfterCheckPickTrayIdList_Complete_APIView(APIView):
             # If brass_qc_accepted_qty_verified is True, show BrassTrayId, else show IPTrayId
             total_stock = TotalStockModel.objects.filter(lot_id=lot_id).first()
             if total_stock and getattr(total_stock, 'brass_qc_accepted_qty_verified', False):
-                # ✅ FIXED: Show ALL trays (removed rejected_tray=False, delink_tray=False filters)
                 queryset = BrassTrayId.objects.filter(
                     batch_id__batch_id=batch_id,
                     tray_quantity__gt=0,
-                    lot_id=lot_id
+                    lot_id=lot_id,
+                    rejected_tray=False,
+                    delink_tray=False
                 )
                 tray_model_used = 'BrassTrayId'
             else:
-                # ✅ FIXED: Show ALL trays (removed rejected_tray=False, delink_tray=False filters)
                 queryset = IPTrayId.objects.filter(
                     batch_id__batch_id=batch_id,
                     tray_quantity__gt=0,
-                    lot_id=lot_id
+                    lot_id=lot_id,
+                    rejected_tray=False,
+                    delink_tray=False
                 )
                 tray_model_used = 'IPTrayId'
-            # ✅ FIXED: Removed the bug that unconditionally set tray_model_used = 'IPTrayId'
+            tray_model_used = 'IPTrayId'
 
         print(f"✅ [AfterCheckPickTrayIdList_Complete_APIView] Using {tray_model_used} model")
         print(f"Flags: send_brass_qc={send_brass_qc}, send_brass_audit_to_qc={send_brass_audit_to_qc}")
-        print(f"Stock Flags: verified={getattr(total_stock, 'brass_qc_accepted_qty_verified', 'N/A')}, physical={getattr(total_stock, 'brass_physical_qty', 'N/A')}")
-        
-        # 🔍 DEEP DEBUG: Check ALL IPTrayId records for this lot
-        if tray_model_used == 'IPTrayId':
-            all_ips = IPTrayId.objects.filter(lot_id=lot_id)
-            print(f"🔍 [DEEP DEBUG] Dumping ALL IPTrayId records for lot {lot_id}:")
-            for t in all_ips:
-                print(f"   - {t.tray_id}: qty={t.tray_quantity}, rej={t.rejected_tray}, delink={t.delink_tray}, top={t.top_tray}, batch={t.batch_id}")
-
         print(f"Total trays found: {queryset.count()}")
 
         # Get stock information to check for delinked quantities and lot rejection status
@@ -5870,14 +5747,15 @@ class AfterCheckPickTrayIdList_Complete_APIView(APIView):
                     display_quantity = tray_obj.tray_quantity or 0
                     print(f"🔍 [create_tray_data] LOT REJECTION - {tray_obj.tray_id}: REJECTED with full quantity={display_quantity}")
                 else:
-                    # For individual tray rejections, get actual rejected qty from Brass_QC_Rejected_TrayScan
+                    # For individual tray rejections, show specific rejection quantity
                     rejected_scans = Brass_QC_Rejected_TrayScan.objects.filter(
                         lot_id=lot_id,
                         rejected_tray_id=tray_obj.tray_id
                     )
-                    # Sum ALL rejected quantities for this tray from scan records
-                    display_quantity = sum(int(scan.rejected_tray_quantity or 0) for scan in rejected_scans)
+                    display_quantity = rejection_qty or 0
                     for scan in rejected_scans:
+                        if not rejection_qty:
+                            display_quantity += int(scan.rejected_tray_quantity or 0)
                         rejection_details.append({
                             'rejected_quantity': scan.rejected_tray_quantity,
                             'rejection_reason': scan.rejection_reason.rejection_reason if scan.rejection_reason else 'Unknown',
@@ -5946,12 +5824,6 @@ class AfterCheckPickTrayIdList_Complete_APIView(APIView):
                     rejected_trays.append(tray)
                 else:
                     accepted_trays.append(tray)
-            
-            # 🔍 DEBUG DUMP
-            print(f"📊 [DEBUG DUMP] All Accepted Trays found for lot {lot_id} (before sort):")
-            for t in accepted_trays:
-                is_top = getattr(t, 'top_tray', False) or getattr(t, 'ip_top_tray', False)
-                print(f"   - {t.tray_id}: qty={t.tray_quantity}, top={is_top}, model={tray_model_used}")
 
             # ✅ Determine which accepted trays should be delinked
             accepted_trays_sorted = sorted(accepted_trays, key=lambda x: x.tray_quantity or 0, reverse=True)
@@ -5961,67 +5833,29 @@ class AfterCheckPickTrayIdList_Complete_APIView(APIView):
             partial_qty_map = {}  # tray_id -> qty for partial accepted top tray
             delinked_trays = []
             
-            # ✅ NEW STRATEGY: Start with the designated top tray to ensure it's included.
-            # Then fill the rest with other trays (largest first).
-            
-            final_accepted_trays = []  # list of TrayId objects
-            partial_qty_map = {}  # tray_id -> qty for partial accepted top tray
-            running_accepted_qty = 0
-            
-            # Determine designated top tray (prefer one with top_tray=True)
-            designated_top_obj = next((t for t in accepted_trays_sorted if getattr(t, 'top_tray', False) or getattr(t, 'ip_top_tray', False)), None)
-            
-            # 1. ALWAYS add the designated top tray first (if it exists)
-            if designated_top_obj:
-                q = int(designated_top_obj.tray_quantity or 0)
-                
-                if q >= accepted_qty_target:
-                    # Top tray alone is enough (or more than enough)
-                    final_accepted_trays.append(designated_top_obj)
-                    partial_qty_map[designated_top_obj.tray_id] = int(accepted_qty_target)
-                    running_accepted_qty += accepted_qty_target
-                    print(f"🔍 [Categorization] {designated_top_obj.tray_id} (TOP): FULL/PARTIAL ACCEPTED = {accepted_qty_target} (Target met)")
+            for tray in accepted_trays_sorted:
+                tray_qty = int(tray.tray_quantity or 0)
+                if running_accepted_qty + tray_qty <= accepted_qty_target:
+                    # This tray can be accepted in full
+                    final_accepted_trays.append(tray)
+                    running_accepted_qty += tray_qty
+                    print(f"🔍 [Categorization] {tray.tray_id}: ACCEPTED (running total: {running_accepted_qty})")
                 else:
-                    # Top tray is used fully, but we need more
-                    final_accepted_trays.append(designated_top_obj)
-                    running_accepted_qty += q
-                    print(f"🔍 [Categorization] {designated_top_obj.tray_id} (TOP): FULL ACCEPTED = {q} (running total: {running_accepted_qty})")
+                    # This tray would exceed the target - accept a partial if possible
+                    remaining = accepted_qty_target - running_accepted_qty
+                    if remaining > 0:
+                        # Prefer a pre-flagged top tray among candidates
+                        preferred = next((t for t in accepted_trays_sorted if getattr(t, 'top_tray', False) or getattr(t, 'ip_top_tray', False)), None)
+                        partial_tray = preferred or tray
+                        if partial_tray.tray_id not in [t.tray_id for t in final_accepted_trays]:
+                            final_accepted_trays.append(partial_tray)
+                        partial_qty_map[partial_tray.tray_id] = int(remaining)
+                        running_accepted_qty += remaining
+                        print(f"🔍 [Categorization] {partial_tray.tray_id}: PARTIAL ACCEPTED = {remaining} (running total: {running_accepted_qty})")
+                    # Remaining candidates become delinked
+                    break
 
-            # 2. Fill with other trays if we still need more quantity
-            remaining_needed = accepted_qty_target - running_accepted_qty
-            
-            if remaining_needed > 0:
-                # Iterate through others (largest first)
-                for tray in accepted_trays_sorted:
-                    # Skip the top tray we already added
-                    if designated_top_obj and tray.tray_id == designated_top_obj.tray_id:
-                        continue
-                    
-                    q = int(tray.tray_quantity or 0)
-                    
-                    if running_accepted_qty >= accepted_qty_target:
-                        break
-
-                    if q <= remaining_needed:
-                        # Take full tray
-                        final_accepted_trays.append(tray)
-                        running_accepted_qty += q
-                        remaining_needed -= q
-                        print(f"🔍 [Categorization] {tray.tray_id}: ACCEPTED = {q} (running total: {running_accepted_qty})")
-                    else:
-                        # Take partial tray to finish
-                        final_accepted_trays.append(tray)
-                        partial_qty_map[tray.tray_id] = int(remaining_needed)
-                        running_accepted_qty += remaining_needed
-                        remaining_needed = 0
-                        print(f"🔍 [Categorization] {tray.tray_id}: PARTIAL ACCEPTED = {partial_qty_map[tray.tray_id]} (running total: {running_accepted_qty})")
-                        break
-
-            # Print final categorization summary
             print(f"🔍 [Final Categorization] Accepted: {len(final_accepted_trays)}, Rejected: {len(rejected_trays)}, Delinked: {len(delinked_trays)}")
-            
-            # Determine delinked trays (accepted_trays not in final_accepted_trays)
-            delinked_trays = [t for t in accepted_trays_sorted if t.tray_id not in [fa.tray_id for fa in final_accepted_trays]]
 
             # ✅ Add trays in proper order: Accepted -> Rejected -> Delinked
             
@@ -6048,7 +5882,7 @@ class AfterCheckPickTrayIdList_Complete_APIView(APIView):
                 data.append(tray_data)
                 row_counter += 1
 
-            # 3. Add delinked trays (only those with delink_tray=True)
+            # 3. Add delinked trays
             for tray in delinked_trays:
                 tray_data = create_tray_data(tray, 'delinked', False)
                 data.append(tray_data)
@@ -6235,8 +6069,7 @@ def brass_get_rejection_remarks(request):
     """
     API endpoint used by the Brass_Completed template to return rejection remarks
     for a given lot_id. Returns JSON:
-      { success: True, rejection_remarks: [{ reason, qty }, ...] }
-    Quantities are aggregated by rejection reason to avoid split display.
+      { success: True, rejection_remarks: [{ reason, qty, tray_id }, ...] }
     """
     lot_id = request.GET.get('lot_id') or request.GET.get('lotid') or request.GET.get('stock_lot_id')
     if not lot_id:
@@ -6244,31 +6077,22 @@ def brass_get_rejection_remarks(request):
 
     try:
         scans = Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id).select_related('rejection_reason').order_by('id')
-        
-        # ✅ FIXED: Aggregate quantities by rejection reason to avoid split display
-        reason_qty_map = {}
-        
+        remarks = []
+        seen = set()
         for s in scans:
             reason = (s.rejection_reason.rejection_reason if getattr(s, 'rejection_reason', None) else '') or ''
-            reason = reason.strip()
-            # ✅ FIX: Convert to int to prevent string concatenation ("1" + "12" = "112")
-            qty = int(s.rejected_tray_quantity or 0)
-            
-            if reason in reason_qty_map:
-                # Add to existing quantity for this reason
-                reason_qty_map[reason] += qty
-            else:
-                # First occurrence of this reason
-                reason_qty_map[reason] = qty
-        
-        # Convert aggregated map to list format
-        remarks = []
-        for reason_name, total_qty in reason_qty_map.items():
+            qty = s.rejected_tray_quantity or 0
+            tray = s.rejected_tray_id or ''
+            # Use tuple key to deduplicate while preserving first-seen order
+            key = (reason.strip(), int(qty) if qty is not None else 0, str(tray).strip())
+            if key in seen:
+                continue
+            seen.add(key)
             remarks.append({
-                'reason': reason_name,
-                'qty': total_qty
+                'reason': reason,
+                'qty': qty,
+                'tray_id': tray
             })
-        
         return Response({'success': True, 'rejection_remarks': remarks})
     except Exception as e:
         # Keep error message concise for UI
