@@ -802,10 +802,10 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                     <td>{{data.polish_finish}}</td>
                     <td>{{data.location__location_name}}</td>
                     <td>{{data.tray_type}} {{data.tray_capacity}}</td>
-                    <td>{{data.iqf_rejection_total_qty}}</td>
+                    <td>{{data.lot_qty|default:0}}</td>
                     <td>
                       {{data.iqf_rejection_total_qty}}
-      <a href="#"
+                                                <a href="#"
       title="View"
       class="text-primary tray-scan-btn-Jig"
       style="text-decoration: underline; margin-left: 8px;"
@@ -846,16 +846,16 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
 
     {# keep existing Lot Rejection text if present #}
     {% if data.batch_rejection and not data.rejection_reason_letters and not data.dp_missing_qty %}
-      <span style="color:#fb8c00;font-weight:500;white-space:nowrap;margin-left:6px;">
+      <span style="color:#fb8c00;font-weight:500;white-space:pre-wrap;margin-left:6px;">
         Lot Rejection
       </span>
     {% endif %}
   </div>
 </td>
-                                        <td style="max-width:250px;">
+                                        <td>
                       {% if data.lot_rejected_comment %}
-                        <span style="color:#fb8c00;font-weight:500;max-width:200px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ data.lot_rejected_comment }}">
-                          {{ data.lot_rejected_comment|truncatechars:50 }}
+                        <span style="color:#fb8c00;font-weight:500;white-space:pre-wrap;">
+                          {{ data.lot_rejected_comment }}
                         </span>
                       {% else %}
                         <span style="color:#aaa;">-</span>

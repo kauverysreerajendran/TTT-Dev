@@ -2,323 +2,9 @@
 {% load stock_filters %} 
 
 <style>
-  /* ✅ CRITICAL CSS: IQF Rejection Modal Styles (Fixed UI Collapse) */
-.iqf-rejection-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.4) !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  z-index: 10000 !important;
-  opacity: 0 !important;
-  visibility: hidden !important;
-  transition: opacity 0.3s ease, visibility 0.3s ease !important;
-  padding: 20px !important;
-  overflow-y: auto !important;
-}
-
-.iqf-rejection-modal-overlay.active {
-  opacity: 1 !important;
-  visibility: visible !important;
-}
-
-.iqf-rejection-modal-container {
-  background: white !important;
-  border-radius: 16px !important;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3) !important;
-  width: 100% !important;
-  max-width: 1000px !important;
-  max-height: 90vh !important;
-  display: flex !important;
-  flex-direction: column !important;
-  animation: slideIn 0.3s ease !important;
-}
-
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateY(-50px);
+  .iqf-rejection-modal-overlay {
+    z-index: 9999 !important;
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.iqf-rejection-modal-header {
-  padding: 24px !important;
-  border-bottom: 2px solid #f0f0f0 !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: space-between !important;
-  flex-shrink: 0 !important;
-  background: linear-gradient(135deg, #f5f7fa 0%, #ffffff 100%) !important;
-  border-radius: 16px 16px 0 0 !important;
-}
-
-.iqf-rejection-modal-title {
-  margin: 0 !important;
-  color: #1a237e !important;
-  font-size: 22px !important;
-  font-weight: 700 !important;
-}
-
-.iqf-rejection-model-badge {
-  background: linear-gradient(135deg, #028084 0%, #015c58 100%) !important;
-  color: white !important;
-  padding: 8px 16px !important;
-  border-radius: 8px !important;
-  font-weight: 600 !important;
-  font-size: 14px !important;
-}
-
-.iqf-rejection-modal-close {
-  background: none !important;
-  border: none !important;
-  font-size: 28px !important;
-  color: #bbb !important;
-  cursor: pointer !important;
-  padding: 0 !important;
-  width: 40px !important;
-  height: 40px !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  transition: all 0.3s ease !important;
-  border-radius: 50% !important;
-}
-
-.iqf-rejection-modal-close:hover {
-  background: #f0f0f0 !important;
-  color: #d32f2f !important;
-  transform: scale(1.1) !important;
-}
-
-.iqf-rejection-modal-body {
-  flex: 1 !important;
-  overflow-y: auto !important;
-  padding: 24px !important;
-  background: white !important;
-}
-
-.iqf-rejection-modal-body::-webkit-scrollbar {
-  width: 8px !important;
-}
-
-.iqf-rejection-modal-body::-webkit-scrollbar-track {
-  background: #f1f1f1 !important;
-  border-radius: 10px !important;
-}
-
-.iqf-rejection-modal-body::-webkit-scrollbar-thumb {
-  background: #bbb !important;
-  border-radius: 10px !important;
-}
-
-.iqf-rejection-modal-body::-webkit-scrollbar-thumb:hover {
-  background: #888 !important;
-}
-
-.iqf-rejection-modal-footer {
-  padding: 16px 24px !important;
-  border-top: 1px solid #f0f0f0 !important;
-  display: flex !important;
-  gap: 12px !important;
-  justify-content: flex-end !important;
-  flex-shrink: 0 !important;
-  background: #fafafa !important;
-  border-radius: 0 0 16px 16px !important;
-}
-
-.iqf-modal-btn {
-  padding: 10px 24px !important;
-  border: none !important;
-  border-radius: 8px !important;
-  font-size: 14px !important;
-  font-weight: 600 !important;
-  cursor: pointer !important;
-  display: flex !important;
-  align-items: center !important;
-  gap: 8px !important;
-  transition: all 0.3s ease !important;
-}
-
-.iqf-modal-btn.draft {
-  background: #007bff !important;
-  color: white !important;
-}
-
-.iqf-modal-btn.draft:hover {
-  background: #0056b3 !important;
-  transform: translateY(-2px) !important;
-  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3) !important;
-}
-
-.iqf-modal-btn.proceed {
-  background: #28a745 !important;
-  color: white !important;
-}
-
-.iqf-modal-btn.proceed:hover {
-  background: #218838 !important;
-  transform: translateY(-2px) !important;
-  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3) !important;
-}
-
-.iqf-modal-btn.cancel {
-  background: #6c757d !important;
-  color: white !important;
-}
-
-.iqf-modal-btn.cancel:hover {
-  background: #5a6268 !important;
-  transform: translateY(-2px) !important;
-  box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3) !important;
-}
-
-.iqf-qty-info-bar {
-  display: flex !important;
-  gap: 20px !important;
-  margin-bottom: 24px !important;
-  padding: 20px !important;
-  background: linear-gradient(135deg, #f5f7fa 0%, #fffbf0 100%) !important;
-  border-radius: 12px !important;
-  border: 2px solid #e0e0e0 !important;
-}
-
-.iqf-qty-item {
-  flex: 1 !important;
-  display: flex !important;
-  align-items: center !important;
-  gap: 12px !important;
-  padding: 12px 16px !important;
-  background: white !important;
-  border-radius: 8px !important;
-  border-left: 4px solid #028084 !important;
-}
-
-.iqf-qty-item.rw {
-  border-left-color: #e67e22 !important;
-}
-
-.iqf-qty-item.missing {
-  border-left-color: #d32f2f !important;
-}
-
-.iqf-qty-item.physical {
-  border-left-color: #388e3c !important;
-}
-
-.iqf-qty-item i {
-  font-size: 18px !important;
-  color: #666 !important;
-}
-
-.iqf-qty-label {
-  font-size: 12px !important;
-  color: #666 !important;
-  text-transform: uppercase !important;
-  font-weight: 600 !important;
-  letter-spacing: 0.5px !important;
-}
-
-.iqf-qty-value {
-  font-size: 20px !important;
-  font-weight: 700 !important;
-  color: #1a237e !important;
-}
-
-.iqf-section-header {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: space-between !important;
-  margin: 20px 0 16px 0 !important;
-  padding: 12px 16px !important;
-  background: #f5f5f5 !important;
-  border-left: 4px solid #028084 !important;
-  border-radius: 4px !important;
-}
-
-.iqf-section-title {
-  margin: 0 !important;
-  color: #1a237e !important;
-  font-size: 16px !important;
-  font-weight: 700 !important;
-  display: flex !important;
-  align-items: center !important;
-  gap: 10px !important;
-}
-
-.iqf-lot-rejection-toggle {
-  display: flex !important;
-  align-items: center !important;
-  gap: 8px !important;
-}
-
-.iqf-lot-rejection-toggle label {
-  margin: 0 !important;
-  font-weight: 600 !important;
-  color: #666 !important;
-  cursor: pointer !important;
-}
-
-#rejection-reasons-section {
-  border: 2px solid #dee2e6 !important;
-  border-radius: 12px !important;
-  background: white !important;
-  overflow: hidden !important;
-}
-
-#accepted-tray-table-container {
-  margin-top: 12px !important;
-  border: 1px solid #dee2e6 !important;
-  border-radius: 6px !important;
-  background: white !important;
-  overflow: hidden !important;
-}
-
-#acceptanceRemarksSection,
-#lotRejectionRemarksSection {
-  border: 2px solid #dee2e6 !important;
-  border-radius: 12px !important;
-  padding: 20px !important;
-  background: #f8fafb !important;
-  margin: 16px 0 !important;
-}
-
-/* Make sure table doesn't break the modal layout */
-#order-listing,
-.table {
-  width: 100% !important;
-  margin-bottom: 0 !important;
-}
-
-/* Prevent modal from collapsing on content updates */
-.iqf-rejection-modal-body {
-  min-height: 400px !important;
-}
-
-/* Ensure modals are always on top */
-.iqf-rejection-modal-overlay,
-#trayScanModal_DayPlanning,
-#delinkModal,
-#iqfRejectionModalOverlay {
-  z-index: 10000 !important;
-}
-
-/* Override any conflicting table styles inside modal */
-.iqf-rejection-modal-body .table thead th {
-  background-color: #028084 !important;
-  color: white !important;
-}
-
-.iqf-rejection-modal-body .table tbody tr:hover {
-  background-color: #f8f9fa !important;
-}
 /* ========== Modal Display Control ========== */
 /* Hide tray scan modals by default */
 #trayScanModal_DayPlanning {
@@ -1133,64 +819,6 @@
 /* ========================================
    END IQF REJECTION MODAL RESPONSIVE STYLES
    ======================================== */
-
-/* ✅ IQF Confirmation Modal Styles */
-.iqf-confirmation-modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1050;
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.3s ease, visibility 0.3s ease;
-}
-
-.iqf-confirmation-modal.open {
-  opacity: 1;
-  visibility: visible;
-}
-
-.iqf-confirmation-modal-content {
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-  max-width: 600px;
-  width: 90%;
-  max-height: 80vh;
-  overflow-y: auto;
-  position: relative;
-  padding: 20px;
-}
-
-.iqf-confirmation-modal-close {
-  position: absolute;
-  top: 10px;
-  right: 15px;
-  font-size: 24px;
-  cursor: pointer;
-  color: #aaa;
-}
-
-.iqf-confirmation-modal-close:hover {
-  color: #000;
-}
-
-/* ✅ IQF Modal Alert Styles - Center Screen */
-.iqf-modal-alert {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 10002;
-  min-width: 400px;
-  max-width: 600px;
-}
 </style>
 
 <div class="content-wrapper">
@@ -1934,10 +1562,10 @@
                   </div>
                 </div>
               </div>
-              <!-- IQF Confirmation Modal (Right Popup) -->
-              <div id="newPopupModal" class="iqf-confirmation-modal">
-                <div class="iqf-confirmation-modal-content">
-                  <span id="closeNewPopupModal" class="iqf-confirmation-modal-close">&times;</span>
+              <!-- New Popup Modal (Right Popup) -->
+              <div id="newPopupModal" class="new-popup-modal">
+                <div class="tray-scan-modal-content">
+                  <span id="closeNewPopupModal" class="tray-scan-close">&times;</span>
                   <!-- New top header container: title + user profile aligned left -->
                   <div
                     class="modal-top-header"
@@ -2021,7 +1649,327 @@
             
            
           </div>
-         <!-- Pagination Section -->
+   <!-- ✅ CRITICAL CSS: IQF Rejection Modal Styles (Fixed UI Collapse) -->
+<style nonce="{{ csp_nonce }}">
+.iqf-rejection-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 10000 !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  transition: opacity 0.3s ease, visibility 0.3s ease !important;
+  padding: 20px !important;
+  overflow-y: auto !important;
+}
+
+.iqf-rejection-modal-overlay.active {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.iqf-rejection-modal-container {
+  background: white !important;
+  border-radius: 16px !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3) !important;
+  width: 100% !important;
+  max-width: 1000px !important;
+  max-height: 90vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  animation: slideIn 0.3s ease !important;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-50px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.iqf-rejection-modal-header {
+  padding: 24px !important;
+  border-bottom: 2px solid #f0f0f0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  flex-shrink: 0 !important;
+  background: linear-gradient(135deg, #f5f7fa 0%, #ffffff 100%) !important;
+  border-radius: 16px 16px 0 0 !important;
+}
+
+.iqf-rejection-modal-title {
+  margin: 0 !important;
+  color: #1a237e !important;
+  font-size: 22px !important;
+  font-weight: 700 !important;
+}
+
+.iqf-rejection-model-badge {
+  background: linear-gradient(135deg, #028084 0%, #015c58 100%) !important;
+  color: white !important;
+  padding: 8px 16px !important;
+  border-radius: 8px !important;
+  font-weight: 600 !important;
+  font-size: 14px !important;
+}
+
+.iqf-rejection-modal-close {
+  background: none !important;
+  border: none !important;
+  font-size: 28px !important;
+  color: #bbb !important;
+  cursor: pointer !important;
+  padding: 0 !important;
+  width: 40px !important;
+  height: 40px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: all 0.3s ease !important;
+  border-radius: 50% !important;
+}
+
+.iqf-rejection-modal-close:hover {
+  background: #f0f0f0 !important;
+  color: #d32f2f !important;
+  transform: scale(1.1) !important;
+}
+
+.iqf-rejection-modal-body {
+  flex: 1 !important;
+  overflow-y: auto !important;
+  padding: 24px !important;
+  background: white !important;
+}
+
+.iqf-rejection-modal-body::-webkit-scrollbar {
+  width: 8px !important;
+}
+
+.iqf-rejection-modal-body::-webkit-scrollbar-track {
+  background: #f1f1f1 !important;
+  border-radius: 10px !important;
+}
+
+.iqf-rejection-modal-body::-webkit-scrollbar-thumb {
+  background: #bbb !important;
+  border-radius: 10px !important;
+}
+
+.iqf-rejection-modal-body::-webkit-scrollbar-thumb:hover {
+  background: #888 !important;
+}
+
+.iqf-rejection-modal-footer {
+  padding: 16px 24px !important;
+  border-top: 1px solid #f0f0f0 !important;
+  display: flex !important;
+  gap: 12px !important;
+  justify-content: flex-end !important;
+  flex-shrink: 0 !important;
+  background: #fafafa !important;
+  border-radius: 0 0 16px 16px !important;
+}
+
+.iqf-modal-btn {
+  padding: 10px 24px !important;
+  border: none !important;
+  border-radius: 8px !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  transition: all 0.3s ease !important;
+}
+
+.iqf-modal-btn.draft {
+  background: #007bff !important;
+  color: white !important;
+}
+
+.iqf-modal-btn.draft:hover {
+  background: #0056b3 !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3) !important;
+}
+
+.iqf-modal-btn.proceed {
+  background: #28a745 !important;
+  color: white !important;
+}
+
+.iqf-modal-btn.proceed:hover {
+  background: #218838 !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3) !important;
+}
+
+.iqf-modal-btn.cancel {
+  background: #6c757d !important;
+  color: white !important;
+}
+
+.iqf-modal-btn.cancel:hover {
+  background: #5a6268 !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3) !important;
+}
+
+.iqf-qty-info-bar {
+  display: flex !important;
+  gap: 20px !important;
+  margin-bottom: 24px !important;
+  padding: 20px !important;
+  background: linear-gradient(135deg, #f5f7fa 0%, #fffbf0 100%) !important;
+  border-radius: 12px !important;
+  border: 2px solid #e0e0e0 !important;
+}
+
+.iqf-qty-item {
+  flex: 1 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  padding: 12px 16px !important;
+  background: white !important;
+  border-radius: 8px !important;
+  border-left: 4px solid #028084 !important;
+}
+
+.iqf-qty-item.rw {
+  border-left-color: #e67e22 !important;
+}
+
+.iqf-qty-item.missing {
+  border-left-color: #d32f2f !important;
+}
+
+.iqf-qty-item.physical {
+  border-left-color: #388e3c !important;
+}
+
+.iqf-qty-item i {
+  font-size: 18px !important;
+  color: #666 !important;
+}
+
+.iqf-qty-label {
+  font-size: 12px !important;
+  color: #666 !important;
+  text-transform: uppercase !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.5px !important;
+}
+
+.iqf-qty-value {
+  font-size: 20px !important;
+  font-weight: 700 !important;
+  color: #1a237e !important;
+}
+
+.iqf-section-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  margin: 20px 0 16px 0 !important;
+  padding: 12px 16px !important;
+  background: #f5f5f5 !important;
+  border-left: 4px solid #028084 !important;
+  border-radius: 4px !important;
+}
+
+.iqf-section-title {
+  margin: 0 !important;
+  color: #1a237e !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+}
+
+.iqf-lot-rejection-toggle {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+.iqf-lot-rejection-toggle label {
+  margin: 0 !important;
+  font-weight: 600 !important;
+  color: #666 !important;
+  cursor: pointer !important;
+}
+
+#rejection-reasons-section {
+  border: 2px solid #dee2e6 !important;
+  border-radius: 12px !important;
+  background: white !important;
+  overflow: hidden !important;
+}
+
+#accepted-tray-table-container {
+  margin-top: 12px !important;
+  border: 1px solid #dee2e6 !important;
+  border-radius: 6px !important;
+  background: white !important;
+  overflow: hidden !important;
+}
+
+#acceptanceRemarksSection,
+#lotRejectionRemarksSection {
+  border: 2px solid #dee2e6 !important;
+  border-radius: 12px !important;
+  padding: 20px !important;
+  background: #f8fafb !important;
+  margin: 16px 0 !important;
+}
+
+/* Make sure table doesn't break the modal layout */
+#order-listing,
+.table {
+  width: 100% !important;
+  margin-bottom: 0 !important;
+}
+
+/* Prevent modal from collapsing on content updates */
+.iqf-rejection-modal-body {
+  min-height: 400px !important;
+}
+
+/* Ensure modals are always on top */
+.iqf-rejection-modal-overlay,
+#trayScanModal_DayPlanning,
+#delinkModal,
+#iqfRejectionModalOverlay {
+  z-index: 10000 !important;
+}
+
+/* Override any conflicting table styles inside modal */
+.iqf-rejection-modal-body .table thead th {
+  background-color: #028084 !important;
+  color: white !important;
+}
+
+.iqf-rejection-modal-body .table tbody tr:hover {
+  background-color: #f8f9fa !important;
+}
+</style>
+
+      <!-- Pagination Section -->
 
             <div class="pagination-wrapper">
               <nav aria-label="Page navigation">
@@ -3114,34 +3062,6 @@ function showNotification(message, type = 'success') {
   }, 3000);
 }
 
-// ✅ IQF Modal Alert Functions
-function showIQFModalAlert(message, type = 'warning') {
-  const alertDiv = document.getElementById('iqf-modal-alert');
-  const messageSpan = document.getElementById('iqf-alert-message');
-  
-  if (alertDiv && messageSpan) {
-    messageSpan.textContent = message;
-    
-    // Update alert type
-    const alertElement = alertDiv.querySelector('.alert');
-    alertElement.className = `alert alert-${type} alert-dismissible fade show`;
-    
-    alertDiv.style.display = 'block';
-    
-    // Auto-hide after 5 seconds
-    setTimeout(() => {
-      hideIQFModalAlert();
-    }, 5000);
-  }
-}
-
-function hideIQFModalAlert() {
-  const alertDiv = document.getElementById('iqf-modal-alert');
-  if (alertDiv) {
-    alertDiv.style.display = 'none';
-  }
-}
-
 // ✅ EXISTING CODE STARTS HERE - KEEPING ALL ORIGINAL FUNCTIONALITY
 document.addEventListener("DOMContentLoaded", () => {
   const trayScanLinks = document.querySelectorAll(".tray-scan-btn");
@@ -3370,10 +3290,8 @@ async function calculateOptimalRejectionDistribution(allRemainingTrays, lotId) {
 
   if (availableTrayIds.length === 0) {
     return {
-      success: true,
-      distributedTrays: [],
-      iqfRejectionQty: 0,
-      totalDistributed: 0
+      success: false,
+      error: 'No tray IDs available for rejection verification after delink exclusions'
     };
   }
   
@@ -4057,7 +3975,7 @@ async function renderModalWithOptimalDistribution(allRemainingTrays, allComments
     <div id="acceptedTrayMsg" style="margin-top: 10px; text-align: center; font-weight: bold;"></div>
   `;
   
-  document.querySelector("#newPopupModal .iqf-confirmation-modal-content").innerHTML = html;
+  document.querySelector("#newPopupModal .tray-scan-modal-content").innerHTML = html;
   newPopupModal.classList.add("open");
   
   console.log('✅ Right popup rendered with model no:', displayModelNo);
@@ -5190,14 +5108,6 @@ function buildRejectionFormHTML(detailsDiv, stockLotId, batchId, hasLotRejection
   }
 
   modalOverlay.innerHTML = `
-    <!-- Alert Notification -->
-    <div id="iqf-modal-alert" class="iqf-modal-alert" style="display: none;">
-      <div class="alert alert-warning alert-dismissible fade show" role="alert">
-        <strong>Warning!</strong> <span id="iqf-alert-message">This is a warning message.</span>
-        <button type="button" class="btn-close" onclick="hideIQFModalAlert()"></button>
-      </div>
-    </div>
-
     <div class="iqf-rejection-modal-container">
       <!-- Modal Header -->
       <div class="iqf-rejection-modal-header">
@@ -5218,36 +5128,36 @@ function buildRejectionFormHTML(detailsDiv, stockLotId, batchId, hasLotRejection
         ${draftIndicator}
         
         <!-- Quantity Info Bar -->
-        <div class="iqf-qty-info-bar">
+        <div class="iqf-qty-info-bar" style="margin: 0 0 24px 0 !important;">
           <div class="iqf-qty-item rw">
-            <i class="fa fa-box"></i>
+            <i class="fa fa-box" style="font-size: 18px !important;"></i>
             <div>
               <div class="iqf-qty-label">RW Qty</div>
-              <div class="iqf-qty-value" id="modalLotQty">${displayLotQty}</div>
+              <div class="iqf-qty-value" id="modalLotQty" style="color: #e67e22 !important;">${displayLotQty}</div>
             </div>
           </div>
           <div class="iqf-qty-item missing">
-            <i class="fa fa-exclamation-triangle"></i>
+            <i class="fa fa-exclamation-triangle" style="font-size: 18px !important;"></i>
             <div>
               <div class="iqf-qty-label">Missing Qty</div>
-              <div class="iqf-qty-value" id="modalMissingQty">${displayMissingQty}</div>
+              <div class="iqf-qty-value" id="modalMissingQty" style="color: #d32f2f !important;">${displayMissingQty}</div>
             </div>
           </div>
           <div class="iqf-qty-item physical">
-            <i class="fa fa-check-circle"></i>
+            <i class="fa fa-check-circle" style="font-size: 18px !important;"></i>
             <div>
               <div class="iqf-qty-label">Physical Qty</div>
-              <div class="iqf-qty-value" id="modalPhysicalQty">${displayPhysicalQty}</div>
+              <div class="iqf-qty-value" id="modalPhysicalQty" style="color: #388e3c !important;">${displayPhysicalQty}</div>
             </div>
           </div>
         </div>
 
         <!-- Loading Indicator -->
-        <div class="d-flex justify-content-center align-items-center" style="padding: 50px;">
-          <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+        <div class="d-flex justify-content-center align-items-center" style="padding: 60px 20px; min-height: 400px; display: flex !important; flex-direction: column !important; gap: 20px !important;">
+          <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem; border-width: 0.3em !important;">
             <span class="sr-only">Loading...</span>
           </div>
-          <span style="margin-left: 15px; font-size: 16px; color: #6c757d; font-weight: 500;">Loading tray capacity and rejection data...</span>
+          <span style="margin: 0 !important; font-size: 16px; color: #6c757d; font-weight: 500; text-align: center; max-width: 300px;">Loading tray capacity and rejection data...</span>
         </div>
       </div>
 
@@ -5269,13 +5179,22 @@ function buildRejectionFormHTML(detailsDiv, stockLotId, batchId, hasLotRejection
     </div>
   `;
 
-  // Show the modal
-  modalOverlay.classList.add('active');
+  // Ensure modal overlay is visible
+  modalOverlay.style.display = 'flex' !important;
+  modalOverlay.setAttribute('style', modalOverlay.getAttribute('style') + '; display: flex !important;');
+  
+  // Show the modal with delay to ensure DOM is ready
+  setTimeout(() => {
+    modalOverlay.classList.add('active');
+    console.log('✅ Modal overlay activated');
+  }, 50);
 
   // Close button handler
   document.getElementById('iqfModalCloseBtn').addEventListener('click', function() {
     modalOverlay.classList.remove('active');
-    window.location.reload();
+    setTimeout(() => {
+      window.location.reload();
+    }, 200);
   });
 
   // Click outside to close
@@ -5555,7 +5474,6 @@ function buildRejectionFormHTML(detailsDiv, stockLotId, batchId, hasLotRejection
                 type="number"
                 min="0"
                 max="${brassQty > 0 ? brassQty : ''}"
-                value="0"
                 class="form-control rejection-qty-input"
                 name="quantity_${index + 1}"
                 style="width: 100%; max-width: 70px; height: 32px; padding: 4px 8px; font-size: 13px; text-align: center; border: 2px solid #028084; border-radius: 6px; font-weight: 700; transition: all 0.3s ease; background-color: #fff; color: #028084; box-shadow: inset 0 1px 3px rgba(0,0,0,0.08);"
@@ -7501,7 +7419,7 @@ function handleTrayWiseRejectionWithAcceptance(batchId, stockLotId, msgDiv, proc
   const acceptanceRemarksInput = document.getElementById('acceptanceRemarksInput');
   const acceptanceRemarks = acceptanceRemarksInput ? acceptanceRemarksInput.value.trim() : '';
   
-  if (false && !isFullLotRejection && !acceptanceRemarks) {
+  if (!isFullLotRejection && !acceptanceRemarks) {
     if (msgDiv) {
       msgDiv.style.color = "#d32f2f";
       msgDiv.textContent = "Acceptance remarks are required for partial rejection.";
