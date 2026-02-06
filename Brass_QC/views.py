@@ -2811,11 +2811,8 @@ def get_brass_qc_tray_details_for_modal(request):
             trays = BrassTrayId.objects.filter(lot_id=lot_id).order_by('-top_tray', 'tray_quantity')
             for tray in trays:
                 if tray.rejected_tray:
-                    rejected_trays.append({
-                        'tray_id': tray.tray_id,
-                        'tray_quantity': tray.tray_quantity or 0,
-                        'rejection_reason': 'Rejected'
-                    })
+                    # Skip rejected trays
+                    continue
                 else:
                     accepted_trays.append({
                         'tray_id': tray.tray_id,
@@ -3904,9 +3901,11 @@ def brass_view_tray_list(request):
         added_tray_ids = set()
 
         # Include rejected trays from Input Screening if any
-        rejected_trays = IP_Rejected_TrayScan.objects.filter(lot_id=lot_id).order_by('id')
+        # (IP Rejections are always relevant as they are pre-Brass QC)
+        # rejected_trays = IP_Rejected_TrayScan.objects.filter(lot_id=lot_id).order_by('id')
+        rejected_trays = [] # Filtered out as per requirement
         rejected_count = 0
-        print(f"   🔍 [IP Rejected] Found {rejected_trays.count()} IP rejected trays for lot {lot_id}")
+        print(f"   🔍 [IP Rejected] Found {len(rejected_trays)} IP rejected trays for lot {lot_id}")
         for tray in rejected_trays:
             tray_id = tray.rejected_tray_id or ''
             
@@ -3952,11 +3951,14 @@ def brass_view_tray_list(request):
         brass_rejected_scans = Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id).order_by('id')
         
         # Check if we have any rejected trays from any source
-        has_brass_rejection = (brass_rejected_trays_brass.exists() or 
-                              brass_rejected_trays_trayid.exists() or 
-                              brass_rejected_scans.exists())
+        has_brass_rejection = False # Force false to skip showing rejected trays
+        # has_brass_rejection = (brass_rejected_trays_brass.exists() or 
+        #                       brass_rejected_trays_trayid.exists() or 
+        #                       brass_rejected_scans.exists())
         
-        if has_brass_rejection:
+        # ✅ FIXED: Only show Brass Rejected trays if NOT Partial Rejection (or if Full Rejection)
+        # If Partial Rejection, user wants to see Accepted Trays (Available stock).
+        if has_brass_rejection and not is_partial_rejection:
             print(f"✅ [BRASS LOT REJECTION] Found brass rejected trays for lot {lot_id}")
             print(f"   - BrassTrayId count: {brass_rejected_trays_brass.count()}")
             print(f"   - TrayId count: {brass_rejected_trays_trayid.count()}")
@@ -5573,6 +5575,15 @@ class PickTrayIdList_Complete_APIView(APIView):
                 )
                 tray_model_used = 'IPTrayId'
             tray_model_used = 'IPTrayId'
+
+        # ✅ FIXED: Global exclusion of rejected trays (Robust Filter)
+        # Ensure we don't show any trays that are rejected in Brass QC, regardless of the source model
+        rejected_scan_ids = Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id).values_list('rejected_tray_id', flat=True)
+        rejected_flag_ids = TrayId.objects.filter(lot_id=lot_id, brass_rejected_tray=True).values_list('tray_id', flat=True)
+        
+        if base_queryset is not None:
+             base_queryset = base_queryset.exclude(tray_id__in=rejected_scan_ids).exclude(tray_id__in=rejected_flag_ids)
+             print(f"🔧 [PickTrayIdList_Complete_APIView] Applied robust rejection filter. Excluded {len(rejected_scan_ids)} scan rejections and {len(rejected_flag_ids)} flag rejections.")
 
         print(f"✅ [PickTrayIdList_Complete_APIView] Using {tray_model_used} model")
         print(f"Flags: send_brass_qc={send_brass_qc}, send_brass_audit_to_qc={send_brass_audit_to_qc}")
