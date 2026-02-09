@@ -4387,6 +4387,16 @@ def reject_check_tray_id_simple(request):
                     'exists': False, 'valid_for_rejection': False,
                     'error': 'Tray already rejected', 'status_message': 'Already Rejected'
                 })
+            
+            # ✅ FIX: Check if tray is already occupied in another lot
+            other_lot_tray = IPTrayId.objects.filter(tray_id=tray_id).exclude(lot_id=current_lot_id).first()
+            if other_lot_tray:
+                return JsonResponse({
+                    'exists': False, 'valid_for_rejection': False,
+                    'error': f'Tray {tray_id} is already occupied in another lot ({other_lot_tray.lot_id})',
+                    'status_message': 'Occupied in Another Lot'
+                })
+            
             # Allow existing tray from other lot for rejection
             return JsonResponse({
                 'exists': True,
