@@ -122,7 +122,7 @@ class BrassAuditPickTableView(APIView):
         ).exclude(
             # Exclude completed few cases lots that are not on hold
             Q(brass_audit_few_cases_accptance=True, brass_audit_onhold_picking=False)
-        )
+        ).distinct()  # ✅ FIX: Prevent duplicate rows when lot matches multiple OR conditions
         
         # Apply sorting if requested
         if sort and sort in sort_field_mapping:
@@ -1217,10 +1217,11 @@ class BAuditBatchRejectionAPIView(APIView):
                 # Fallback to original method
                 transfer_brass_audit_rejections_to_brass_qc(lot_id, request.user, batch_rejection=True, lot_comment=lot_rejected_comment)
             
-            # Set send_brass_qc=True to send accepted trays back to Brass QC
-            total_stock.send_brass_qc = True
+            # ✅ FIX: Do NOT set send_brass_qc=True here. 
+            # The send_brass_audit_to_qc=True flag (set above) is sufficient to show the lot in Brass QC pick table.
+            # Setting BOTH flags causes duplication because BrassPickTableView has OR conditions for both.
             total_stock.last_process_date_time = timezone.now()
-            total_stock.save(update_fields=['send_brass_qc', 'last_process_date_time'])
+            total_stock.save(update_fields=['last_process_date_time'])
             
                         # ✅ REMOVED: Redundant creation of new lot. 
             # The original lot is already sent back to Brass QC via send_brass_audit_back_to_brass_qc.
