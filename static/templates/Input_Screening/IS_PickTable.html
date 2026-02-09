@@ -4029,62 +4029,63 @@ function handleDraftSave() {
      });
    }
    
-   // ✅ REDO BUTTON HANDLER
-   const redoBtn = document.getElementById("trayQtyRedoBtn");
-   if (redoBtn && validateInput) {
-     redoBtn.addEventListener('click', async function () {
-       // 1. Call backend to reset verification for this lot
-       const modal = document.getElementById("trayScanModal_DayPlanning");
-       const lotId = modal && modal.stockLotId ? modal.stockLotId : (window.getCurrentLotId && window.getCurrentLotId());
-       if (!lotId) return;
-
-       // Disable redo button to prevent double clicks
-       redoBtn.disabled = true;
-
-       try {
-         // Call backend to reset verification
-         await fetch('/inputscreening/reset_tray_verification_for_lot/', {
-           method: 'POST',
-           headers: {
-             'X-CSRFToken': (window.getCookie && window.getCookie('csrftoken')) || ''
-           },
-           body: JSON.stringify({ lot_id: lotId })
-         });
-
-         // 2. Fetch updated verification status
-         const verifyResp = await fetch(`/inputscreening/get_tray_verification_status/?lot_id=${encodeURIComponent(lotId)}`);
-         const verifyResult = await verifyResp.json();
-         let verificationData = {};
-         if (verifyResult.success) {
-           verificationData = verifyResult.verification_data;
-         }
-
-         // 3. Update modal's verificationData and rebuild table
-         if (modal) {
-           modal.verificationData = verificationData;
-           // Rebuild the table to reflect "Not verified" status
-           if (typeof modal.buildTableHTML === "function") {
-             const detailsDiv = document.getElementById("trayScanDetails_DayPlanning");
-             if (detailsDiv) {
-               detailsDiv.innerHTML = modal.buildTableHTML(false);
-             }
-           }
-         }
-
-         // 4. Visually update all status indicators to "Not verified"
-         document.querySelectorAll('.tray-verified-indicator').forEach(function (el) {
-           el.textContent = '⏳ Not Verified';
-           el.classList.remove('verified');
-           el.classList.add('not-verified');
-         });
-
-       } catch (err) {
-         console.error('Redo failed:', err);
-       } finally {
-         redoBtn.disabled = false;
-       }
-     });
-   }
+    // ✅ REDO BUTTON HANDLER
+    const redoBtn = document.getElementById("trayQtyRedoBtn");
+    if (redoBtn && validateInput) {
+      redoBtn.addEventListener('click', async function () {
+        // 1. Call backend to reset verification for this lot
+        const modal = document.getElementById("trayScanModal_DayPlanning");
+        const lotId = modal && modal.stockLotId ? modal.stockLotId : (window.getCurrentLotId && window.getCurrentLotId());
+        if (!lotId) return;
+    
+        // Disable redo button to prevent double clicks
+        redoBtn.disabled = true;
+    
+        try {
+          // Call backend to reset verification
+          await fetch('/inputscreening/reset_tray_verification_for_lot/', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': (window.getCookie && window.getCookie('csrftoken')) || ''
+            },
+            body: JSON.stringify({ lot_id: lotId })
+          });
+    
+          // 2. Fetch updated verification status
+          const verifyResp = await fetch(`/inputscreening/get_tray_verification_status/?lot_id=${encodeURIComponent(lotId)}`);
+          const verifyResult = await verifyResp.json();
+          let verificationData = {};
+          if (verifyResult.success) {
+            verificationData = verifyResult.verification_data;
+          }
+    
+          // 3. Update modal's verificationData and rebuild table
+          if (modal) {
+            modal.verificationData = verificationData;
+            // Rebuild the table to reflect "Not verified" status
+            if (typeof modal.buildTableHTML === "function") {
+              const detailsDiv = document.getElementById("trayScanDetails_DayPlanning");
+              if (detailsDiv) {
+                detailsDiv.innerHTML = modal.buildTableHTML(false);
+              }
+            }
+          }
+    
+          // 4. Visually update all status indicators to "Not verified"
+          document.querySelectorAll('.tray-verified-indicator').forEach(function (el) {
+            el.textContent = '⏳ Not Verified';
+            el.classList.remove('verified');
+            el.classList.add('not-verified');
+          });
+    
+        } catch (err) {
+          console.error('Redo failed:', err);
+        } finally {
+          redoBtn.disabled = false;
+        }
+      });
+    }
    
      // ✅ QTY INPUT CHANGE HANDLER
      document.addEventListener('input', function (e) {

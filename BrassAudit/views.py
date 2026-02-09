@@ -1637,29 +1637,47 @@ def brass_audit_reject_check_tray_id_simple(request):
             # Validate tray capacity and rearrangement logic for existing tray
             tray_qty = brass_tray_obj.tray_quantity or 0
             tray_capacity = brass_tray_obj.tray_capacity or 0
-            remaining_in_tray = tray_qty - rejection_qty
+        
+            # ✅ Calculate effective tray quantity considering session allocations
+            try:
+                current_session_allocations = json.loads(request.GET.get('current_session_allocations', '[]'))
+            except Exception:
+                current_session_allocations = []
 
+            session_usage_for_current_tray = 0
+            for alloc in current_session_allocations:
+                if tray_id in alloc.get('tray_ids', []):
+                    session_usage_for_current_tray += int(alloc.get('qty', 0))
             
+            effective_tray_qty = max(0, tray_qty - session_usage_for_current_tray)
+            
+            remaining_in_tray = effective_tray_qty - rejection_qty
+
+            print(f"[Brass Audit Reject Validation] Existing tray analysis:")
+            print(f"  - tray_qty (DB): {tray_qty}")
+            print(f"  - session_usage: {session_usage_for_current_tray}")
+            print(f"  - effective_tray_qty: {effective_tray_qty}")
+            print(f"  - rejection_qty: {rejection_qty}")
+            print(f"  - remaining_in_tray: {remaining_in_tray}")
+
             # If some pieces will remain, check if they can fit in other trays
             if remaining_in_tray > 0:
-                other_trays = BrassAuditTrayId.objects.filter(
-                    lot_id=current_lot_id,
-                    tray_quantity__gt=0,
-                    rejected_tray=False
-                ).exclude(tray_id=tray_id)
+                # Use helper to check global availability
+                _, total_free_space = get_brass_audit_available_quantities_with_session_allocations(current_lot_id, current_session_allocations)
                 
-                available_space_in_other_trays = 0
-                for t in other_trays:
-                    current_qty = t.tray_quantity or 0
-                    max_capacity = t.tray_capacity or tray_capacity
-                    available_space_in_other_trays += max(0, max_capacity - current_qty)
-                
+                # Check available space in other trays (total free space - space in current tray)
+                current_tray_free_space = max(0, tray_capacity - effective_tray_qty)
+                available_space_in_other_trays = max(0, total_free_space - current_tray_free_space)
+
                 if remaining_in_tray > available_space_in_other_trays:
                     return JsonResponse({
                         'exists': False,
                         'valid_for_rejection': False,
                         'error': f'Cannot reject: {remaining_in_tray} pieces will remain but only {available_space_in_other_trays} space available in other trays',
-                        'status_message': 'Need New Tray'
+                        'status_message': 'Need New Tray',
+                        'validation_type': 'existing_no_space',
+                        'remaining_in_tray': remaining_in_tray,
+                        'available_space_in_other_trays': available_space_in_other_trays
                     })
             
             # Validation passed for existing tray
@@ -5815,3 +5833,176 @@ def get_brass_audit_tray_details_for_modal(request):
 
     except Exception as e:
         return Response({'success': False, 'error': str(e)})
+
+
+# ✅ NEW: Helper functions for Brass Audit (adapted from Brass QC)
+
+def get_brass_audit_available_quantities_with_session_allocations(lot_id, current_session_allocations):
+    """
+    Calculate available tray quantities and ACTUAL free space for Brass Audit
+    """
+    try:
+        # Get original distribution and track free space separately
+        original_distribution = get_brass_audit_original_tray_distribution(lot_id)
+        original_capacities = get_brass_audit_tray_capacities_for_lot(lot_id)
+        
+        available_quantities = original_distribution.copy()
+        new_tray_usage_count = 0  # Track NEW tray usage for free space calculation
+        
+        print(f"[Brass Audit Session Validation] Starting with: {available_quantities}")
+        
+        # First, apply saved rejections
+        saved_rejections = Brass_Audit_Rejected_TrayScan.objects.filter(lot_id=lot_id).order_by('id')
+        
+        for rejection in saved_rejections:
+            rejected_qty = rejection.rejected_tray_quantity or 0
+            tray_id = rejection.rejected_tray_id
+            
+            if rejected_qty <= 0:
+                continue
+                
+            # Check if NEW tray by ID (generic check)
+            if tray_id and is_new_tray_by_id(tray_id):
+                new_tray_usage_count += 1
+                available_quantities = brass_audit_reduce_quantities_optimally(available_quantities, rejected_qty, is_new_tray=True)
+            else:
+                available_quantities = brass_audit_reduce_quantities_optimally(available_quantities, rejected_qty, is_new_tray=False)
+        
+        # Then, apply current session allocations
+        for allocation in current_session_allocations:
+            try:
+                qty = int(allocation.get('qty', 0))
+                tray_ids = allocation.get('tray_ids', [])
+                
+                if qty <= 0:
+                    continue
+                
+                is_new_tray_used = False
+                if tray_ids:
+                    for tray_id in tray_ids:
+                        if tray_id and is_new_tray_by_id(tray_id):
+                            is_new_tray_used = True
+                            break
+                
+                if is_new_tray_used:
+                    new_tray_usage_count += 1
+                    available_quantities = brass_audit_reduce_quantities_optimally(available_quantities, qty, is_new_tray=True)
+                else:
+                    available_quantities = brass_audit_reduce_quantities_optimally(available_quantities, qty, is_new_tray=False)
+            except Exception as e:
+                print(f"[Brass Audit Session Validation] Error processing allocation: {e}")
+                continue
+        
+        # Calculate ACTUAL current free space
+        actual_free_space = 0
+        if len(available_quantities) <= len(original_capacities):
+            for i, qty in enumerate(available_quantities):
+                if i < len(original_capacities):
+                    capacity = original_capacities[i]
+                    actual_free_space += max(0, capacity - qty)
+        
+        return available_quantities, actual_free_space
+        
+    except Exception as e:
+        print(f"[Brass Audit Session Validation] Error: {e}")
+        return get_brass_audit_original_tray_distribution(lot_id), 0
+
+def get_brass_audit_original_tray_distribution(lot_id):
+    """
+    Get original tray quantity distribution for the lot in Brass Audit
+    """
+    try:
+        # Use BrassAuditTrayId
+        tray_objects = BrassAuditTrayId.objects.filter(lot_id=lot_id).exclude(
+            rejected_tray=True
+        ).order_by('date')
+        
+        if tray_objects.exists():
+            quantities = []
+            for tray in tray_objects:
+                tray_qty = getattr(tray, 'tray_quantity', 0)
+                if tray_qty and tray_qty > 0:
+                    quantities.append(tray_qty)
+            if quantities:
+                return quantities
+        
+        # Fallback from TotalStockModel
+        total_stock = TotalStockModel.objects.filter(lot_id=lot_id).first()
+        if total_stock and hasattr(total_stock, 'brass_audit_physical_qty') and total_stock.brass_audit_physical_qty:
+             # Assume standard capacity if unknown
+             return [12] * ceil(total_stock.brass_audit_physical_qty / 12)
+        
+        return []
+    except Exception as e:
+        print(f"[Brass Audit Orig Dist] Error: {e}")
+        return []
+
+def get_brass_audit_tray_capacities_for_lot(lot_id):
+    """
+    Get capabilities for Brass Audit trays
+    """
+    try:
+        tray_objects = BrassAuditTrayId.objects.filter(lot_id=lot_id).exclude(
+            rejected_tray=True
+        ).order_by('date')
+        
+        if tray_objects.exists():
+            capacities = []
+            for tray in tray_objects:
+                cap = getattr(tray, 'tray_capacity', 12) or 12
+                capacities.append(cap)
+            return capacities
+            
+        return [12] * 10 # Fallback
+    except Exception as e:
+        return [12] * 10
+
+def brass_audit_reduce_quantities_optimally(available_quantities, qty_to_reduce, is_new_tray=True):
+    """
+    Reduce quantities optimally for Brass Audit (Same logic as Brass QC)
+    """
+    quantities = available_quantities.copy()
+    remaining = qty_to_reduce
+    
+    if is_new_tray:
+        # Free up space from smallest trays first
+        sorted_indices = sorted(range(len(quantities)), key=lambda i: quantities[i])
+        for i in sorted_indices:
+            if remaining <= 0: break
+            current_qty = quantities[i]
+            if current_qty >= remaining:
+                quantities[i] = current_qty - remaining
+                remaining = 0
+            elif current_qty > 0:
+                remaining -= current_qty
+                quantities[i] = 0
+        return quantities
+    else:
+        # Consume from larger trays first
+        sorted_indices = sorted(range(len(quantities)), key=lambda i: quantities[i], reverse=True)
+        for i in sorted_indices:
+            if remaining <= 0: break
+            current_qty = quantities[i]
+            if current_qty > 0:
+                consume = min(remaining, current_qty)
+                quantities[i] -= consume
+                remaining -= consume
+        return quantities
+
+def is_new_tray_by_id(tray_id):
+    """
+    Check if a tray ID is considered 'new' (not part of the original lot)
+    """
+    try:
+        if not tray_id: return True
+        tray_obj = TrayId.objects.filter(tray_id=tray_id).first()
+        if not tray_obj: return True
+        
+        # If it has a lot_id, it is NOT new (it belongs to THAT lot)
+        if tray_obj.lot_id and str(tray_obj.lot_id).strip():
+            return False
+            
+        # No lot_id -> New tray or empty tray
+        return True
+    except:
+        return True

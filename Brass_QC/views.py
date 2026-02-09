@@ -2068,28 +2068,54 @@ def brass_reject_check_tray_id_simple(request):
         # Validate tray capacity and rearrangement logic for existing tray
         tray_qty = tray_obj.tray_quantity or 0
         tray_capacity = tray_obj.tray_capacity or 12
-        remaining_in_tray = tray_qty - rejection_qty
+
+        # ✅ Calculate effective tray quantity considering session allocations
+        session_usage_for_current_tray = 0
+        for alloc in current_session_allocations:
+            if tray_id in alloc.get('tray_ids', []):
+                session_usage_for_current_tray += int(alloc.get('qty', 0))
+        
+        effective_tray_qty = max(0, tray_qty - session_usage_for_current_tray)
+
+        remaining_in_tray = effective_tray_qty - rejection_qty
 
         print(f"[Brass QC Reject Validation] Existing tray analysis:")
-        print(f"  - adjusted_current_qty: {tray_qty}")
+        print(f"  - tray_qty (DB): {tray_qty}")
+        print(f"  - session_usage: {session_usage_for_current_tray}")
+        print(f"  - effective_tray_qty: {effective_tray_qty}")
         print(f"  - rejection_qty: {rejection_qty}")
         print(f"  - remaining_in_tray: {remaining_in_tray}")
 
         # Check rearrangement needs based on remaining pieces
         if remaining_in_tray > 0:
             # Pieces will remain in this tray - check if they can fit in other trays
-            other_trays = BrassTrayId.objects.filter(
-                lot_id=current_lot_id,
-                tray_quantity__gt=0,
-                rejected_tray=False
-            ).exclude(tray_id=tray_id)
+            # Use total free space from helper (calculated across ALL trays) minus space in THIS tray
+            # Wait! Helper returns 'actual_free_space' which is total capacity - total allocated good items
+            # It ALREADY accounts for sessionallocations on OTHER trays!
+            # But does it double count our current tray usage?
+            # Helper uses ALL session allocations. So 'actual_free_space' is correct global free space.
+            # However, if we move items OUT of current tray, we free up Space in Current Tray?
+            # No, we want to know if space exists in OTHER trays.
+            # Space in Other Trays = Total Free Space - (Free Space in Current Tray)
             
-            available_space_in_other_trays = 0
-            for t in other_trays:
-                current_qty = t.tray_quantity or 0
-                max_capacity = t.tray_capacity or tray_capacity
-                available_space_in_other_trays += max(0, max_capacity - current_qty)
+            # Helper returns `available_tray_quantities` and `actual_free_space`.
+            # Free Space in Current Tray = Capacity - Effective Qty.
             
+            # BUT wait, helper optimizes distribution!
+            # So `actual_free_space` is effectively simply: (Sum(Capacities) - Sum(EffectiveQtys)).
+            # This is the TOTAL room available in the system.
+            # If we want to move `remaining_in_tray` items to *other* places.
+            # We need `Total Free Space` >= `remaining_in_tray`.
+            # AND we can ignore the space *created* in current tray by moving them out? (No, we can't put them back in current tray).
+            # So `Total Free Space - (Capacity - Effective_Qty)` IS the space available elsewhere.
+            
+            # To be safe, calculate total free space manually from available_tray_quantities?
+            # No, helper returns `actual_free_space`. Assume it is correct.
+            _, total_free_space = get_brass_available_quantities_with_session_allocations(current_lot_id, current_session_allocations)
+            
+            current_tray_free_space = max(0, tray_capacity - effective_tray_qty)
+            available_space_in_other_trays = max(0, total_free_space - current_tray_free_space)
+
             if remaining_in_tray > available_space_in_other_trays:
                 return JsonResponse({
                     'exists': False,
