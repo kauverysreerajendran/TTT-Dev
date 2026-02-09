@@ -453,7 +453,9 @@ class BrassPickTableView(APIView):
             Q(send_brass_audit_to_qc=True)
         ).exclude(
             Q(brass_audit_rejection=True)  # ✅ Exclude old lots that were rejected at Brass Audit
-        )
+        ).exclude(
+            Q(send_brass_audit_to_qc=True, brass_physical_qty=0) # ✅ Exclude "ghost" lots created by bug
+        ).distinct()
 
         # Apply sorting if requested
         if sort and sort in sort_field_mapping:

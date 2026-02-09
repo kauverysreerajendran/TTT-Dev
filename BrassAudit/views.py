@@ -1222,52 +1222,9 @@ class BAuditBatchRejectionAPIView(APIView):
             total_stock.last_process_date_time = timezone.now()
             total_stock.save(update_fields=['send_brass_qc', 'last_process_date_time'])
             
-                        # ✅ NEW: Create new TotalStockModel instance for next process
-            new_lot_id = generate_new_lot_id()
-            new_total_stock = TotalStockModel.objects.create(
-                lot_id=new_lot_id,
-                model_stock_no=total_stock.model_stock_no,
-                batch_id=total_stock.batch_id,
-                version=total_stock.version,
-                total_stock=total_stock.total_stock,
-                total_IP_accpeted_quantity=total_stock.brass_audit_physical_qty,
-                polish_finish=total_stock.polish_finish,
-                plating_color=total_stock.plating_color,
-                created_at=total_stock.created_at,
-                send_brass_audit_to_qc=True,
-                iqf_acceptance=False,  # Ensure IQF flag is cleared
-                send_brass_qc=False,  # Ensure Brass QC flag is cleared
-                remove_lot=True,
-                tray_scan_status=True,
-                ip_person_qty_verified=True,
-                last_process_module="Brass Audit",
-                brass_audit_last_process_date_time=timezone.now(),
-                last_process_date_time=timezone.now()
-            )
-            print(f"✅ Created new TotalStockModel for next process: {new_lot_id}")
-
-                        # ✅ FIX BUG 2: Create BrassTrayId records for the new lot (not BrassAuditTrayId)
-            # Get all original trays from the rejected lot
-            from Brass_QC.models import BrassTrayId
-            original_trays = BrassTrayId.objects.filter(lot_id=lot_id)
-
-            # Create BrassTrayId records for the new lot to enable proper tray scanning in Brass QC
-            for tray in original_trays:
-                BrassTrayId.objects.create(
-                    tray_id=tray.tray_id,
-                    lot_id=new_lot_id,
-                    batch_id=tray.batch_id,
-                    tray_quantity=tray.tray_quantity,
-                    tray_capacity=tray.tray_capacity,
-                    tray_type=tray.tray_type,
-                    top_tray=tray.top_tray,
-                    rejected_tray=False,  # Reset rejection flag for new lot
-                    delink_tray=False,
-                    IP_tray_verified=True,
-                    new_tray=False,
-                    user=request.user,
-                    date=timezone.now()
-                )
+                        # ✅ REMOVED: Redundant creation of new lot. 
+            # The original lot is already sent back to Brass QC via send_brass_audit_back_to_brass_qc.
+            # No need to create a new one.
 
             return Response({'success': True, 'message': 'Batch rejection saved with remarks.'})
 
