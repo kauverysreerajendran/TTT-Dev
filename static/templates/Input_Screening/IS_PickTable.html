@@ -4028,64 +4028,65 @@ function handleDraftSave() {
        validateBtn.style.color = "#2e7d32";
      });
    }
-   
-    // ✅ REDO BUTTON HANDLER
-    const redoBtn = document.getElementById("trayQtyRedoBtn");
-    if (redoBtn && validateInput) {
-      redoBtn.addEventListener('click', async function () {
-        // 1. Call backend to reset verification for this lot
-        const modal = document.getElementById("trayScanModal_DayPlanning");
-        const lotId = modal && modal.stockLotId ? modal.stockLotId : (window.getCurrentLotId && window.getCurrentLotId());
-        if (!lotId) return;
-    
-        // Disable redo button to prevent double clicks
-        redoBtn.disabled = true;
-    
-        try {
-          // Call backend to reset verification
-          await fetch('/inputscreening/reset_tray_verification_for_lot/', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-CSRFToken': (window.getCookie && window.getCookie('csrftoken')) || ''
-            },
-            body: JSON.stringify({ lot_id: lotId })
-          });
-    
-          // 2. Fetch updated verification status
-          const verifyResp = await fetch(`/inputscreening/get_tray_verification_status/?lot_id=${encodeURIComponent(lotId)}`);
-          const verifyResult = await verifyResp.json();
-          let verificationData = {};
-          if (verifyResult.success) {
-            verificationData = verifyResult.verification_data;
-          }
-    
-          // 3. Update modal's verificationData and rebuild table
-          if (modal) {
-            modal.verificationData = verificationData;
-            // Rebuild the table to reflect "Not verified" status
-            if (typeof modal.buildTableHTML === "function") {
-              const detailsDiv = document.getElementById("trayScanDetails_DayPlanning");
-              if (detailsDiv) {
-                detailsDiv.innerHTML = modal.buildTableHTML(false);
-              }
-            }
-          }
-    
-          // 4. Visually update all status indicators to "Not verified"
-          document.querySelectorAll('.tray-verified-indicator').forEach(function (el) {
-            el.textContent = '⏳ Not Verified';
-            el.classList.remove('verified');
-            el.classList.add('not-verified');
-          });
-    
-        } catch (err) {
-          console.error('Redo failed:', err);
-        } finally {
-          redoBtn.disabled = false;
-        }
+      
+// ✅ REDO BUTTON HANDLER
+const redoBtn = document.getElementById("trayQtyRedoBtn");
+if (redoBtn && validateInput) {
+  redoBtn.addEventListener('click', async function () {
+    // 1. Call backend to reset verification for this lot
+    const modal = document.getElementById("trayScanModal_DayPlanning");
+    const lotId = modal && modal.stockLotId ? modal.stockLotId : (window.getCurrentLotId && window.getCurrentLotId());
+    if (!lotId) return;
+ 
+    // Disable redo button to prevent double clicks
+    redoBtn.disabled = true;
+ 
+    try {
+      // Call backend to reset verification
+      await fetch('/inputscreening/reset_tray_verification_for_lot/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': (window.getCookie && window.getCookie('csrftoken')) || ''
+        },
+        body: JSON.stringify({ lot_id: lotId })
       });
+ 
+      // 2. Fetch updated verification status
+      const verifyResp = await fetch(`/inputscreening/get_tray_verification_status/?lot_id=${encodeURIComponent(lotId)}`);
+      const verifyResult = await verifyResp.json();
+      let verificationData = {};
+      if (verifyResult.success) {
+        verificationData = verifyResult.verification_data;
+      }
+ 
+      // 3. Update modal's verificationData and rebuild table
+      if (modal) {
+        modal.verificationData = verificationData;
+        // Rebuild the table to reflect "Not verified" status
+        if (typeof modal.buildTableHTML === "function") {
+          const detailsDiv = document.getElementById("trayScanDetails_DayPlanning");
+          if (detailsDiv) {
+            detailsDiv.innerHTML = modal.buildTableHTML(false);
+          }
+        }
+      }
+ 
+      // 4. Visually update all status indicators to "Not verified"
+      document.querySelectorAll('.tray-verified-indicator').forEach(function (el) {
+        el.textContent = '⏳ Not Verified';
+        el.classList.remove('verified');
+        el.classList.add('not-verified');
+      });
+ 
+    } catch (err) {
+      console.error('Redo failed:', err);
+    } finally {
+      redoBtn.disabled = false;
     }
+  });
+}
+ 
    
      // ✅ QTY INPUT CHANGE HANDLER
      document.addEventListener('input', function (e) {
@@ -10338,68 +10339,11 @@ function addInstantTopTrayValidation(lotId) {
         
         console.log('🔧 [addInstantTopTrayValidation] ✅ Valid tray');
         
-        // ✅ NEW: Auto-move focus to next available delink input
-        setTimeout(() => {
-          const moveToNextDelink = () => {
-            const delinkInputs = document.querySelectorAll('.delink-tray-input');
-            console.log('🔧 [addInstantTopTrayValidation] Found delink inputs:', delinkInputs.length);
-            
-            let nextInput = null;
-            
-            // Find the first empty delink input
-            for (let input of delinkInputs) {
-              console.log('🔧 [addInstantTopTrayValidation] Checking delink input value:', input.value.trim());
-              if (!input.value.trim()) {
-                nextInput = input;
-                break;
-              }
-            }
-            
-            if (nextInput) {
-              console.log('🔧 [addInstantTopTrayValidation] Moving focus to empty delink input');
-              // Blur the current input first
-              topTrayInput.blur();
-              // Give a tiny delay for blur to register
-              setTimeout(() => {
-                nextInput.focus();
-                nextInput.select();
-                console.log('🔧 [addInstantTopTrayValidation] ✅ Focus moved to delink input');
-              }, 50);
-              return true;
-            } else if (delinkInputs.length > 0) {
-              // If no empty inputs but delink inputs exist, focus on first one
-              console.log('🔧 [addInstantTopTrayValidation] No empty inputs, focusing on first delink input');
-              topTrayInput.blur();
-              setTimeout(() => {
-                delinkInputs[0].focus();
-                delinkInputs[0].select();
-                console.log('🔧 [addInstantTopTrayValidation] ✅ Focus moved to first delink input');
-              }, 50);
-              return true;
-            } else {
-              console.log('🔧 [addInstantTopTrayValidation] No delink inputs found yet, will retry');
-              return false;
-            }
-          };
-          
-          // Try immediately
-          if (!moveToNextDelink()) {
-            // If not found, wait for delink table to be ready
-            const handleDelinkReady = (event) => {
-              console.log('🔧 [addInstantTopTrayValidation] Delink table ready event, trying focus again');
-              moveToNextDelink();
-              document.removeEventListener('delinkTableReady', handleDelinkReady);
-            };
-            document.addEventListener('delinkTableReady', handleDelinkReady);
-            
-            // Also retry after a short delay in case event was missed
-            setTimeout(() => {
-              if (!moveToNextDelink()) {
-                console.log('🔧 [addInstantTopTrayValidation] Still no delink inputs after retry');
-              }
-            }, 1000);
-          }
-        }, 500); // Small delay to allow user to see validation result
+        // FIX: Do NOT move focus after last tray scan in 'Scan top tray ID:'
+        // After successful validation, keep focus on the top tray input or blur, but do not move to any delink input automatically.
+        // If you want to blur after scan, uncomment the next line:
+        // setTimeout(() => { topTrayInput.blur(); }, 500);
+        // Otherwise, do nothing (keep focus on last input)
       } else {
         // Invalid tray
         this.classList.add('top-tray-invalid');

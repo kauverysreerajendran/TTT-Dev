@@ -1203,9 +1203,8 @@ class BAuditBatchRejectionAPIView(APIView):
                 if reverse_transfer_success:
                     print(f"✅ [BAuditBatchRejectionAPIView] Successfully sent lot {lot_id} back to Brass QC using reverse transfer")
                     
-                    # Also set the flag to ensure it appears in Brass QC pick table
-                    total_stock.send_brass_audit_to_qc = True
-                    total_stock.save(update_fields=['send_brass_audit_to_qc'])
+                    # ✅ FIX: Don't set flags to appear in Brass QC - rejected lot goes to Jig Loading
+                    print(f"✅ [BAuditBatchRejectionAPIView] Rejected lot {lot_id} will proceed to Jig Loading")
                 else:
                     print(f"⚠️ [BAuditBatchRejectionAPIView] Reverse transfer failed, falling back to original transfer method")
                     # Fallback to the original transfer method if needed
@@ -1217,15 +1216,12 @@ class BAuditBatchRejectionAPIView(APIView):
                 # Fallback to original method
                 transfer_brass_audit_rejections_to_brass_qc(lot_id, request.user, batch_rejection=True, lot_comment=lot_rejected_comment)
             
-            # ✅ FIX: Do NOT set send_brass_qc=True here. 
-            # The send_brass_audit_to_qc=True flag (set above) is sufficient to show the lot in Brass QC pick table.
-            # Setting BOTH flags causes duplication because BrassPickTableView has OR conditions for both.
+            # ✅ FIX: Don't set send_brass_qc=True - rejected lot goes to Jig Loading, not back to Brass QC
             total_stock.last_process_date_time = timezone.now()
             total_stock.save(update_fields=['last_process_date_time'])
             
-                        # ✅ REMOVED: Redundant creation of new lot. 
-            # The original lot is already sent back to Brass QC via send_brass_audit_back_to_brass_qc.
-            # No need to create a new one.
+            # ✅ FIX: Remove new lot creation - rejected lot goes directly to Jig Loading
+            print(f"✅ [BAuditBatchRejectionAPIView] Lot {lot_id} rejected and routed to Jig Loading - no new lot created")
 
             return Response({'success': True, 'message': 'Batch rejection saved with remarks.'})
 
