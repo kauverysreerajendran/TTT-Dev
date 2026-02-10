@@ -302,10 +302,12 @@ def send_brass_audit_back_to_brass_qc(lot_id, user):
         stock.brass_audit_accepted_tray_scan_status = False
         stock.brass_audit_onhold_picking = False
         stock.brass_audit_draft = False
+        stock.brass_qc_accepted_qty_verified = False  # ✅ Reset verification so user must manually check
         stock.save(update_fields=[
             'send_brass_audit_to_qc', 'brass_audit_rejection', 'brass_audit_accptance', 'brass_qc_accptance',
             'brass_audit_few_cases_accptance', 'brass_audit_rejection_tray_scan_status',
-            'brass_audit_accepted_tray_scan_status', 'brass_audit_onhold_picking', 'brass_audit_draft'
+            'brass_audit_accepted_tray_scan_status', 'brass_audit_onhold_picking', 'brass_audit_draft',
+            'brass_qc_accepted_qty_verified'
         ])
         print(f"✅ [REVERSE TRANSFER] Updated flags for lot {lot_id} to enable in Brass QC")
         
@@ -2065,70 +2067,63 @@ def brass_reject_check_tray_id_simple(request):
                 'status_message': 'Already Rejected'
             })
 
-        # Validate tray capacity and rearrangement logic for existing tray
-        tray_qty = tray_obj.tray_quantity or 0
-        tray_capacity = tray_obj.tray_capacity or 12
-        remaining_in_tray = tray_qty - rejection_qty
+        # Calculate session qty for this tray
+        session_qty_for_tray = 0
+        for alloc in current_session_allocations:
+            if tray_id in alloc.get('tray_ids', []):
+                # Divide the total qty by number of trays in this allocation
+                num_trays = len(alloc.get('tray_ids', []))
+                if num_trays > 0:
+                    session_qty_for_tray += alloc['qty'] // num_trays
+
+        adjusted_tray_qty = (tray_obj.tray_quantity or 0) - session_qty_for_tray
 
         print(f"[Brass QC Reject Validation] Existing tray analysis:")
-        print(f"  - adjusted_current_qty: {tray_qty}")
+        print(f"  - original_qty: {tray_obj.tray_quantity or 0}")
+        print(f"  - session_qty: {session_qty_for_tray}")
+        print(f"  - adjusted_qty: {adjusted_tray_qty}")
         print(f"  - rejection_qty: {rejection_qty}")
-        print(f"  - remaining_in_tray: {remaining_in_tray}")
 
-        # Check rearrangement needs based on remaining pieces
-        if remaining_in_tray > 0:
-            # Pieces will remain in this tray - check if they can fit in other trays
-            other_trays = BrassTrayId.objects.filter(
-                lot_id=current_lot_id,
-                tray_quantity__gt=0,
-                rejected_tray=False
-            ).exclude(tray_id=tray_id)
-            
-            available_space_in_other_trays = 0
-            for t in other_trays:
-                current_qty = t.tray_quantity or 0
-                max_capacity = t.tray_capacity or tray_capacity
-                available_space_in_other_trays += max(0, max_capacity - current_qty)
-            
-            if remaining_in_tray > available_space_in_other_trays:
+        tray_capacity = tray_obj.tray_capacity or 12
+
+        # Allow reuse of emptied trays (adjusted_qty == 0) up to tray capacity
+        # For trays with remaining qty, only allow up to remaining qty
+        if adjusted_tray_qty < 0:
+            return JsonResponse({
+                'exists': False,
+                'valid_for_rejection': False,
+                'error': f'Cannot reject {rejection_qty} pieces: tray has negative adjusted quantity {adjusted_tray_qty}',
+                'status_message': 'Invalid Tray State',
+                'validation_type': 'negative_adjusted_qty',
+                'available_qty': adjusted_tray_qty,
+                'requested_qty': rejection_qty
+            })
+        elif adjusted_tray_qty == 0:
+            # Tray is empty, allow reuse up to capacity
+            if rejection_qty > tray_capacity:
                 return JsonResponse({
                     'exists': False,
                     'valid_for_rejection': False,
-                    'error': f'Cannot reject: {remaining_in_tray} pieces will remain but only {available_space_in_other_trays} space available in other trays',
-                    'status_message': 'Need New Tray',
-                    'validation_type': 'existing_no_space',
-                    'remaining_in_tray': remaining_in_tray,
-                    'available_space_in_other_trays': available_space_in_other_trays
+                    'error': f'Cannot reject {rejection_qty} pieces: exceeds tray capacity {tray_capacity}',
+                    'status_message': 'Exceeds Capacity',
+                    'validation_type': 'exceeds_capacity',
+                    'available_qty': adjusted_tray_qty,
+                    'requested_qty': rejection_qty,
+                    'tray_capacity': tray_capacity
                 })
-        
-        elif remaining_in_tray < 0:
-            # This tray doesn't have enough pieces - need additional pieces from other trays
-            additional_needed = abs(remaining_in_tray)
-            
-            # Get other trays and their available quantities (after accounting for session allocations)
-            other_trays = BrassTrayId.objects.filter(
-                lot_id=current_lot_id,
-                rejected_tray=False
-            ).exclude(tray_id=tray_id)
-            
-            # Calculate how many additional pieces are available from other trays
-            # (their current quantities represent what's available for redistribution)
-            available_from_other_trays = 0
-            for t in other_trays:
-                current_qty = t.tray_quantity or 0
-                available_from_other_trays += current_qty
-            
-            if additional_needed > available_from_other_trays:
+        else:
+            # Tray has remaining qty, only allow up to remaining
+            if rejection_qty > adjusted_tray_qty:
                 return JsonResponse({
                     'exists': False,
                     'valid_for_rejection': False,
-                    'error': f'Cannot reject: need {additional_needed} more pieces but only {available_from_other_trays} available in other trays',
-                    'status_message': 'Need New Tray',
-                    'validation_type': 'existing_no_space',
-                    'additional_needed': additional_needed,
-                    'available_from_other_trays': available_from_other_trays
+                    'error': f'Cannot reject {rejection_qty} pieces: tray only has {adjusted_tray_qty} available',
+                    'status_message': 'Insufficient Quantity',
+                    'validation_type': 'insufficient_quantity',
+                    'available_qty': adjusted_tray_qty,
+                    'requested_qty': rejection_qty
                 })
-        
+
         # Validation passed for existing tray
         return JsonResponse({
             'exists': True,
@@ -2136,8 +2131,8 @@ def brass_reject_check_tray_id_simple(request):
             'status_message': 'Available (Can Rearrange)',
             'validation_type': 'existing_tray_in_brass',
             'tray_capacity': tray_capacity,
-            'current_quantity': tray_qty,
-            'remaining_after_rejection': remaining_in_tray
+            'available_qty': adjusted_tray_qty,
+            'remaining_after_rejection': max(0, adjusted_tray_qty - rejection_qty)
         })
     
     # Step 2: Not found in BrassTrayId, check TrayId for new/existing tray availability

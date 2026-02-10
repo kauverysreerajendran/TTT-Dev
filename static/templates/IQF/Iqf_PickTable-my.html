@@ -338,16 +338,6 @@
   justify-content: center;
 }
 
-/* ✅ CRITICAL CSS: Ensure SweetAlert appears above Rejection Modal */
-.swal2-container {
-  z-index: 20000 !important;
-}
-
-/* ✅ CRITICAL CSS: Ensure 'Verify All' Modal appears above Rejection Modal */
-#newPopupModal {
-  z-index: 20050 !important;
-}
-
 /* ========== Tablet override — paste at file end (after other table styles) ========== */
 /* --- Tablet: freeze first 3 columns consistently with desktop --- */
 @media (pointer: coarse) and (min-width: 680px) and (max-width: 1400px) {
@@ -8029,7 +8019,7 @@ function addDelinkStyles() {
     .delink-modal {
         display: none;
         position: fixed;
-        z-index: 20050;
+        z-index: 10000;
         left: 0;
         top: 0;
         width: 100%;

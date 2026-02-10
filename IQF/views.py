@@ -2829,7 +2829,8 @@ class IQFRejectTableView(APIView):
                 'iqf_last_process_date_time': stock_obj.iqf_last_process_date_time,
                 'brass_rejection_total_qty': stock_obj.brass_rejection_total_qty,
                 'iqf_physical_qty': stock_obj.iqf_physical_qty,
-                'iqf_missing_qty': stock_obj.iqf_missing_qty
+                'iqf_missing_qty': stock_obj.iqf_missing_qty,
+                'lot_qty': batch.total_batch_quantity if hasattr(batch, 'total_batch_quantity') else 0
             }
 
             # --- Add lot rejection remarks ---
@@ -2950,91 +2951,103 @@ def iqf_get_rejection_details(request):
     
 @require_GET
 def iqf_reject_check_tray_id_simple(request):
-    import math
-
-    tray_id = request.GET.get('tray_id', '').strip()
-    lot_id = request.GET.get('lot_id', '').strip()
-    tray_qty = int(request.GET.get('tray_qty', 0))
-    rejection_qty = int(request.GET.get('total_iqf_qty', 0))  # Use this as rejection qty
-    already_allocated = int(request.GET.get('already_allocated', 0))  # Number of trays already accepted
-
-    # Get iqf_physical_qty from TotalStockModel
-    stock = TotalStockModel.objects.filter(lot_id=lot_id).first()
-    iqf_physical_qty = stock.iqf_physical_qty if stock and stock.iqf_physical_qty else 0
-
-    # Get tray_capacity from batch
-    tray_capacity = stock.batch_id.tray_capacity if stock and stock.batch_id and hasattr(stock.batch_id, 'tray_capacity') else 12
-
-    print(f"[DEBUG] iqf_physical_qty: {iqf_physical_qty}")
-    print(f"[DEBUG] rejection_qty: {rejection_qty}")
-    print(f"[DEBUG] tray_capacity: {tray_capacity}")
-
-    # Calculate tray allocation
-    total_trays = math.ceil(iqf_physical_qty / tray_capacity) if tray_capacity > 0 else 0
-    rejection_trays = math.ceil(rejection_qty / tray_capacity) if tray_capacity > 0 else 0
-    allowed_trays = total_trays - rejection_trays
-
-    print(f"[DEBUG] Total trays needed for acceptance: {total_trays}")
-    print(f"[DEBUG] Allowed trays for acceptance: {allowed_trays}")
-    print(f"[DEBUG] Trays needed for rejection: {rejection_trays}")
-
-    # ✅ STEP 1: Check if this is an original IQF tray for this lot
-    iqf_tray_obj = IQFTrayId.objects.filter(tray_id=tray_id, lot_id=lot_id).first()
-
-    if iqf_tray_obj:
+    """
+    Enhanced tray validation for IQF rejections with session allocation awareness
+    """
+    try:
+        tray_id = request.GET.get('tray_id', '').strip()
+        lot_id = request.GET.get('lot_id', '').strip()
+        rejection_qty = int(request.GET.get('rejection_qty', 0))
+        
+        # Parse current session allocations
         try:
-            # Get all IQF trays for this lot
-            all_iqf_trays = list(IQFTrayId.objects.filter(
-                lot_id=lot_id,
-                new_tray=False,
-                IP_tray_verified=True
-            ).order_by('id').values('tray_id', 'tray_quantity'))
+            current_session_allocations = json.loads(request.GET.get('current_session_allocations', '[]'))
+        except:
+            current_session_allocations = []
 
-            print(f"[DEBUG] All IQF trays: {[t['tray_id'] for t in all_iqf_trays]}")
+        print(f"[IQF Reject Validation] tray_id: {tray_id}, lot_id: {lot_id}, qty: {rejection_qty}")
 
-            # Only allow up to allowed_trays, based on already_allocated
-            if already_allocated < allowed_trays:
-                print(f"[DEBUG] Tray {tray_id} is allowed (already_allocated={already_allocated}, allowed_trays={allowed_trays})")
-                return JsonResponse({
-                    'exists': True,
-                    'valid_for_rejection': True,
-                    'status_message': 'Available (can rearrange)'
-                })
-            else:
-                print(f"[DEBUG] Tray {tray_id} is NOT allowed (already_allocated={already_allocated}, allowed_trays={allowed_trays})")
-                return JsonResponse({
-                    'exists': False,
-                    'valid_for_rejection': False,
-                    'status_message': 'Need New Tray'
+        # ✅ STEP 1: Check if tray exists in IQFTrayId (Existing IQF Tray)
+        iqf_tray_obj = IQFTrayId.objects.filter(tray_id=tray_id, lot_id=lot_id).first()
+        
+        if iqf_tray_obj:
+            # Check if tray is completely rejected (if flag exists) - IQFTrayId might not have rejected_tray flag?
+            # Assuming it does based on other models
+            if getattr(iqf_tray_obj, 'rejected_tray', False):
+                 return JsonResponse({
+                    'exists': False, 
+                    'valid_for_rejection': False, 
+                    'error': 'Already rejected',
+                    'status_message': 'Already Rejected'
                 })
 
-        except Exception as e:
-            print(f"[DEBUG] Error in tray allocation logic: {e}")
+            # Validate capacity and usage
+            tray_qty = iqf_tray_obj.tray_quantity or 0
+            tray_capacity = getattr(iqf_tray_obj, 'tray_capacity', 12) or 12
+            
+            # Calculate effective qty with session allocations
+            session_usage = 0
+            for alloc in current_session_allocations:
+                if tray_id in alloc.get('tray_ids', []):
+                    session_usage += int(alloc.get('qty', 0))
+            
+            effective_qty = max(0, tray_qty - session_usage)
+            remaining_in_tray = effective_qty - rejection_qty
+            
+            # If pieces remain, check if they fit in other trays
+            if remaining_in_tray > 0:
+                _, total_free_space = get_iqf_available_quantities_with_session_allocations(lot_id, current_session_allocations)
+                
+                current_tray_free_space = max(0, tray_capacity - effective_qty)
+                available_space_in_other_trays = max(0, total_free_space - current_tray_free_space)
+                
+                if remaining_in_tray > available_space_in_other_trays:
+                     return JsonResponse({
+                        'exists': False,
+                        'valid_for_rejection': False,
+                        'error': f'Cannot reject: {remaining_in_tray} pieces remain, only {available_space_in_other_trays} space elsewhere',
+                        'status_message': 'Need New Tray'
+                    })
+
             return JsonResponse({
-                'exists': False,
-                'valid_for_rejection': False,
-                'status_message': 'Need New Tray'
+                'exists': True,
+                'valid_for_rejection': True,
+                'status_message': 'Available (can rearrange)',
+                'validation_type': 'existing_iqf_tray',
+                'tray_capacity': tray_capacity,
+                'current_quantity': tray_qty
             })
 
-    # ✅ STEP 2: Check TrayId table for new trays
-    tray_obj = TrayId.objects.filter(tray_id=tray_id).first()
-
-    if not tray_obj:
+        # ✅ STEP 2: Check global TrayId for new trays
+        tray_obj = TrayId.objects.filter(tray_id=tray_id).first()
+        
+        if not tray_obj:
+             return JsonResponse({
+                'exists': False,
+                'valid_for_rejection': False,
+                'status_message': 'Invalid Barcode'
+            })
+            
+        # Check if tray belongs to different lot
+        if tray_obj.lot_id and str(tray_obj.lot_id).strip() and str(tray_obj.lot_id).strip() != lot_id:
+             return JsonResponse({
+                'exists': False,
+                'valid_for_rejection': False,
+                'status_message': 'Different Lot'
+            })
+            
+        # New tray available
         return JsonResponse({
-            'exists': False,
-            'valid_for_rejection': False,
-            'status_message': 'Invalid Barcode'
+            'exists': True,
+            'valid_for_rejection': True,
+            'status_message': 'New Tray Available',
+            'validation_type': 'new_tray'
         })
 
-    # Different lot check
-    if (tray_obj.lot_id and
-        str(tray_obj.lot_id).strip() != '' and
-        str(tray_obj.lot_id).strip() != lot_id):
-        return JsonResponse({
-            'exists': False,
-            'valid_for_rejection': False,
-            'status_message': 'Different Lot'
-        })
+    except Exception as e:
+        print(f"[IQF Reject Validation] Error: {e}")
+        return JsonResponse({'exists': False, 'valid_for_rejection': False, 'status_message': 'System Error'})
+
 
     # New tray validation
     if not tray_obj.lot_id or str(tray_obj.lot_id).strip() == '':
@@ -4834,3 +4847,114 @@ def iqf_get_available_new_tray(request):
             'success': False,
             'error': f'Database error: {str(e)}'
         })
+
+
+# ✅ NEW: Helper functions for IQF (adapted from Brass QC)
+
+def get_iqf_available_quantities_with_session_allocations(lot_id, current_session_allocations):
+    """
+    Calculate available tray quantities and ACTUAL free space for IQF
+    """
+    try:
+        # Get original distribution and track free space separately
+        original_distribution = get_iqf_original_tray_distribution(lot_id)
+        original_capacities = get_iqf_tray_capacities_for_lot(lot_id)
+        
+        available_quantities = original_distribution.copy()
+        
+        # First, apply saved rejections
+        saved_rejections = IQF_Rejected_TrayScan.objects.filter(lot_id=lot_id).order_by('id')
+        
+        for rejection in saved_rejections:
+            # Assuming rejection quantity field is 'rejected_quantity' or similar?
+            # Need to check model. Assuming similar to BrassQC: rejected_tray_quantity?
+            # Or is it implicity full tray?
+            # Re-read IQF models... Assuming 'rejected_tray_quantity' based on pattern.
+            rejected_qty = getattr(rejection, 'rejected_tray_quantity', 0) or 0
+            # If rejected_qty is 0, maybe it means full tray? No, 0 usually means nothing.
+            
+            # If rejected_qty is missing, fallback to 0.
+            
+            tray_id = getattr(rejection, 'rejected_tray_id', None)
+            
+            if rejected_qty <= 0:
+                continue
+
+            # Standard reduction logic
+            # Simplify: treat all as consumption
+            available_quantities = iqf_reduce_quantities_optimally(available_quantities, rejected_qty)
+        
+        # Then, apply current session allocations
+        for allocation in current_session_allocations:
+            qty = int(allocation.get('qty', 0))
+            if qty > 0:
+                available_quantities = iqf_reduce_quantities_optimally(available_quantities, qty)
+        
+        # Calculate ACTUAL current free space
+        actual_free_space = 0
+        if len(available_quantities) <= len(original_capacities):
+            for i, qty in enumerate(available_quantities):
+                if i < len(original_capacities):
+                    capacity = original_capacities[i]
+                    actual_free_space += max(0, capacity - qty)
+        
+        return available_quantities, actual_free_space
+
+    except Exception as e:
+        print(f"[IQF Session Validation] Error: {e}")
+        return [], 0
+
+def get_iqf_original_tray_distribution(lot_id):
+    """
+    Get original tray quantity distribution for IQF
+    """
+    try:
+        trays = IQFTrayId.objects.filter(lot_id=lot_id).exclude(
+            rejected_tray=True
+        ).order_by('id') # Or date?
+        
+        quantities = []
+        for t in trays:
+            q = getattr(t, 'tray_quantity', 0)
+            if q > 0:
+                quantities.append(q)
+        return quantities
+    except:
+        return []
+
+def get_iqf_tray_capacities_for_lot(lot_id):
+    """
+    Get capacities for IQF trays
+    """
+    try:
+        trays = IQFTrayId.objects.filter(lot_id=lot_id).exclude(
+            rejected_tray=True
+        ).order_by('id')
+        capacities = []
+        for t in trays:
+            c = getattr(t, 'tray_capacity', 12) or 12
+            capacities.append(c)
+        return capacities
+    except:
+        return []
+
+def iqf_reduce_quantities_optimally(available_quantities, qty_to_reduce):
+    """
+    Reduce quantities optimally for IQF
+    """
+    quantities = available_quantities.copy()
+    remaining = qty_to_reduce
+    
+    # Consume from larger trays first? Or smaller?
+    # Brass QC strategy: Existing trays consume optimally.
+    # Let's consume from LARGEST first to mimic Brass QC "Existing" logic.
+    sorted_indices = sorted(range(len(quantities)), key=lambda i: quantities[i], reverse=True)
+    
+    for i in sorted_indices:
+        if remaining <= 0: break
+        current_qty = quantities[i]
+        if current_qty > 0:
+            consume = min(remaining, current_qty)
+            quantities[i] -= consume
+            remaining -= consume
+    return quantities
