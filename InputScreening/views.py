@@ -4362,6 +4362,8 @@ def reject_check_tray_id_simple(request):
                 if not is_new:
                     # For existing trays, check if already used by another reason
                     for other_alloc in current_session_allocations:
+                        if int(other_alloc.get('qty', 0)) == 0:
+                            continue  # Skip deleted/zero qty allocations
                         if str(other_alloc.get('reason_id')) != str(rejection_reason_id):
                             other_tray_ids = other_alloc.get('tray_ids', [])
                             if isinstance(other_tray_ids, str):
@@ -4543,6 +4545,8 @@ def reject_check_tray_id_simple(request):
         # CHECK 3c: Prevent cross-reason tray mixing
         # ---------------------------------------------------------
         for alloc in current_session_allocations:
+            if int(alloc.get('qty', 0)) == 0:
+                continue  # Skip deleted/zero qty allocations
             alloc_reason_id = str(alloc.get('reason_id', ''))
             alloc_tray_ids = alloc.get('tray_ids', [])
             if isinstance(alloc_tray_ids, str):
