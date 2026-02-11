@@ -4469,9 +4469,10 @@ def reject_check_tray_id_simple(request):
         current_tray_qty = ip_tray_obj.tray_quantity
 
         # ---------------------------------------------------------
-        # NEW CHECK 3a: Compute REUSABLE TRAY POOL (dynamic)
+        # CHECK 3a: COVERAGE-BASED PHYSICAL REUSE
+        # Matches Brass QC: top tray absorbs first, overflow → reuse
         # ---------------------------------------------------------
-        
+
         # Calculate TOTAL rejected quantity (including current request)
         total_rejected_qty = 0
         current_reason_already_present = False
@@ -4484,76 +4485,97 @@ def reject_check_tray_id_simple(request):
         # Add rejection_qty ONLY if this reason is not yet in session
         if not current_reason_already_present:
             total_rejected_qty += rejection_qty
-            
-        # Determine Tray Capacity (Critical for reuse calculation)
+
+        # Determine Tray Capacity
         tray_capacity = 0
-        
+
         # Try to get from existing tray in lot
         sample_tray = IPTrayId.objects.filter(lot_id=current_lot_id).first()
         if sample_tray and sample_tray.tray_capacity:
              tray_capacity = sample_tray.tray_capacity
-        
+
         # Fallback to TotalStockModel
         if not tray_capacity:
             ts = TotalStockModel.objects.filter(lot_id=current_lot_id).first()
             if ts and ts.batch_id and ts.batch_id.tray_capacity:
                 tray_capacity = ts.batch_id.tray_capacity
-        
+
         if not tray_capacity:
-            tray_capacity = 12 # Default fallback
-            
-        # ✅ FIX: Strict Integer Division for Reusable Count
-        # Example: 14 rejected / 12 capacity = 1 reusable tray
-        reusable_tray_count = total_rejected_qty // tray_capacity
-        
-        print(f"DEBUG: Reuse Logic - Total Rejected: {total_rejected_qty}, Capacity: {tray_capacity}, Allowed Reusable Trays: {reusable_tray_count}")
+            tray_capacity = 12  # Default fallback
+
+        # Find the TOP TRAY (partially filled — lowest tray_quantity)
+        top_tray = IPTrayId.objects.filter(
+            lot_id=current_lot_id,
+            rejected_tray=False
+        ).order_by('tray_quantity').first()
+
+        top_tray_qty = top_tray.tray_quantity if top_tray else 0
+        top_tray_id = top_tray.tray_id if top_tray else None
+
+        # Coverage calculation
+        remaining_after_top = max(0, total_rejected_qty - top_tray_qty)
+
+        # Reusable trays: first one covers overflow, additional must be fully justified
+        allowed_reusable_trays = 0
+        if total_rejected_qty > top_tray_qty:
+            allowed_reusable_trays = 1
+            if remaining_after_top > tray_capacity:
+                additional_full_trays = (remaining_after_top - tray_capacity) // tray_capacity
+                allowed_reusable_trays += additional_full_trays
+
+        print(f"[INPUT_REUSE] total_rejected={total_rejected_qty}, top_tray={top_tray_id}, "
+              f"top_tray_qty={top_tray_qty}, remaining_after_top={remaining_after_top}, "
+              f"capacity={tray_capacity}, allowed_reusable_trays={allowed_reusable_trays}")
 
         # ---------------------------------------------------------
-        # 🔧 FIX: Count ONLY reusable trays already CONSUMED
-        #      (exclude current tray and in-progress same-reason tray)
+        # Count ONLY reusable trays already CONSUMED
+        # Exclude: current tray, top tray, new trays, delinked trays
         # ---------------------------------------------------------
         used_reusable_trays = set()
 
         for alloc in current_session_allocations:
-            # Skip the current request if it's already in the list (to avoid double counting, though list is usually distinct reasons)
-            # Actually, standard logic: just count ALL used trays in the session.
-            
             alloc_tray_ids = alloc.get('tray_ids', [])
-            print(f"DEBUG: Processing alloc: {alloc}, Extracted tray_ids: {alloc_tray_ids}")
-            
             if isinstance(alloc_tray_ids, str):
                 alloc_tray_ids = [alloc_tray_ids]
-            
+
             for t_id in alloc_tray_ids:
-                if t_id and t_id != tray_id: # Exclude current tray being validated
-                    # Check if this t_id is existing (reusable)
-                    # It is reusable if it exists and is NOT a new tray (or is new but already assigned to a lot? verify definition)
-                    # "Existing tray" = Not New Tray OR (New Tray but assigned to Lot long ago?)
-                    # Simplified: is_new_tray = False
-                    
-                    # Refined "Existing" check:
-                    t_obj = TrayId.objects.filter(tray_id=t_id).first()
-                    is_t_new = getattr(t_obj, 'new_tray', False) and not t_obj.lot_id if t_obj else False
-                    
-                    if not is_t_new:
-                        used_reusable_trays.add(t_id)
-                        print(f"DEBUG: Found used existing tray: {t_id}")
+                if not t_id:
+                    continue
+                # Top tray is NOT a reusable tray — it already exists
+                if top_tray and t_id == top_tray.tray_id:
+                    continue
+                # Check if this tray is new or delinked
+                t_obj = TrayId.objects.filter(tray_id=t_id).first()
+                t_is_new = (getattr(t_obj, 'new_tray', False) and not t_obj.lot_id) if t_obj else False
+                t_is_delinked = getattr(t_obj, 'delink_tray', False) if t_obj else False
+
+                if not t_is_new and not t_is_delinked:
+                    used_reusable_trays.add(t_id)
+
+        # Count the currently validated tray as a reusable tray
+        if not is_new_tray:
+            if not top_tray or tray_id != top_tray.tray_id:
+                used_reusable_trays.add(tray_id)
 
         used_reusable_count = len(used_reusable_trays)
-        print(f"DEBUG: Used Reusable Trays: {used_reusable_count} ({used_reusable_trays})")
+
+        # How many reuse slots remain
+        remaining_reuse_slots = max(0, allowed_reusable_trays - used_reusable_count)
+
+        print(f"[INPUT_REUSE] used_reusable_trays={used_reusable_count} {used_reusable_trays}, "
+              f"remaining_reuse_slots={remaining_reuse_slots}")
 
         # ---------------------------------------------------------
-        # NEW CHECK 3b: Enforce dynamic reuse availability
+        # CHECK 3b: Enforce dynamic reuse availability
         # ---------------------------------------------------------
-        # Only allow if we haven't exceeded the limit
-        # The current tray is an existing tray (we are in Step 3), so it counts towards the limit
-        # So: used_count + 1 (current) must be <= allowed
-        
-        if used_reusable_count >= reusable_tray_count:
+        if remaining_reuse_slots <= 0:
             return JsonResponse({
                 'exists': True,
                 'valid_for_rejection': False,
-                'error': f'Reuse limit reached. Total Rejected: {total_rejected_qty}, Capacity: {tray_capacity} => Max {reusable_tray_count} reusable trays. Already used: {used_reusable_count}.',
+                'error': (
+                    f'Reuse limit reached. Total Rejected: {total_rejected_qty}, '
+                    f'Already used: {used_reusable_count}.'
+                ),
                 'status_message': 'Reuse Limit Reached'
             })
 
@@ -4563,11 +4585,13 @@ def reject_check_tray_id_simple(request):
         for alloc in current_session_allocations:
             if int(alloc.get('qty', 0)) == 0:
                 continue  # Skip deleted/zero qty allocations
-            alloc_reason_id = str(alloc.get('reason_id', ''))
+            alloc_reason_id = str(alloc.get('reason_id', '')).strip()
             alloc_tray_ids = alloc.get('tray_ids', [])
             if isinstance(alloc_tray_ids, str):
                 alloc_tray_ids = [alloc_tray_ids]
 
+            if not alloc_reason_id:
+                continue  # Skip allocations with empty/missing reason_id
             if alloc_reason_id != str(rejection_reason_id):
                 if tray_id in alloc_tray_ids:
                     return JsonResponse({

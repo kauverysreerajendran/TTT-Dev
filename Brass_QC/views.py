@@ -1986,11 +1986,16 @@ def brass_reject_check_tray_id(request):
         })
 
 # Tray ID Allowance based on condition in rejection
-# --- FIX: Allow tray reuse if rejection_qty <= ANY tray's qty, not just the selected tray's qty ---
+# --- GLOBAL REUSE CONTRACT: reuse eligibility is global, not tray-local ---
 @require_GET
 def brass_reject_check_tray_id_simple(request):
-    tray_id = request.GET.get('tray_id', '')
-    current_lot_id = request.GET.get('lot_id', '')
+    """
+    GLOBAL REUSE CONTRACT for Brass QC tray validation.
+    Reuse eligibility = total_rejected_qty // tray_capacity.
+    Per-tray quantity checks only run AFTER global reuse is confirmed.
+    """
+    tray_id = request.GET.get('tray_id', '').strip()
+    current_lot_id = request.GET.get('lot_id', '').strip()
     if current_lot_id in ['null', 'None', '', None]:
         return JsonResponse({
             'exists': False,
@@ -2000,17 +2005,17 @@ def brass_reject_check_tray_id_simple(request):
         })
     rejection_qty = int(request.GET.get('rejection_qty', 0))
     current_session_allocations_str = request.GET.get('current_session_allocations', '[]')
-    rejection_reason_id = request.GET.get('rejection_reason_id', '')
+    rejection_reason_id = request.GET.get('rejection_reason_id', '').strip()
 
     try:
         current_session_allocations = json.loads(current_session_allocations_str)
     except Exception:
         current_session_allocations = []
 
-    # ✅ UPDATED: Include delinked trays as available (delink_tray=True means reusable)
-    tray_objs = BrassTrayId.objects.filter(lot_id=current_lot_id, rejected_tray=False)
+    # -----------------------------------------------------------------
+    # STEP 1: Tray existence check
+    # -----------------------------------------------------------------
     tray_id_obj = TrayId.objects.filter(tray_id=tray_id).first()
-
     if not tray_id_obj:
         return JsonResponse({
             'exists': False,
@@ -2021,163 +2026,10 @@ def brass_reject_check_tray_id_simple(request):
 
     is_new_tray = getattr(tray_id_obj, 'new_tray', False)
     is_delinked = getattr(tray_id_obj, 'delink_tray', False)
-    
-    # ✅ NEW: Check if this is a delinked tray - treat as reusable
-    if is_delinked:
-        print(f"[BRASS_QC_REJECT_VALIDATION] ✅ DELINKED tray detected: {tray_id} - treating as reusable")
-        
-        # Validate tray capacity compatibility
-        tray_capacity_validation = validate_brass_tray_capacity_compatibility(tray_id_obj, current_lot_id)
-        if not tray_capacity_validation['is_compatible']:
-            return JsonResponse({
-                'exists': False,
-                'valid_for_rejection': False,
-                'error': tray_capacity_validation['error'],
-                'status_message': tray_capacity_validation['status_message'],
-                'tray_capacity_mismatch': True,
-                'scanned_tray_capacity': tray_capacity_validation['scanned_tray_capacity'],
-                'expected_tray_capacity': tray_capacity_validation['expected_tray_capacity']
-            })
-        
-        # Delinked trays are always available for rejection reuse
-        return JsonResponse({
-            'exists': True,
-            'valid_for_rejection': True,
-            'status_message': 'Delinked Tray Available for Reuse',
-            'validation_type': 'delinked_tray_reusable',
-            'tray_capacity_compatible': True,
-            'is_delinked': True,
-            'tray_capacity': tray_id_obj.tray_capacity or tray_capacity_validation.get('expected_tray_capacity', 12)
-        })
 
-# ✅ RESTRUCTURED LOGIC: Follow Brass Audit pattern
-    # Get session-adjusted tray quantities for accurate rearrangement calculation
-    available_tray_quantities, _ = get_brass_available_quantities_with_session_allocations(current_lot_id, current_session_allocations)
-
-    # Step 1: Check if tray exists in BrassTrayId (existing tray)
-    tray_obj = BrassTrayId.objects.filter(tray_id=tray_id, lot_id=current_lot_id).first()
-
-    if tray_obj:
-        print(f"[Brass QC Reject Validation] Found in BrassTrayId for lot {current_lot_id}")
-
-        # Check if already rejected
-        if tray_obj.rejected_tray:
-            return JsonResponse({
-                'exists': False,
-                'valid_for_rejection': False,
-                'error': 'Already rejected in Brass QC',
-                'status_message': 'Already Rejected'
-            })
-
-        # Calculate session qty for this tray
-        session_qty_for_tray = 0
-        for alloc in current_session_allocations:
-            if tray_id in alloc.get('tray_ids', []):
-                # Divide the total qty by number of trays in this allocation
-                num_trays = len(alloc.get('tray_ids', []))
-                if num_trays > 0:
-                    session_qty_for_tray += alloc['qty'] // num_trays
-
-        adjusted_tray_qty = (tray_obj.tray_quantity or 0) - session_qty_for_tray
-
-        print(f"[Brass QC Reject Validation] Existing tray analysis:")
-        print(f"  - original_qty: {tray_obj.tray_quantity or 0}")
-        print(f"  - session_qty: {session_qty_for_tray}")
-        print(f"  - adjusted_qty: {adjusted_tray_qty}")
-        print(f"  - rejection_qty: {rejection_qty}")
-
-        tray_capacity = tray_obj.tray_capacity or 12
-
-        # Allow reuse of emptied trays (adjusted_qty == 0) up to tray capacity
-        # For trays with remaining qty, only allow up to remaining qty
-        if adjusted_tray_qty < 0:
-            return JsonResponse({
-                'exists': False,
-                'valid_for_rejection': False,
-                'error': f'Cannot reject {rejection_qty} pieces: tray has negative adjusted quantity {adjusted_tray_qty}',
-                'status_message': 'Invalid Tray State',
-                'validation_type': 'negative_adjusted_qty',
-                'available_qty': adjusted_tray_qty,
-                'requested_qty': rejection_qty
-            })
-        elif adjusted_tray_qty == 0:
-            # Tray is empty, allow reuse up to capacity
-            if rejection_qty > tray_capacity:
-                return JsonResponse({
-                    'exists': False,
-                    'valid_for_rejection': False,
-                    'error': f'Cannot reject {rejection_qty} pieces: exceeds tray capacity {tray_capacity}',
-                    'status_message': 'Exceeds Capacity',
-                    'validation_type': 'exceeds_capacity',
-                    'available_qty': adjusted_tray_qty,
-                    'requested_qty': rejection_qty,
-                    'tray_capacity': tray_capacity
-                })
-        else:
-            # Tray has remaining qty, only allow up to remaining
-            if rejection_qty > adjusted_tray_qty:
-                return JsonResponse({
-                    'exists': False,
-                    'valid_for_rejection': False,
-                    'error': f'Cannot reject {rejection_qty} pieces: tray only has {adjusted_tray_qty} available',
-                    'status_message': 'Insufficient Quantity',
-                    'validation_type': 'insufficient_quantity',
-                    'available_qty': adjusted_tray_qty,
-                    'requested_qty': rejection_qty
-                })
-
-        # Validation passed for existing tray
-        return JsonResponse({
-            'exists': True,
-            'valid_for_rejection': True,
-            'status_message': 'Available (Can Rearrange)',
-            'validation_type': 'existing_tray_in_brass',
-            'tray_capacity': tray_capacity,
-            'available_qty': adjusted_tray_qty,
-            'remaining_after_rejection': max(0, adjusted_tray_qty - rejection_qty)
-        })
-    
-    # Step 2: Not found in BrassTrayId, check TrayId for new/existing tray availability
-    print(f"[Brass QC Reject Validation] Not found in BrassTrayId, checking TrayId")
-    
-    # Check if tray belongs to a different lot
-    if tray_id_obj.lot_id and str(tray_id_obj.lot_id).strip():
-        if str(tray_id_obj.lot_id).strip() != str(current_lot_id).strip():
-            return JsonResponse({
-                'exists': False,
-                'valid_for_rejection': False,
-                'error': 'Tray belongs to different lot',
-                'status_message': 'Different Lot'
-            })
-    
-    # Check if it's a new tray (no lot_id or empty lot_id)
-    is_new_tray = (not tray_id_obj.lot_id or str(tray_id_obj.lot_id).strip() == '')
-    
-    if is_new_tray:
-        # Validate tray capacity compatibility
-        tray_capacity_validation = validate_brass_tray_capacity_compatibility(tray_id_obj, current_lot_id)
-        if not tray_capacity_validation['is_compatible']:
-            return JsonResponse({
-                'exists': False,
-                'valid_for_rejection': False,
-                'error': tray_capacity_validation['error'],
-                'status_message': tray_capacity_validation['status_message'],
-                'tray_capacity_mismatch': True,
-                'scanned_tray_capacity': tray_capacity_validation['scanned_tray_capacity'],
-                'expected_tray_capacity': tray_capacity_validation['expected_tray_capacity']
-            })
-        
-        return JsonResponse({
-            'exists': True,
-            'valid_for_rejection': True,
-            'status_message': 'New Tray Available',
-            'validation_type': 'new_tray_from_master',
-            'tray_capacity_compatible': True,
-            'tray_capacity': tray_id_obj.tray_capacity or tray_capacity_validation['expected_tray_capacity']
-        })
-    
-    # If we reach here, tray exists in TrayId with same lot_id but not in BrassTrayId
-    # This could be a valid scenario - treat as available existing tray
+    # -----------------------------------------------------------------
+    # STEP 2: Tray capacity compatibility
+    # -----------------------------------------------------------------
     tray_capacity_validation = validate_brass_tray_capacity_compatibility(tray_id_obj, current_lot_id)
     if not tray_capacity_validation['is_compatible']:
         return JsonResponse({
@@ -2189,14 +2041,281 @@ def brass_reject_check_tray_id_simple(request):
             'scanned_tray_capacity': tray_capacity_validation['scanned_tray_capacity'],
             'expected_tray_capacity': tray_capacity_validation['expected_tray_capacity']
         })
-    
+
+    # -----------------------------------------------------------------
+    # STEP 3: New / delinked trays → allow immediately
+    # They never consume reuse capacity.
+    # Cross-reason isolation does NOT apply to new/delinked trays.
+    # -----------------------------------------------------------------
+    if is_delinked:
+        print(f"[BRASS_REUSE] ✅ DELINKED tray: {tray_id} — allowed (does not consume reuse)")
+        return JsonResponse({
+            'exists': True,
+            'valid_for_rejection': True,
+            'status_message': 'Delinked Tray Available for Reuse',
+            'validation_type': 'delinked_tray_reusable',
+            'tray_capacity_compatible': True,
+            'is_delinked': True,
+            'tray_capacity': tray_id_obj.tray_capacity or tray_capacity_validation.get('expected_tray_capacity', 12)
+        })
+
+    if is_new_tray and (not tray_id_obj.lot_id or str(tray_id_obj.lot_id).strip() == ''):
+        print(f"[BRASS_REUSE] ✅ NEW tray: {tray_id} — allowed (does not consume reuse)")
+        return JsonResponse({
+            'exists': True,
+            'valid_for_rejection': True,
+            'status_message': 'New Tray Available',
+            'validation_type': 'new_tray_from_master',
+            'tray_capacity_compatible': True,
+            'tray_capacity': tray_id_obj.tray_capacity or tray_capacity_validation.get('expected_tray_capacity', 12)
+        })
+
+    # -----------------------------------------------------------------
+    # STEP 3a: Cross-reason isolation (EXISTING trays only)
+    # Only existing trays reach here — new/delinked already returned above.
+    # An existing tray must NOT be shared across different rejection reasons.
+    # Same-reason rescans are allowed.
+    # Skip entirely if rejection_reason_id is empty/falsy.
+    # -----------------------------------------------------------------
+    if rejection_reason_id:
+        # DB check: tray already saved with a different reason
+        try:
+            existing_cross_reason = Brass_QC_Rejected_TrayScan.objects.filter(
+                lot_id=current_lot_id,
+                rejected_tray_id=tray_id
+            ).exclude(
+                rejection_reason_id=int(rejection_reason_id)
+            ).exists()
+
+            if existing_cross_reason:
+                return JsonResponse({
+                    'exists': True,
+                    'valid_for_rejection': False,
+                    'error': 'Tray already used by another rejection reason.',
+                    'status_message': 'Tray Cross-Mixing'
+                })
+        except (ValueError, TypeError):
+            pass  # rejection_reason_id not a valid int — skip DB check
+
+        # Session check: tray in current unsaved allocations with a different reason
+        for alloc in current_session_allocations:
+            if int(alloc.get('qty', 0)) == 0:
+                continue
+            alloc_reason_id = str(alloc.get('reason_id', '')).strip()
+            if not alloc_reason_id:
+                continue
+            alloc_tray_ids = alloc.get('tray_ids', [])
+            if isinstance(alloc_tray_ids, str):
+                alloc_tray_ids = [alloc_tray_ids]
+
+            if tray_id in alloc_tray_ids:
+                if alloc_reason_id == str(rejection_reason_id):
+                    continue  # Same reason rescan → allowed
+                return JsonResponse({
+                    'exists': True,
+                    'valid_for_rejection': False,
+                    'error': 'Tray already used by another rejection reason.',
+                    'status_message': 'Tray Cross-Mixing'
+                })
+
+    # -----------------------------------------------------------------
+    # STEP 4: Existing tray — basic ownership & status checks
+    # -----------------------------------------------------------------
+    # Check lot ownership from TrayId
+    if tray_id_obj.lot_id and str(tray_id_obj.lot_id).strip():
+        if str(tray_id_obj.lot_id).strip() != str(current_lot_id).strip():
+            return JsonResponse({
+                'exists': False,
+                'valid_for_rejection': False,
+                'error': 'Tray belongs to different lot',
+                'status_message': 'Different Lot'
+            })
+
+    # Check BrassTrayId record
+    brass_tray_obj = BrassTrayId.objects.filter(tray_id=tray_id, lot_id=current_lot_id).first()
+
+    if brass_tray_obj:
+        if brass_tray_obj.rejected_tray:
+            return JsonResponse({
+                'exists': False,
+                'valid_for_rejection': False,
+                'error': 'Already rejected in Brass QC',
+                'status_message': 'Already Rejected'
+            })
+
+    # -----------------------------------------------------------------
+    # STEP 5: COVERAGE-BASED PHYSICAL REUSE
+    # Reuse eligibility accounts for top tray partial fill.
+    # -----------------------------------------------------------------
+
+    # 5a. Compute total_rejected_qty from current_session_allocations
+    total_rejected_qty = 0
+    current_reason_already_present = False
+
+    for alloc in current_session_allocations:
+        total_rejected_qty += int(alloc.get('qty', 0))
+        if str(alloc.get('reason_id')) == str(rejection_reason_id):
+            current_reason_already_present = True
+
+    # Include rejection_qty only if the current reason is NOT already present
+    if not current_reason_already_present:
+        total_rejected_qty += rejection_qty
+
+    # 5b. Determine tray_capacity
+    tray_capacity = 0
+    # From existing BrassTrayId trays in the lot
+    sample_brass = BrassTrayId.objects.filter(
+        lot_id=current_lot_id, rejected_tray=False, tray_capacity__isnull=False
+    ).first()
+    if sample_brass and sample_brass.tray_capacity:
+        tray_capacity = sample_brass.tray_capacity
+
+    # Fallback to TotalStockModel batch
+    if not tray_capacity:
+        ts = TotalStockModel.objects.filter(lot_id=current_lot_id).first()
+        if ts and ts.batch_id and hasattr(ts.batch_id, 'tray_capacity') and ts.batch_id.tray_capacity:
+            tray_capacity = ts.batch_id.tray_capacity
+
+    # Fallback default
+    if not tray_capacity:
+        tray_capacity = 12
+
+    # 5c. Determine top_tray_qty (GLOBAL for the lot, not per scanned tray)
+
+    top_tray_qty = 0
+
+    top_tray = BrassTrayId.objects.filter(
+        lot_id=current_lot_id,
+        rejected_tray=False
+    ).order_by('tray_quantity').first()
+
+    if top_tray:
+        top_tray_qty = top_tray.tray_quantity or 0
+
+    # Include session allocations ON THAT SAME top tray ONLY
+    top_tray = BrassTrayId.objects.filter(
+        lot_id=current_lot_id,
+        rejected_tray=False
+    ).order_by('tray_quantity').first()
+
+    top_tray_qty = top_tray.tray_quantity if top_tray else 0
+
+    # 5d. Physical coverage-based reusable tray calculation
+    remaining_after_top = max(0, total_rejected_qty - top_tray_qty)
+
+    max_reusable_trays = 0
+
+    # Top tray counts as 1 if it contributes anything
+    if total_rejected_qty > top_tray_qty:
+        max_reusable_trays = 1
+
+        # Additional trays must be FULLY justified
+        if remaining_after_top > tray_capacity:
+            additional_full_trays = (remaining_after_top - tray_capacity) // tray_capacity
+            max_reusable_trays += additional_full_trays
+
+    top_tray_id = top_tray.tray_id if top_tray else None
+    print(f"[BRASS_REUSE] Coverage: total_rejected={total_rejected_qty}, top_tray={top_tray_id}, "
+          f"top_tray_qty={top_tray_qty}, remaining_after_top={remaining_after_top}, "
+          f"capacity={tray_capacity}, max_reusable_trays={max_reusable_trays}")
+
+    # -----------------------------------------------------------------
+    # STEP 6: Count existing trays already used in the session
+    # "Existing tray" = NOT new AND NOT delinked.
+    # New trays must NEVER consume reuse capacity.
+    # -----------------------------------------------------------------
+    used_reusable_trays = set()
+
+    for alloc in current_session_allocations:
+        alloc_tray_ids = alloc.get('tray_ids', [])
+        if isinstance(alloc_tray_ids, str):
+            alloc_tray_ids = [alloc_tray_ids]
+
+        for t_id in alloc_tray_ids:
+            if not t_id:
+                continue
+            # Top tray is NOT a reusable tray — it already exists
+            if top_tray and t_id == top_tray.tray_id:
+                continue
+            # Determine if this tray is new or delinked
+            t_obj = TrayId.objects.filter(tray_id=t_id).first()
+            t_is_new = (getattr(t_obj, 'new_tray', False) and not t_obj.lot_id) if t_obj else False
+            t_is_delinked = getattr(t_obj, 'delink_tray', False) if t_obj else False
+
+            if not t_is_new and not t_is_delinked:
+                used_reusable_trays.add(t_id)
+
+    # Count the currently validated tray as a reusable tray
+    if not is_new_tray and not is_delinked:
+        if not top_tray or tray_id != top_tray.tray_id:
+            used_reusable_trays.add(tray_id)
+
+    used_reusable_count = len(used_reusable_trays)
+
+    # 6b. How many more trays may be reused
+    remaining_reuse_slots = max(0, max_reusable_trays - used_reusable_count)
+
+    print(f"[BRASS_REUSE] Used reusable trays: {used_reusable_count} {used_reusable_trays}, "
+          f"remaining reuse slots: {remaining_reuse_slots}")
+
+    # -----------------------------------------------------------------
+    # STEP 7: Enforce reuse limit
+    # Block if no more reuse slots are available.
+    # -----------------------------------------------------------------
+    if remaining_reuse_slots <= 0:
+        return JsonResponse({
+            'exists': True,
+            'valid_for_rejection': False,
+            'error': (
+                f'Reuse limit reached. Total Rejected: {total_rejected_qty}, '
+                f'Already used: {used_reusable_count}.'
+            ),
+            'status_message': 'Reuse Limit Reached'
+        })
+
+    # -----------------------------------------------------------------
+    # STEP 8: Post-reuse informational computation (Brass QC specific)
+    # Global reuse is confirmed — tray-level qty is for UI/logging only.
+    # -----------------------------------------------------------------
+    if brass_tray_obj:
+        tray_cap = brass_tray_obj.tray_capacity or tray_capacity
+
+        # Calculate session qty already allocated to this tray (informational)
+        session_qty_for_tray = 0
+        for alloc in current_session_allocations:
+            if tray_id in alloc.get('tray_ids', []):
+                num_trays = len(alloc.get('tray_ids', []))
+                if num_trays > 0:
+                    session_qty_for_tray += int(alloc.get('qty', 0)) // num_trays
+
+        adjusted_tray_qty = (brass_tray_obj.tray_quantity or 0) - session_qty_for_tray
+
+        print(f"[BRASS_REUSE] Informational: original={brass_tray_obj.tray_quantity or 0}, "
+              f"session={session_qty_for_tray}, adjusted={adjusted_tray_qty}, rejection_qty={rejection_qty}")
+
+        # Always allow — global reuse contract already passed
+        return JsonResponse({
+            'exists': True,
+            'valid_for_rejection': True,
+            'status_message': 'Tray reuse allowed',
+            'validation_type': 'reuse_existing',
+            'tray_capacity': tray_cap,
+            'available_qty': max(0, adjusted_tray_qty),
+            'remaining_after_rejection': max(0, adjusted_tray_qty - rejection_qty)
+        })
+
+    # -----------------------------------------------------------------
+    # STEP 9: Existing tray in TrayId but not in BrassTrayId
+    # Reuse is already confirmed by the global contract — allow it.
+    # -----------------------------------------------------------------
+    print(f"[BRASS_REUSE] Tray {tray_id} found in TrayId (same lot) but not in BrassTrayId — allowing reuse")
     return JsonResponse({
         'exists': True,
         'valid_for_rejection': True,
-        'status_message': 'Available (from TrayId)',
-        'validation_type': 'existing_tray_from_master',
+        'status_message': 'Tray reuse allowed',
+        'validation_type': 'reuse_existing',
         'tray_capacity_compatible': True,
-        'tray_capacity': tray_id_obj.tray_capacity or tray_capacity_validation['expected_tray_capacity']
+        'tray_capacity': tray_id_obj.tray_capacity or tray_capacity_validation.get('expected_tray_capacity', 12)
     })
 
 
