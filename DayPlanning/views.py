@@ -1605,8 +1605,7 @@ class DayPlanningPickTableAPIView(APIView):
             mmc = ModelMasterCreation.objects.filter(batch_id=data['batch_id']).first()
             images = []
             if mmc:
-                model_master = mmc.model_stock_no
-                for img in getattr(model_master, 'images', []).all():
+                for img in getattr(mmc, 'images', []).all():
                     if getattr(img, 'master_image', None):
                         images.append(img.master_image.url)
             if not images:
@@ -2933,8 +2932,7 @@ class DPCompletedTableView(APIView):
             mmc = ModelMasterCreation.objects.filter(batch_id=data['batch_id']).first()
             images = []
             if mmc:
-                model_master = mmc.model_stock_no
-                for img in getattr(model_master, 'images', []).all():
+                for img in getattr(mmc, 'images', []).all():
                     if getattr(img, 'master_image', None):
                         images.append(img.master_image.url)
             if not images:

@@ -2991,6 +2991,15 @@ if (modalTopHeader) {
                if (!data.exists) {
                  showError(data.error || `Tray ID "${trayId}" validation failed.`);
                } else {
+                 // ✅ NEW: Update modal verificationData to persist the verification status
+                 const modal = document.getElementById("trayScanModal_DayPlanning");
+                 if (modal && modal.verificationData) {
+                   modal.verificationData[position] = {
+                     is_verified: true,
+                     tray_id: trayId,
+                     verification_status: 'pass'
+                   };
+                 }
                  // ✅ NEW: Hide "Please Scan" indicator after successful validation
                  const pleaseScanIndicator = document.getElementById("pleaseScanIndicator");
                  if (pleaseScanIndicator) {
@@ -4011,8 +4020,8 @@ function handleDraftSave() {
        const modal = document.getElementById("trayScanModal_DayPlanning");
        const detailsDiv = document.getElementById("trayScanDetails_DayPlanning");
        if (modal && detailsDiv && typeof modal.buildTableHTML === "function") {
-         // Only add validation column if not already present (by checking for a unique marker)
-         if (!detailsDiv.innerHTML.includes('tray-verified-indicator')) {
+         // Only rebuild table if verification indicators are not present
+         if (!detailsDiv.innerHTML.includes('Verified') && !detailsDiv.innerHTML.includes('Not Verified')) {
            detailsDiv.innerHTML = modal.buildTableHTML(true);
          }
        }

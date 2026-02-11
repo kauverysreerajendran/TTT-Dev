@@ -276,19 +276,16 @@ def iqf_get_brass_rejection_quantities(request):
 
         # If no tray-wise reasons, show lot_rejected_comment from reason_store_model
         lot_rejected_comment = ""
-        total_rejection_quantity = 0
-        reason_store = reason_store_model.objects.filter(lot_id=lot_id).order_by('-id').first()
-        if reason_store:
-            total_rejection_quantity = reason_store.total_rejection_quantity or 0
-            if not rejection_qty_map:
+        if not rejection_qty_map:
+            reason_store = reason_store_model.objects.filter(lot_id=lot_id).order_by('-id').first()
+            if reason_store:
                 lot_rejected_comment = reason_store.lot_rejected_comment or ""
 
         return Response({
             'success': True,
             'rejection_reasons': rejection_reasons,
             'brass_rejection_qty_map': rejection_qty_map,
-            'lot_rejected_comment': lot_rejected_comment,
-            'total_rejection_quantity': total_rejection_quantity
+            'lot_rejected_comment': lot_rejected_comment
         })
     except Exception as e:
         print(f"❌ ERROR in iqf_get_brass_rejection_quantities: {str(e)}")
