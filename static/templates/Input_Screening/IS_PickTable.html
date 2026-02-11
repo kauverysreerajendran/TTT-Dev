@@ -2,7 +2,7 @@
 {% load static %}
 {% load stock_filters %} 
 {% block content %}
- 
+<script>console.log("🔥 CRITICAL DEBUG: IS_PickTable.html LOADED 🔥");</script>
   <style>
     /* ✅ FIX: Ensure acceptedTrayCancelBtn is always accessible */
     #acceptedTrayCancelBtn {
@@ -5233,21 +5233,21 @@ window.loadDraftDataIntoForm = function(draftData) {
           const trayIdCell = row.querySelector('td:last-child');
           
           if (trayIdCell) {
-            const trayInputs = trayIdCell.querySelectorAll('.rejection-tray-id-input');
-            console.log(`Found ${trayInputs.length} tray inputs for reason ${reasonId}`);
+            const tInputs = trayIdCell.querySelectorAll('.rejection-tray-id-input');
+            console.log(`Found ${tInputs.length} tray inputs for reason ${reasonId}`);
             
             // ✅ FIXED: Load each tray into the corresponding input
             traysForReason.forEach((scan, index) => {
-              if (index < trayInputs.length) {
-                const trayInput = trayInputs[index];
-                const trayCapacity = parseInt(trayInput.getAttribute('data-tray-capacity')) || 0;
-                if (trayInput && trayInput.value !== undefined) {
-                  trayInput.value = scan.tray_id;
-                  console.log(`✅ Set tray ${index + 1}: ${scan.tray_id} (qty: ${scan.tray_qty}, capacity: ${trayCapacity})`);
-                } else {
-                  console.warn('⚠️ [loadDraftDataIntoForm] Tray input is null or invalid at index', index);
-                  return;
-                }
+              if (index < tInputs.length) {
+                 const tInput = tInputs[index];
+                 const trayCapacity = parseInt(tInput.getAttribute('data-tray-capacity')) || 0;
+                 if (tInput && tInput.value !== undefined) {
+                   tInput.value = scan.tray_id;
+                   console.log(`✅ Set tray ${index + 1}: ${scan.tray_id} (qty: ${scan.tray_qty}, capacity: ${trayCapacity})`);
+                 } else {
+                   console.warn('⚠️ [loadDraftDataIntoForm] Tray input is null or invalid at index', index);
+                   return;
+                 }
 
                 // ✅ FIXED: First check if this tray was previously validated by backend
                 setTimeout(async () => {
@@ -5259,7 +5259,7 @@ window.loadDraftDataIntoForm = function(draftData) {
                       const data = await response.json();
                       
                       // ✅ CRITICAL FIX: Store complete backend response data for frontend validation
-                      trayInput._backendResponseData = data;
+                      tInput._backendResponseData = data;
                       console.log(`✅ [loadDraftDataIntoForm] Stored complete backend response data for frontend validation on ${scan.tray_id}`);
                       
                       // ✅ GLOBAL FIX: Store available quantities globally for all tray validations in this lot
@@ -5272,20 +5272,20 @@ window.loadDraftDataIntoForm = function(draftData) {
                       
                       if (data.success && data.message === 'Perfect capacity match!') {
                         // Mark as backend validated and show success state
-                        trayInput._isBackendValidated = true;
-                        trayInput._isValid = true;
-                        trayInput.style.backgroundColor = '#d4edda';
-                        trayInput.style.borderColor = '#28a745';
-                        trayInput.style.borderWidth = '2px';
+                        tInput._isBackendValidated = true;
+                        tInput._isValid = true;
+                        tInput.style.backgroundColor = '#d4edda';
+                        tInput.style.borderColor = '#28a745';
+                        tInput.style.borderWidth = '2px';
                         
                         // ✅ NEW: Store actual tray quantity from backend response
                         if (data.tray_actual_quantity) {
-                          trayInput._backendTrayQuantity = data.tray_actual_quantity;
+                          tInput._backendTrayQuantity = data.tray_actual_quantity;
                           console.log(`✅ [loadDraftDataIntoForm] Stored backend tray quantity: ${data.tray_actual_quantity} for ${scan.tray_id}`);
                         }
                         
                         // Update error span with success message
-                        const errorSpan = trayInput.parentElement?.parentElement?.querySelector('.rejection-tray-error');
+                        const errorSpan = tInput.parentElement?.parentElement?.querySelector('.rejection-tray-error');
                         if (errorSpan) {
                           errorSpan.innerHTML = '✅ Valid for re-use - Perfect capacity match';
                           errorSpan.style.display = 'block';
@@ -5301,16 +5301,16 @@ window.loadDraftDataIntoForm = function(draftData) {
                         console.log(`✅ [loadDraftDataIntoForm] Backend validated ${scan.tray_id} as valid`);
                       } else {
                         // Show draft styling for invalid/unvalidated trays
-                        trayInput.style.backgroundColor = '#fff3cd';
-                        trayInput.style.borderColor = '#f39c12';
-                        trayInput.style.borderWidth = '2px';
+                        tInput.style.backgroundColor = '#fff3cd';
+                        tInput.style.borderColor = '#f39c12';
+                        tInput.style.borderWidth = '2px';
                         
                         // ✅ NEW: Extract actual tray quantity from error message for accurate validation
                         if (data.error && data.error.includes('but tray has')) {
                           const match = data.error.match(/but tray has (\d+) pieces/);
                           if (match) {
                             const actualQty = parseInt(match[1]);
-                            trayInput._extractedTrayQuantity = actualQty;
+                            tInput._extractedTrayQuantity = actualQty;
                             console.log(`✅ [loadDraftDataIntoForm] Extracted actual tray quantity from error: ${actualQty} for ${scan.tray_id}`);
                           }
                         }
@@ -5319,9 +5319,9 @@ window.loadDraftDataIntoForm = function(draftData) {
                       }
                     } else {
                       // No lot ID available, use draft styling
-                      trayInput.style.backgroundColor = '#fff3cd';
-                      trayInput.style.borderColor = '#f39c12';
-                      trayInput.style.borderWidth = '2px';
+                      tInput.style.backgroundColor = '#fff3cd';
+                      tInput.style.borderColor = '#f39c12';
+                      tInput.style.borderWidth = '2px';
                     }
                     
                     // Trigger validation after status check to update proceed button
@@ -5337,9 +5337,9 @@ window.loadDraftDataIntoForm = function(draftData) {
                   } catch (error) {
                     console.warn('⚠️ Failed to validate draft tray:', error);
                     // Fallback to draft styling
-                    trayInput.style.backgroundColor = '#fff3cd';
-                    trayInput.style.borderColor = '#f39c12';
-                    trayInput.style.borderWidth = '2px';
+                    tInput.style.backgroundColor = '#fff3cd';
+                    tInput.style.borderColor = '#f39c12';
+                    tInput.style.borderWidth = '2px';
                   }
                 }, 100);
                 
@@ -5347,7 +5347,7 @@ window.loadDraftDataIntoForm = function(draftData) {
                 
                 // ✅ NEW: Update the data-tray-qty attribute to match the saved quantity
                 if (scan.tray_qty) {
-                  trayInput.setAttribute('data-tray-qty', scan.tray_qty);
+                  tInput.setAttribute('data-tray-qty', scan.tray_qty);
                 }
               } else {
                 console.log(`  ⚠️ No input available for tray ${index + 1}: ${scan.tray_id}`);
@@ -5371,18 +5371,18 @@ window.loadDraftDataIntoForm = function(draftData) {
                   
                   traysForReason.forEach((scan, index) => {
                     if (index < newTrayInputs.length) {
-                      const trayInput = newTrayInputs[index];
-                      if (trayInput && trayInput.value !== undefined) {
-                        trayInput.value = scan.tray_id;
+                      const ti = newTrayInputs[index];
+                      if (ti && ti.value !== undefined) {
+                        ti.value = scan.tray_id;
                         // Immediately trigger validation for loaded value
-                        trayInput.dispatchEvent(new Event('input', { bubbles: true }));
-                        trayInput.dispatchEvent(new Event('blur', { bubbles: true }));
-                        trayInput.style.backgroundColor = '#fff3cd';
-                        trayInput.style.borderColor = '#f39c12';
-                        trayInput.style.borderWidth = '2px';
+                        ti.dispatchEvent(new Event('input', { bubbles: true }));
+                        ti.dispatchEvent(new Event('blur', { bubbles: true }));
+                        ti.style.backgroundColor = '#fff3cd';
+                        ti.style.borderColor = '#f39c12';
+                        ti.style.borderWidth = '2px';
                         
                         if (scan.tray_qty) {
-                          trayInput.setAttribute('data-tray-qty', scan.tray_qty);
+                          ti.setAttribute('data-tray-qty', scan.tray_qty);
                         }
                         
                         console.log(`  🔄 Re-loaded tray ${index + 1}: ${scan.tray_id}`);
@@ -5763,39 +5763,43 @@ function generateDynamicTrayIdInputs(row, quantity, trayIdCell) {
     trayNumber.textContent = `${i + 1}`;
     
     // Tray ID input
-    const trayInput = document.createElement('input');
-    trayInput.type = 'text';
-    trayInput.className = 'form-control rejection-tray-id-input';
-    trayInput.style.cssText = `
+    const tInput = document.createElement('input');
+    tInput.type = 'text';
+    tInput.className = 'form-control rejection-tray-id-input';
+    tInput.style.cssText = `
       flex: 1; font-size: 12px; padding: 6px 10px;
       border: 2px solid #ced4da; border-radius: 6px;
       transition: all 0.2s ease; text-align: left; font-weight: 500;
     `;
-    trayInput.placeholder = `Scan Tray ID ${i + 1}`;
+    tInput.placeholder = `Scan Tray ID ${i + 1}`;
     
     // Set data attributes
-    trayInput.setAttribute('data-tray-index', i);
-    trayInput.setAttribute('data-tray-capacity', trayCapacity);
-    trayInput.setAttribute('data-tray-qty', trayQty);
-    trayInput.setAttribute('data-is-complete', trayQty === trayCapacity);
-    trayInput.setAttribute('data-is-partial', trayQty < trayCapacity);
-    trayInput.setAttribute('data-reason-id', reasonId);
-    trayInput.setAttribute('data-rejection-qty', quantity);
-    trayInput.setAttribute('data-rejection-reason', reasonText);
-    trayInput.setAttribute('data-expected-total-trays', traysNeeded);
-    trayInput.setAttribute('data-tray-position-in-rejection', i + 1);
+    tInput.setAttribute('data-tray-index', i);
+    tInput.setAttribute('data-tray-capacity', trayCapacity);
+    tInput.setAttribute('data-tray-qty', trayQty);
+    tInput.setAttribute('data-is-complete', trayQty === trayCapacity);
+    tInput.setAttribute('data-is-partial', trayQty < trayCapacity);
+    tInput.setAttribute('data-reason-id', reasonId);
+    tInput.setAttribute('data-rejection-qty', quantity);
+    tInput.setAttribute('data-rejection-reason', reasonText);
+    tInput.setAttribute('data-expected-total-trays', traysNeeded);
+    tInput.setAttribute('data-tray-position-in-rejection', i + 1);
+    
+    // ✅ NEW: Store original quantity for delink logic
+    tInput._originalQty = trayQty;
     
     // ✅ NEW: Add event listeners for duplicate validation
-    trayInput.addEventListener('change', function() {
-      setTimeout(() => {
-        validateDuplicateTrayIds();
-      }, 100);
+    tInput.addEventListener('change', function() {
+      validateDuplicateTrayIds();
+      updateFormValidationState();
     });
     
-    trayInput.addEventListener('paste', function() {
-      setTimeout(() => {
-        validateDuplicateTrayIds();
-      }, 200);
+    tInput.addEventListener('input', function() {
+      // Clear error display on input
+      const errorSpan = this.parentElement.parentElement.querySelector('.rejection-tray-error');
+      if (errorSpan) {
+        errorSpan.style.display = 'none';
+      }
     });
     
     // Error span for this specific tray
@@ -5821,7 +5825,7 @@ function generateDynamicTrayIdInputs(row, quantity, trayIdCell) {
     `;
     
     trayInputRow.appendChild(trayNumber);
-    trayInputRow.appendChild(trayInput);
+    trayInputRow.appendChild(tInput);
     
     trayInputGroup.appendChild(trayInputRow);
     trayInputGroup.appendChild(errorSpan);
@@ -6181,14 +6185,16 @@ function addInstantTrayValidationToInputs(trayIdCell) {
       const currentSessionAllocations = collectCurrentSessionAllocations();
       
       // Build validation request
-      const queryParams = new URLSearchParams({
+      const queryParamsObject = {
         tray_id: trayId,
         lot_id: lotId,
         rejection_qty: rejectionQty,
         rejection_reason_id: rejectionReasonId,
         current_session_allocations: JSON.stringify(currentSessionAllocations),
-        is_draft: isDraftMode ? 'true' : 'false'
-      });
+        is_draft: (typeof isDraftMode !== 'undefined' && isDraftMode) ? 'true' : 'false'
+      };
+      
+      const queryParams = new URLSearchParams(queryParamsObject);
       
       console.log('🔧 [InstantValidation] API call with params:', queryParams.toString());
       
@@ -7962,14 +7968,16 @@ function interceptFormSubmission() {
        document.querySelectorAll('.rejection-qty-input').forEach(function(qtyInput) {
          qtyInput.addEventListener('input', function() {
            const row = qtyInput.closest('tr');
-           const trayInput = row.querySelector('.rejection-tray-id-input');
-           if (parseInt(qtyInput.value) > 0) {
-             trayInput.disabled = false;
-             trayInput.required = true;
-           } else {
-             trayInput.value = '';
-             trayInput.disabled = true;
-             trayInput.required = false;
+           const tInput = row.querySelector('.rejection-tray-id-input');
+           if (tInput) {
+             if (parseInt(qtyInput.value) > 0) {
+               tInput.disabled = false;
+               tInput.required = true;
+             } else {
+               tInput.value = '';
+               tInput.disabled = true;
+               tInput.required = false;
+             }
            }
            
            // ✅ Check tray capacity violations after quantity change
@@ -8985,36 +8993,49 @@ function interceptFormSubmission() {
        return modal?.dataset?.stockLotId || '';
      }
    
-   // ✅ SIMPLIFIED: collectCurrentSessionAllocations function for frontend compatibility
-   function collectCurrentSessionAllocations(excludeInput) {
-     const allocations = [];
-     
-     console.log('📊 [collectCurrentSessionAllocations] Starting allocation collection...');
-     
-     document.querySelectorAll('.rejection-qty-input').forEach(qtyInput => {
-       const qty = parseInt(qtyInput.value) || 0;
-       const reasonId = qtyInput.getAttribute('data-reason-id');
-       
-       if (qty > 0) {
-         const row = qtyInput.closest('tr');
-         const reasonCell = row.cells[2];
-         const reasonText = reasonCell ? reasonCell.textContent.trim() : '';
-         
-         console.log(`📋 [collectCurrentSessionAllocations] Processing reason ${reasonId} (${reasonText}): qty=${qty}`);
-         
-         // For the new simplified logic, we just need the basic rejection quantities
-         allocations.push({
-           reason_id: reasonId,
-           reason_text: reasonText,
-           qty: qty,
-           rejection_qty: qty  // Add both for compatibility
-         });
-       }
-     });
-     
-     console.log('📊 [collectCurrentSessionAllocations] FINAL allocations:', allocations);
-     return allocations;
-   }
+    // ✅ SIMPLIFIED: collectCurrentSessionAllocations function for frontend compatibility
+    // UPDATED: Now includes tray_ids for backend validation
+    function collectCurrentSessionAllocations(excludeInput) {
+      const allocations = [];
+      
+      console.log('📊 [collectCurrentSessionAllocations] Starting allocation collection...');
+      
+      document.querySelectorAll('.rejection-qty-input').forEach(qtyInput => {
+        const qty = parseInt(qtyInput.value) || 0;
+        const reasonId = qtyInput.getAttribute('data-reason-id');
+        
+        if (qty > 0) {
+          const row = qtyInput.closest('tr');
+          const reasonCell = row.cells[2];
+          const reasonText = reasonCell ? reasonCell.textContent.trim() : '';
+          
+          // Collect tray IDs for this reason
+          const trayIdCell = row.querySelector('td:last-child');
+          const tInputs = trayIdCell ? trayIdCell.querySelectorAll('.rejection-tray-id-input') : [];
+          const trayIds = [];
+          
+          tInputs.forEach(ti => {
+            const val = ti.value.trim();
+            if (ti !== excludeInput && val) {
+              trayIds.push(val);
+            }
+          });
+          
+          console.log(`📋 [collectCurrentSessionAllocations] Processing reason ${reasonId} (${reasonText}): qty=${qty}, trayIds=[${trayIds.join(', ')}]`);
+          
+          allocations.push({
+            reason_id: reasonId,
+            reason_text: reasonText,
+            qty: qty,
+            rejection_qty: qty,
+            tray_ids: trayIds  // ✅ CRITICAL: Include tray IDs for reuse limit check
+          });
+        }
+      });
+      
+      console.log('📊 [collectCurrentSessionAllocations] FINAL allocations:', allocations);
+      return allocations;
+    }
 
    // ✅ ENHANCED: Update rejection scan counter with quantity tracking
    function updateRejectionScanCounter() {
@@ -12981,12 +13002,30 @@ document.addEventListener("DOMContentLoaded", function () {
       let apiUrl = '';
       let queryParams = {};
 
-      if (type === 'rejection') {
-        const rejectionQty = parseInt(this.getAttribute('data-tray-qty')) || 0;
-        const rejectionReasonId = this.getAttribute('data-reason-id') || '';
-        const currentSessionAllocations = collectCurrentSessionAllocations();
-        
-        queryParams = {
+        if (type === 'rejection') {
+          const rejectionQty = parseInt(this.getAttribute('data-tray-qty')) || 0;
+          const rejectionReasonId = this.getAttribute('data-reason-id') || '';
+          
+          console.log(`DEBUG: Checking for collectCurrentSessionAllocationsWithNewTrayTracking... Type: ${typeof collectCurrentSessionAllocationsWithNewTrayTracking}`);
+          
+          // alert("DEBUG: Frontend Logic Updated - 1"); // Temporary check
+          
+          let currentSessionAllocations = [];
+          
+          if (typeof window.collectCurrentSessionAllocationsWithNewTrayTracking === 'function') {
+             console.log("DEBUG: Using window.collectCurrentSessionAllocationsWithNewTrayTracking");
+             currentSessionAllocations = window.collectCurrentSessionAllocationsWithNewTrayTracking(this);
+          } else if (typeof collectCurrentSessionAllocationsWithNewTrayTracking === 'function') {
+             console.log("DEBUG: Using local collectCurrentSessionAllocationsWithNewTrayTracking");
+             currentSessionAllocations = collectCurrentSessionAllocationsWithNewTrayTracking(this);
+          } else {
+             console.warn("DEBUG: Falling back to OLD collectCurrentSessionAllocations (Missing tray_ids!)");
+             currentSessionAllocations = (typeof collectCurrentSessionAllocations === 'function' ? collectCurrentSessionAllocations() : []);
+          }
+           
+          console.log('DEBUG: Payload allocations being sent:', currentSessionAllocations);
+
+          queryParams = {
           tray_id: trayId,
           lot_id: lotId,
           rejection_qty: rejectionQty,
@@ -13053,6 +13092,68 @@ document.addEventListener("DOMContentLoaded", function () {
     childList: true,
     subtree: true
   });
+
+   // ✅ NEW: Enhanced session allocation collection with NEW tray tracking
+   window.collectCurrentSessionAllocationsWithNewTrayTracking = function(excludeInput) {
+     const allocations = [];
+     
+     console.log('📊 [NEW Tray Aware Collection] Starting allocation collection...');
+     
+     document.querySelectorAll('.rejection-qty-input').forEach(qtyInput => {
+       const qty = parseInt(qtyInput.value) || 0;
+       const reasonId = qtyInput.getAttribute('data-reason-id');
+       
+       if (qty > 0) {
+         const row = qtyInput.closest('tr');
+         const reasonCell = row.cells[2];
+         const reasonText = reasonCell ? reasonCell.textContent.trim() : '';
+         const trayIdCell = row.querySelector('td:last-child');
+         const trayInputs = trayIdCell.querySelectorAll('.rejection-tray-id-input');
+         
+         const validTrayAllocations = [];
+         let validTrayCount = 0;
+         
+         trayInputs.forEach((trayInput, index) => {
+           const trayId = trayInput.value.trim();
+           
+           if (trayInput === excludeInput) {
+             return; // Skip current input
+           }
+           
+           if (trayId) {
+             const errorSpan = trayInput.parentElement.querySelector('.rejection-tray-error');
+             const hasError = errorSpan && 
+                              errorSpan.style.display === 'block' && 
+                              (errorSpan.textContent.includes('❌') || errorSpan.style.color === '#721c24');
+             
+             if (!hasError) {
+               const individualTrayQty = parseInt(trayInput.getAttribute('data-tray-qty')) || 0;
+               
+               validTrayAllocations.push({
+                 tray_id: trayId,
+                 tray_qty: individualTrayQty
+               });
+               validTrayCount++;
+             }
+           }
+         });
+         
+         if (validTrayCount > 0) {
+           validTrayAllocations.forEach(trayAllocation => {
+             allocations.push({
+               reason_id: reasonId,
+               reason_text: reasonText,
+               qty: trayAllocation.tray_qty,
+               tray_ids: [trayAllocation.tray_id] // ✅ Include tray_ids
+             });
+           });
+         }
+       }
+     });
+     
+     console.log('📊 [NEW Tray Aware Collection] FINAL allocations:', allocations);
+     return allocations;
+   };
 });
 </script>
 
@@ -13513,13 +13614,13 @@ window.testScenario310 = function() {
   
   try {
     // Find tray inputs with JB-A00310
-    const trayInputs = Array.from(document.querySelectorAll('.rejection-tray-id-input'))
+    const tInputs = Array.from(document.querySelectorAll('.rejection-tray-id-input'))
       .filter(input => input.value.trim() === 'JB-A00310');
     
-    console.log(`Found ${trayInputs.length} inputs with tray ID JB-A00310`);
+    console.log(`Found ${tInputs.length} inputs with tray ID JB-A00310`);
     
-    if (trayInputs.length > 0) {
-      const validationResult = validateTrayCapacityAcrossRejections('JB-A00310', trayInputs[0]);
+    if (tInputs.length > 0) {
+      const validationResult = validateTrayCapacityAcrossRejections('JB-A00310', tInputs[0]);
       console.log('Validation result:', validationResult);
       
       if (!validationResult.valid) {

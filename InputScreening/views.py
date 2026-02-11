@@ -3428,12 +3428,16 @@ def calculate_distribution_after_rejections(lot_id, original_distribution):
     """
     Calculate the current tray distribution after applying all rejections.
     
-    CORRECTED LOGIC:
-    - NEW tray usage frees up existing tray space (creates empty trays)
-    - Existing tray usage removes that tray entirely from distribution  
-    - SHORTAGE rejections consume quantities from existing trays (can create empty trays)
+    CORRECTED LOGIC (FLOATING QUANTITY APPROACH):
+    - We track "floating_extra_qty" for items that were in an existing tray 
+      that got reused for rejection.
+    - When an existing tray is reused, its REMAINING good items become "floating".
+    - These floating items are used to satisfy future shortages or space needs first.
+    - At the end, any remaining floating items are added back to the distribution 
+      (simulating them being put into a tray, likely the top tray).
     """
     current_distribution = original_distribution.copy()
+    floating_extra_qty = 0  # Items that are "homeless" but valid
     
     # Get all rejections for this lot ordered by creation
     rejections = IP_Rejected_TrayScan.objects.filter(lot_id=lot_id).order_by('id')
@@ -3451,45 +3455,81 @@ def calculate_distribution_after_rejections(lot_id, original_distribution):
             continue
         
         print(f"DEBUG: Processing rejection - Reason: {reason}, Qty: {rejected_qty}, Tray ID: '{tray_id}'")
+        print(f"DEBUG: Current Floating Extra Qty: {floating_extra_qty}")
         
-        # ✅ FIXED: Handle SHORTAGE rejections properly
+        # Scenario A: SHORTAGE rejection (No tray ID)
         if not tray_id or tray_id.strip() == '':
-            print(f"DEBUG: SHORTAGE rejection - consuming {rejected_qty} from existing trays")
-            # SHORTAGE rejections consume quantities from existing trays
-            current_distribution = consume_shortage_from_distribution(current_distribution, rejected_qty)
+            print(f"DEBUG: SHORTAGE rejection - consuming {rejected_qty}")
+            
+            # First consume from floating_extra_qty
+            if floating_extra_qty > 0:
+                consumed_from_floating = min(floating_extra_qty, rejected_qty)
+                floating_extra_qty -= consumed_from_floating
+                rejected_qty -= consumed_from_floating
+                print(f"DEBUG: Consumed {consumed_from_floating} from floating qty. Remaining floating: {floating_extra_qty}, Remaining reject: {rejected_qty}")
+            
+            if rejected_qty > 0:
+                print(f"DEBUG: Consuming remaining {rejected_qty} from existing trays")
+                current_distribution = consume_shortage_from_distribution(current_distribution, rejected_qty)
+            
             print(f"DEBUG: Distribution after SHORTAGE: {current_distribution}")
             continue
         
-        # Check if NEW tray was used for non-SHORTAGE rejections
+        # Scenario B: Tray Rejection (Existing or New)
         is_new_tray = is_new_tray_by_id(tray_id)
-        print(f"DEBUG: is_new_tray_by_id('{tray_id}') = {is_new_tray}")
         
         if is_new_tray:
-            print(f"DEBUG: ✅ NEW tray used - freeing up {rejected_qty} space in existing trays")
-            current_distribution = free_up_space_optimally(current_distribution, rejected_qty)
+            print(f"DEBUG: ✅ NEW tray used - freeing up {rejected_qty} space")
+            
+            # First consume from floating_extra_qty
+            if floating_extra_qty > 0:
+                consumed_from_floating = min(floating_extra_qty, rejected_qty)
+                floating_extra_qty -= consumed_from_floating
+                rejected_qty -= consumed_from_floating
+                print(f"DEBUG: Space filled by {consumed_from_floating} floating items. Remaining floating: {floating_extra_qty}, Remaining space needed: {rejected_qty}")
+
+            if rejected_qty > 0:
+                 print(f"DEBUG: Freeing up remaining {rejected_qty} space from existing trays")
+                 current_distribution = free_up_space_optimally(current_distribution, rejected_qty)
+                 
         else:
-            print(f"DEBUG: ❌ Existing tray used - removing {rejected_qty} from distribution entirely")
-            current_distribution = remove_rejected_tray_from_distribution(current_distribution, rejected_qty)
+            print(f"DEBUG: ❌ Existing tray used - removing {rejected_qty} from distribution")
+            
+            # Remove the tray from distribution, but CATCH the valid items that were in it!
+            # These items become "floating" because they weren't rejected, they just lost their tray.
+            current_distribution, freed_good_items = remove_rejected_tray_from_distribution(current_distribution, rejected_qty)
+            
+            floating_extra_qty += freed_good_items
+            print(f"DEBUG: Existing tray removed. {freed_good_items} valid items are now floating. Total Floating: {floating_extra_qty}")
         
         print(f"DEBUG: Distribution after this rejection: {current_distribution}")
     
+    # Final Step: If there are floating items left, they must exist somewhere!
+    # We add them back to the distribution. Ideally, they merge into the top tray or form a new one.
+    if floating_extra_qty > 0:
+        print(f"DEBUG: Re-integrating {floating_extra_qty} floating items into distribution")
+        # Logic: Try to fill the first tray (if it's partial/top tray) or insert as new top tray
+        # For simplicity and correctness with "top tray" logic, we can insert at 0
+        # But we should check if we can merge with index 0
+        
+        # Attempt minimal merge if index 0 exists and has space (assuming capacity 12 for simplicity, 
+        # but better to just insert to be safe and let frontend handle display)
+        current_distribution.insert(0, floating_extra_qty) 
+        print(f"DEBUG: Added floating items to start of distribution: {current_distribution}")
+
     print(f"DEBUG: Final distribution: {current_distribution}")
     return current_distribution
 
 
 def consume_shortage_from_distribution(distribution, shortage_qty):
     """
-    ✅ NEW FUNCTION: Handle SHORTAGE rejections by consuming from existing trays
-    This will consume from smallest trays first to maximize chance of creating empty trays
-    
-    Example: [6, 12, 12] with shortage 6 → [0, 12, 12]
+    Handle SHORTAGE rejections by consuming from existing trays
+    Consumes from smallest trays first.
     """
     result = distribution.copy()
     remaining_shortage = shortage_qty
     
-    print(f"   SHORTAGE: consuming {shortage_qty} from distribution {distribution}")
-    
-    # Consume from smallest trays first (to create empty trays for delink)
+    # Consume from smallest trays first
     sorted_indices = sorted(range(len(result)), key=lambda i: result[i])
     
     for i in sorted_indices:
@@ -3498,85 +3538,81 @@ def consume_shortage_from_distribution(distribution, shortage_qty):
             
         current_qty = result[i]
         if current_qty >= remaining_shortage:
-            # This tray can handle all remaining shortage
             result[i] = current_qty - remaining_shortage
-            print(f"   SHORTAGE: consumed {remaining_shortage} from tray {i}, remaining: {result[i]}")
             remaining_shortage = 0
         elif current_qty > 0:
-            # Consume entire tray and continue
             remaining_shortage -= current_qty
-            print(f"   SHORTAGE: consumed entire tray {i}: {current_qty}")
             result[i] = 0
-    
-    if remaining_shortage > 0:
-        print(f"   ⚠️ WARNING: Could not consume all shortage qty, remaining: {remaining_shortage}")
-    
-    print(f"   SHORTAGE result: {result}")
+            
     return result
 
 
 def remove_rejected_tray_from_distribution(distribution, rejected_qty):
     """
-    EXISTING tray rejection: consume rejection quantity AND remove one tray entirely
-    This matches the user's requirement where existing tray usage removes a physical tray
+    EXISTING tray rejection.
+    Returns: (updated_distribution, freed_good_items)
+    
+    freed_good_items = (Total quantity in the removed tray) - (rejected_qty)
+    This represents the valid items that were in the tray but misplaced/displaced.
     """
     result = distribution.copy()
     total_available = sum(result)
     
     if total_available < rejected_qty:
-        return result  # Not enough quantity, return unchanged
+        return result, 0  # Should not happen ideally
     
-    # Step 1: Try to find exact match first
+    # Step 1: Try to find exact match first (Exact match means NO extra valid items)
     for i, qty in enumerate(result):
         if qty == rejected_qty:
-            result.pop(i)  # Remove the tray with exact quantity
-            return result
-    
-    # Step 2: No exact match - consume rejected_qty and remove one tray
-    remaining_to_consume = rejected_qty
-    
-    # Consume the rejection quantity from available trays
-    for i in range(len(result)):
-        if remaining_to_consume <= 0:
-            break
-        current_qty = result[i]
-        consume_from_this_tray = min(remaining_to_consume, current_qty)
-        result[i] -= consume_from_this_tray
-        remaining_to_consume -= consume_from_this_tray
-    
-    # Step 3: Remove one tray entirely (prefer empty ones first)
-    # Remove empty tray first
-    for i in range(len(result)):
-        if result[i] == 0:
             result.pop(i)
-            return result
+            return result, 0 # Precise removal, no extra goods
     
-    # If no empty tray, remove the smallest quantity tray
-    if result:
-        min_qty = min(result)
-        for i in range(len(result)):
-            if result[i] == min_qty:
-                result.pop(i)
-                return result
+    # Step 2: No exact match. We need to find a tray to "blame" (remove).
+    # Logic: Find the smallest tray that can hold the rejection (or just the smallest tray?)
+    # User requirement usually implies a specific physical tray was picked.
+    # Without knowing exact capacity, we pick the best fit.
     
-    return result
+    # Strategy: Find the smallest tray that remains valid (qty >= rejected_qty) to minimize "floating"
+    # If no tray is big enough, we just remove the largest one? 
+    # Actually, for existing tray rejection, generally the tray MUST contain at least the rejected qty.
+    
+    best_idx = -1
+    min_waste = float('inf')
+    
+    # Find tray with min items >= rejected_qty
+    for i, qty in enumerate(result):
+        if qty >= rejected_qty:
+            waste = qty - rejected_qty
+            if waste < min_waste:
+                min_waste = waste
+                best_idx = i
+    
+    if best_idx != -1:
+        # Found a tray that contained the rejected items
+        removed_qty = result.pop(best_idx)
+        freed_good_items = removed_qty - rejected_qty
+        return result, freed_good_items
+
+    # Fallback: If no single tray had enough (rare/weird?), consume greedily?
+    # Or just remove the largest tray (assuming it was capable)
+    # Let's remove the largest tray to be safe
+    max_idx = result.index(max(result))
+    removed_qty = result.pop(max_idx)
+    
+    # Even if removed_qty < rejected_qty (weird), we calculate net change
+    # But strictly, freed items = max(0, removed_qty - rejected_qty)
+    freed_good_items = max(0, removed_qty - rejected_qty)
+    return result, freed_good_items
+
 
 def free_up_space_optimally(distribution, qty_to_free):
     """
     Free up space in existing trays when NEW tray is used for rejection.
-    
-    CORRECTED LOGIC:
-    - NEW tray usage means we PHYSICALLY MOVE pieces from existing trays to the new tray
-    - We move the exact quantity needed, emptying trays that match or are smaller
-    
-    Example: [4, 12, 12, 12] with NEW tray for 4 qty → [0, 12, 12, 12] (move 4 pieces from first tray)
+    Moves pieces from existing trays to the new tray.
     """
     result = distribution.copy()
     remaining = qty_to_free
     
-    print(f"   NEW TRAY: moving {qty_to_free} pieces from distribution {distribution} to new tray")
-    
-    # Move pieces from existing trays to the new tray
     for i in range(len(result)):
         if remaining <= 0:
             break
@@ -3584,17 +3620,12 @@ def free_up_space_optimally(distribution, qty_to_free):
         current_qty = result[i]
         
         if current_qty <= remaining:
-            # This tray has less than or equal to what we need - take all of it
-            print(f"   NEW TRAY: moving all {current_qty} pieces from tray {i} (emptying it)")
             remaining -= current_qty
             result[i] = 0
         elif current_qty > remaining:
-            # This tray has more than we need - take only what we need
-            print(f"   NEW TRAY: moving {remaining} pieces from tray {i} (leaving {current_qty - remaining})")
             result[i] = current_qty - remaining
             remaining = 0
             
-    print(f"   NEW TRAY result: {result}")
     return result
 
 def get_original_capacity_for_tray(tray_index, current_distribution):
@@ -4302,7 +4333,9 @@ def reject_check_tray_id_simple(request):
         
         try:
             current_session_allocations = json.loads(current_session_allocations_str)
-        except:
+            print(f"DEBUG: Parsed current_session_allocations (len={len(current_session_allocations)}): {current_session_allocations}")
+        except json.JSONDecodeError as e:
+            print(f"DEBUG: JSON Match decode error: {e}")
             current_session_allocations = []
 
         # ---------------------------------------------------------
@@ -4420,12 +4453,8 @@ def reject_check_tray_id_simple(request):
         # ---------------------------------------------------------
         # NEW CHECK 3a: Compute REUSABLE TRAY POOL (dynamic)
         # ---------------------------------------------------------
-        lot_trays = IPTrayId.objects.filter(
-            lot_id=current_lot_id,
-            IP_tray_verified=True,
-            rejected_tray=False
-        )
-
+        
+        # Calculate TOTAL rejected quantity (including current request)
         total_rejected_qty = 0
         current_reason_already_present = False
 
@@ -4437,18 +4466,29 @@ def reject_check_tray_id_simple(request):
         # Add rejection_qty ONLY if this reason is not yet in session
         if not current_reason_already_present:
             total_rejected_qty += rejection_qty
-
-        tray_quantities = sorted([t.tray_quantity for t in lot_trays])
-
-        remaining_reject = total_rejected_qty
-        reusable_tray_count = 0
-
-        for qty in tray_quantities:
-            if remaining_reject >= qty:
-                reusable_tray_count += 1
-                remaining_reject -= qty
-            else:
-                break
+            
+        # Determine Tray Capacity (Critical for reuse calculation)
+        tray_capacity = 0
+        
+        # Try to get from existing tray in lot
+        sample_tray = IPTrayId.objects.filter(lot_id=current_lot_id).first()
+        if sample_tray and sample_tray.tray_capacity:
+             tray_capacity = sample_tray.tray_capacity
+        
+        # Fallback to TotalStockModel
+        if not tray_capacity:
+            ts = TotalStockModel.objects.filter(lot_id=current_lot_id).first()
+            if ts and ts.batch_id and ts.batch_id.tray_capacity:
+                tray_capacity = ts.batch_id.tray_capacity
+        
+        if not tray_capacity:
+            tray_capacity = 12 # Default fallback
+            
+        # ✅ FIX: Strict Integer Division for Reusable Count
+        # Example: 14 rejected / 12 capacity = 1 reusable tray
+        reusable_tray_count = total_rejected_qty // tray_capacity
+        
+        print(f"DEBUG: Reuse Logic - Total Rejected: {total_rejected_qty}, Capacity: {tray_capacity}, Allowed Reusable Trays: {reusable_tray_count}")
 
         # ---------------------------------------------------------
         # 🔧 FIX: Count ONLY reusable trays already CONSUMED
@@ -4457,32 +4497,45 @@ def reject_check_tray_id_simple(request):
         used_reusable_trays = set()
 
         for alloc in current_session_allocations:
-            tray_ids = alloc.get('tray_ids', [])
-            if isinstance(tray_ids, str):
-                tray_ids = [tray_ids]
-
-            for tid in tray_ids:
-                if tid == tray_id:
-                    continue  # 🔧 do NOT count current tray
-
-                t_obj = TrayId.objects.filter(tray_id=tid).first()
-                if not t_obj:
-                    continue
-
-                # Existing tray reused earlier
-                if not (getattr(t_obj, 'new_tray', False) and not t_obj.lot_id):
-                    used_reusable_trays.add(tid)
+            # Skip the current request if it's already in the list (to avoid double counting, though list is usually distinct reasons)
+            # Actually, standard logic: just count ALL used trays in the session.
+            
+            alloc_tray_ids = alloc.get('tray_ids', [])
+            print(f"DEBUG: Processing alloc: {alloc}, Extracted tray_ids: {alloc_tray_ids}")
+            
+            if isinstance(alloc_tray_ids, str):
+                alloc_tray_ids = [alloc_tray_ids]
+            
+            for t_id in alloc_tray_ids:
+                if t_id and t_id != tray_id: # Exclude current tray being validated
+                    # Check if this t_id is existing (reusable)
+                    # It is reusable if it exists and is NOT a new tray (or is new but already assigned to a lot? verify definition)
+                    # "Existing tray" = Not New Tray OR (New Tray but assigned to Lot long ago?)
+                    # Simplified: is_new_tray = False
+                    
+                    # Refined "Existing" check:
+                    t_obj = TrayId.objects.filter(tray_id=t_id).first()
+                    is_t_new = getattr(t_obj, 'new_tray', False) and not t_obj.lot_id if t_obj else False
+                    
+                    if not is_t_new:
+                        used_reusable_trays.add(t_id)
+                        print(f"DEBUG: Found used existing tray: {t_id}")
 
         used_reusable_count = len(used_reusable_trays)
+        print(f"DEBUG: Used Reusable Trays: {used_reusable_count} ({used_reusable_trays})")
 
         # ---------------------------------------------------------
         # NEW CHECK 3b: Enforce dynamic reuse availability
         # ---------------------------------------------------------
+        # Only allow if we haven't exceeded the limit
+        # The current tray is an existing tray (we are in Step 3), so it counts towards the limit
+        # So: used_count + 1 (current) must be <= allowed
+        
         if used_reusable_count >= reusable_tray_count:
             return JsonResponse({
                 'exists': True,
                 'valid_for_rejection': False,
-                'error': 'No reusable trays available. Reuse pool exhausted.',
+                'error': f'Reuse limit reached. Total Rejected: {total_rejected_qty}, Capacity: {tray_capacity} => Max {reusable_tray_count} reusable trays. Already used: {used_reusable_count}.',
                 'status_message': 'Reuse Limit Reached'
             })
 
