@@ -3554,6 +3554,9 @@ def remove_rejected_tray_from_distribution(distribution, rejected_qty):
     
     freed_good_items = (Total quantity in the removed tray) - (rejected_qty)
     This represents the valid items that were in the tray but misplaced/displaced.
+    
+    ✅ FIX: Prefer full-capacity trays (non-top-tray) over the top/remainder tray
+    to preserve the top tray's identity in the distribution.
     """
     result = distribution.copy()
     total_available = sum(result)
@@ -3561,46 +3564,51 @@ def remove_rejected_tray_from_distribution(distribution, rejected_qty):
     if total_available < rejected_qty:
         return result, 0  # Should not happen ideally
     
-    # Step 1: Try to find exact match first (Exact match means NO extra valid items)
-    for i, qty in enumerate(result):
-        if qty == rejected_qty:
+    # Step 1: Try to find exact match first, but PREFER non-top-tray (index > 0)
+    # Check non-top trays first
+    for i in range(1, len(result)):
+        if result[i] == rejected_qty:
             result.pop(i)
-            return result, 0 # Precise removal, no extra goods
+            return result, 0  # Precise removal, no extra goods
+    # Then check top tray as fallback
+    if len(result) > 0 and result[0] == rejected_qty:
+        result.pop(0)
+        return result, 0
     
-    # Step 2: No exact match. We need to find a tray to "blame" (remove).
-    # Logic: Find the smallest tray that can hold the rejection (or just the smallest tray?)
-    # User requirement usually implies a specific physical tray was picked.
-    # Without knowing exact capacity, we pick the best fit.
-    
-    # Strategy: Find the smallest tray that remains valid (qty >= rejected_qty) to minimize "floating"
-    # If no tray is big enough, we just remove the largest one? 
-    # Actually, for existing tray rejection, generally the tray MUST contain at least the rejected qty.
-    
+    # Step 2: No exact match. Find best tray to remove.
+    # ✅ FIX: Prefer non-top-tray (index > 0) to preserve the top tray quantity.
+    # Among non-top trays, find the one with minimum waste.
     best_idx = -1
     min_waste = float('inf')
     
-    # Find tray with min items >= rejected_qty
-    for i, qty in enumerate(result):
+    # First pass: search non-top trays (index > 0)
+    for i in range(1, len(result)):
+        qty = result[i]
         if qty >= rejected_qty:
             waste = qty - rejected_qty
             if waste < min_waste:
                 min_waste = waste
                 best_idx = i
     
+    # Second pass: if no non-top tray found, try the top tray (index 0)
+    if best_idx == -1 and len(result) > 0 and result[0] >= rejected_qty:
+        best_idx = 0
+    
     if best_idx != -1:
-        # Found a tray that contained the rejected items
         removed_qty = result.pop(best_idx)
         freed_good_items = removed_qty - rejected_qty
+        print(f"DEBUG: Removed tray at index {best_idx} (qty={removed_qty}), freed {freed_good_items} good items")
         return result, freed_good_items
 
-    # Fallback: If no single tray had enough (rare/weird?), consume greedily?
-    # Or just remove the largest tray (assuming it was capable)
-    # Let's remove the largest tray to be safe
-    max_idx = result.index(max(result))
-    removed_qty = result.pop(max_idx)
+    # Fallback: remove the largest non-top tray
+    if len(result) > 1:
+        # Find largest among non-top trays
+        max_val = max(result[1:])
+        max_idx = result.index(max_val, 1)
+    else:
+        max_idx = 0
     
-    # Even if removed_qty < rejected_qty (weird), we calculate net change
-    # But strictly, freed items = max(0, removed_qty - rejected_qty)
+    removed_qty = result.pop(max_idx)
     freed_good_items = max(0, removed_qty - rejected_qty)
     return result, freed_good_items
 
@@ -3609,11 +3617,16 @@ def free_up_space_optimally(distribution, qty_to_free):
     """
     Free up space in existing trays when NEW tray is used for rejection.
     Moves pieces from existing trays to the new tray.
+    
+    ✅ FIX: Free space from BOTTOM trays first (reverse order) to preserve
+    the top tray's quantity. This ensures the top tray (index 0) is the
+    last one affected.
     """
     result = distribution.copy()
     remaining = qty_to_free
     
-    for i in range(len(result)):
+    # ✅ FIXED: Iterate in REVERSE to protect the top tray
+    for i in range(len(result) - 1, -1, -1):
         if remaining <= 0:
             break
             
@@ -3625,6 +3638,9 @@ def free_up_space_optimally(distribution, qty_to_free):
         elif current_qty > remaining:
             result[i] = current_qty - remaining
             remaining = 0
+    
+    # Remove any zero-quantity trays
+    result = [q for q in result if q > 0]
             
     return result
 
