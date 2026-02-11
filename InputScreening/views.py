@@ -3516,7 +3516,7 @@ def calculate_distribution_after_rejections(lot_id, original_distribution):
         # but better to just insert to be safe and let frontend handle display)
         current_distribution.insert(0, floating_extra_qty) 
         print(f"DEBUG: Added floating items to start of distribution: {current_distribution}")
-
+    current_distribution.sort()
     print(f"DEBUG: Final distribution: {current_distribution}")
     return current_distribution
 
