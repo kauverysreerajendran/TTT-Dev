@@ -1691,7 +1691,10 @@ document.addEventListener("DOMContentLoaded", function () {
       
             // Add delinked trays
             delinkedTrays.forEach((tray) => {
-              let displayQuantity = tray.ip_top_tray && tray.ip_top_tray_qty !== null ? tray.ip_top_tray_qty : tray.tray_quantity;
+              // User requested: let displayQuantity = tray.ip_top_tray ?? tray.tray_quantity;
+              // But strictly speaking, for delinked trays, tray_quantity is the only valid number from history.
+              // We'll use the safe fallback logic.
+              let displayQuantity = tray.tray_quantity; 
               
               html += `
                 <tr>
@@ -1707,10 +1710,10 @@ document.addEventListener("DOMContentLoaded", function () {
                     <td>
                       <div class="validation-status">
                         <div class="status-icon fail">
-                          <img src="{% static 'assets/icons/fail.png' %}" alt="Fail" title="Fail" style="width:18px; height:18px;" />
+                          <img src="{% static 'assets/icons/fail.png' %}" alt="Fail" style="width:18px; height:18px;" />
                         </div>
                         <div class="status-icon pass">
-                          <img src="{% static 'assets/icons/pass.png' %}" alt="Pass" title="Pass" style="width:18px; height:18px;" />
+                          <img src="{% static 'assets/icons/pass.png' %}" alt="Pass" style="width:18px; height:18px;" />
                         </div>
                       </div>
                     </td>

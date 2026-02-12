@@ -3040,13 +3040,34 @@ class IS_RejectTable(APIView):
             )
             data['dp_missing_qty'] = shortage_qty  # Add shortage quantity for template
             
+            # ✅ NEW: Calculate Delinked Trays Count (from History)
+            # Delinked trays are those with delink_tray=True in DPTrayId_History
+            # We use distinct() to avoid double-counting if multiple history entries exist
+            delinked_qty = DPTrayId_History.objects.filter(
+                lot_id=stock_lot_id,
+                delink_tray=True
+            ).values('tray_id').distinct().count()
+            
+            data['delinked_qty'] = delinked_qty
+            print(f"Delinked trays for {stock_lot_id} (History): {delinked_qty}")
+            
             # Calculate effective stock (excluding SHORTAGE)
             total_rejection_stock = data.get('ip_rejection_total_qty', 0)
             effective_stock = max(total_rejection_stock - shortage_qty, 0)
             tray_capacity = data.get('tray_capacity', 0)
             
-            # Calculate no_of_trays based on effective stock
-            if tray_capacity > 0:
+            # ✅ FIX: Calculate no_of_trays from IPTrayId + Delinked History
+            # Active trays (Accepted/Rejected) are in IPTrayId
+            active_tray_count = IPTrayId.objects.filter(lot_id=stock_lot_id).count()
+            
+            # Total trays = Active Trays + Delinked Trays
+            total_physical_trays = active_tray_count + delinked_qty
+            
+            if total_physical_trays > 0:
+                data['no_of_trays'] = total_physical_trays
+                print(f"Set no_of_trays for {stock_lot_id}: {total_physical_trays} (Active: {active_tray_count} + Delinked: {delinked_qty})")
+            elif tray_capacity > 0:
+                # Fallback to calculation if no trays found at all
                 data['no_of_trays'] = math.ceil(effective_stock / tray_capacity)
             else:
                 data['no_of_trays'] = 0
@@ -3994,65 +4015,125 @@ class TrayIdList_Complete_APIView(APIView):
         if not lot_id:
             return JsonResponse({'success': False, 'error': 'Missing lot_id or stock_lot_id'}, status=400)
         
-        # Base queryset - all trays from TrayId table with quantity > 0
-        base_queryset = IPTrayId.objects.filter(
+        # 1. Active Trays (Accepted/Rejected) from IPTrayId
+        # Quantity > 0 ensures we only get valid active trays
+        active_trays = IPTrayId.objects.filter(
             tray_quantity__gt=0,
             lot_id=lot_id
         )
+
+        # Rejected trays: rejected_tray=True (from Active)
+        rejected_trays = active_trays.filter(rejected_tray=True).order_by('tray_quantity', 'id')
         
-        # Get rejected and accepted trays directly from TrayId table
-        rejected_trays = base_queryset.filter(rejected_tray=True).order_by('tray_quantity', 'id')
-        accepted_trays = base_queryset.filter(rejected_tray=False)
+        # Accepted trays: rejected_tray=False (from Active)
+        accepted_trays = active_trays.filter(rejected_tray=False)
         
-        print(f"Total trays in lot: {base_queryset.count()}")
-        print(f"Rejected trays: {rejected_trays.count()}")
-        print(f"Accepted trays: {accepted_trays.count()}")
+        # 2. Delinked Trays from DPTrayId_History
+        # Use distinct() to avoid duplicates
+        delinked_history = DPTrayId_History.objects.filter(
+            lot_id=lot_id,
+            delink_tray=True
+        ).values('tray_id', 'tray_quantity', 'rejected_tray', 'delink_tray', 'top_tray').distinct()
+
+        # Convert history values to a list of dicts or compatible objects for processing
+        # We need to standardize the format to match IPTrayId objects for the 'data' loop below
+        delinked_trays_list = []
+        for hist in delinked_history:
+            # Create a mock object or dict that resembles IPTrayId structure
+            delinked_trays_list.append({
+                'tray_id': hist['tray_id'],
+                'tray_quantity': hist['tray_quantity'] or 0, # Handle potential None
+                'rejected_tray': hist['rejected_tray'],
+                'delink_tray': True, # Explicitly True
+                'top_tray': hist['top_tray'],
+                'is_history': True # Flag to identify origin
+            })
+
+        print(f"Total Active trays: {active_trays.count()}")
+        print(f"Rejected trays (Active): {rejected_trays.count()}")
+        print(f"Accepted trays (Active): {accepted_trays.count()}")
+        print(f"Delinked trays (History): {len(delinked_trays_list)}") 
         
+        # Prepare the final list of trays to process
+        trays_to_process = []
+
         # Apply filtering based on stock status
         if accepted_ip_stock and not few_cases_accepted_ip_stock:
-            # Show only accepted trays
-            queryset = accepted_trays
+            # Show accepted trays only
+            trays_to_process = list(accepted_trays)
             print("Filtering for accepted trays only")
+
         elif rejected_ip_stock and not few_cases_accepted_ip_stock:
-            # Show only rejected trays
-            queryset = rejected_trays
+            # Show rejected trays only
+            trays_to_process = list(rejected_trays)
             print("Filtering for rejected trays only")
+
         elif few_cases_accepted_ip_stock:
-            # Show both accepted and rejected trays
-            queryset = base_queryset
-            print("Showing both accepted and rejected trays")
+            # Show accepted and rejected trays AND delinked trays
+            # Partial acceptance means we should see the full picture of the lot
+            trays_to_process = list(accepted_trays) + list(rejected_trays) + delinked_trays_list
+            print("Showing accepted, rejected, and delinked trays (Partial/Few Cases)")
+
         else:
-            # Default - show all trays
-            queryset = base_queryset
-            print("Using default filter - showing all trays")
-        
+            # Default - show ALL trays (Accepted + Rejected + Delinked)
+            trays_to_process = list(active_trays) + delinked_trays_list
+            print("Using default filter - showing all trays (Active + History)")
+            
        
-        # Determine top tray based on status
-        top_tray = None
-        if accepted_ip_stock and not few_cases_accepted_ip_stock:
-            # For accepted trays, show only top_tray
-            top_tray = accepted_trays.filter(top_tray=True).first()
-        else:
-            # For all other cases, show only top_tray
-            top_tray = queryset.filter(top_tray=True).first()
+        # Determine top tray (only from active trays usually, unless top tray was delinked/history?)
+        # For output logic, we just iterate through 'trays_to_process'
         
-        # Get other trays (excluding top tray)
-        other_trays = queryset.exclude(pk=top_tray.pk if top_tray else None).order_by('id')
+        # Sort trays: Top tray first, then others
+        # We need to identify the top tray within the process list itself
+        
+        final_data_list = []
+        top_tray_data = None
+        
+        # Helper to convert object/dict to response format
+        def get_tray_attrs(tray_obj):
+            if isinstance(tray_obj, dict):
+                return tray_obj
+            else:
+                return {
+                    'tray_id': tray_obj.tray_id,
+                    'tray_quantity': tray_obj.tray_quantity,
+                    'rejected_tray': tray_obj.rejected_tray,
+                    'delink_tray': getattr(tray_obj, 'delink_tray', False),
+                    'top_tray': getattr(tray_obj, 'top_tray', False),
+                    'is_history': False
+                }
+
+        # Separate top tray and others
+        processed_trays = []
+        for tray in trays_to_process:
+            attrs = get_tray_attrs(tray)
+            ifattrs_top = attrs.get('top_tray', False)
+            
+            # Criteria for top tray: marked as top_tray AND usually active
+            # If multiple top trays exist (weird), pick first.
+            if ifattrs_top and not top_tray_data:
+                top_tray_data = attrs
+            else:
+                processed_trays.append(attrs)
+
+        # Sort other trays by ID (optional, consistent with previous behavior)
+        processed_trays.sort(key=lambda x: x['tray_id'])
         
         data = []
         row_counter = 1
 
-        # Helper function to create tray data
-        def create_tray_data(tray_obj, is_top=False):
+        # Helper function to create response entry
+        def create_tray_data(tray_attrs, is_top=False):
             nonlocal row_counter
             
             # Get rejection details if tray is rejected
             rejection_details = []
-            if tray_obj.rejected_tray:
+            if tray_attrs['rejected_tray']:
                 # Get rejection details from IP_Rejected_TrayScan if needed
+                # Note: IP_Rejected_TrayScan links to tray_id string, so works for both Active and History
                 rejected_scans = IP_Rejected_TrayScan.objects.filter(
                     lot_id=lot_id,
-                    rejected_tray_id=tray_obj.tray_id
+                    rejected_tray_id=tray_attrs['tray_id']
                 )
                 for scan in rejected_scans:
                     rejection_details.append({
@@ -4064,25 +4145,25 @@ class TrayIdList_Complete_APIView(APIView):
             
             return {
                 's_no': row_counter,
-                'tray_id': tray_obj.tray_id,
-                'tray_quantity': tray_obj.tray_quantity,
+                'tray_id': tray_attrs['tray_id'],
+                'tray_quantity': tray_attrs['tray_quantity'],
                 'position': row_counter - 1,
                 'is_top_tray': is_top,
-                'rejected_tray': tray_obj.rejected_tray,
-                'delink_tray': getattr(tray_obj, 'delink_tray', False),
+                'rejected_tray': tray_attrs['rejected_tray'],
+                'delink_tray': tray_attrs['delink_tray'],
                 'rejection_details': rejection_details,
-                'top_tray': getattr(tray_obj, 'top_tray', False),
-                'tray_quantity': getattr(tray_obj, 'tray_quantity', None),
+                'top_tray': tray_attrs['top_tray'],
+                 # 'is_history': tray_attrs.get('is_history', False) # Optional debug flag
             }
 
-        # Add top tray first if it exists
-        if top_tray:
-            tray_data = create_tray_data(top_tray, is_top=True)
+        # Add top tray first
+        if top_tray_data:
+            tray_data = create_tray_data(top_tray_data, is_top=True)
             data.append(tray_data)
             row_counter += 1
 
         # Add other trays
-        for tray in other_trays:
+        for tray in processed_trays:
             tray_data = create_tray_data(tray, is_top=False)
             data.append(tray_data)
             row_counter += 1
@@ -4102,7 +4183,11 @@ class TrayIdList_Complete_APIView(APIView):
             'rejected_tray_ids': list(rejected_trays.values_list('tray_id', flat=True)),
             'shortage_rejections': shortage_count,
             'total_accepted_trays': accepted_trays.count(),
-            'accepted_tray_ids': list(accepted_trays.values_list('tray_id', flat=True))
+            'accepted_tray_ids': list(accepted_trays.values_list('tray_id', flat=True)),
+            
+            # ✅ NEW: Add delinked trays to summary (from history list)
+            'total_delinked_trays': len(delinked_trays_list),
+            'delinked_tray_ids': [d['tray_id'] for d in delinked_trays_list]
         }
         
         return JsonResponse({
