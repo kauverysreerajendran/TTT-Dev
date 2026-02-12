@@ -791,6 +791,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
          title="View"
          class="text-primary tray-scan-btn-BQ-view tray-scan-btn-Jig"
          style="text-decoration: underline"
+         data-table-type="accept"
          data-stock-lot-id="{{ data.stock_lot_id|default:'' }}"
          data-batch-id="{{ data.batch_id }}"
          data-model-no="{{ data.plating_stk_no }}"
@@ -1189,22 +1190,36 @@ document.addEventListener("DOMContentLoaded", function () {
     return lastBtn ? lastBtn.getAttribute('data-batch-id') : '';
   }
 
-  function getCurrentStockStatus() {
-    // Get stock status from the last clicked button
-    const lastBtn = document.querySelector('.tray-scan-btn-Jig[data-batch-id]');
-    if (lastBtn) {
-      return {
-        accepted_ip_stock: lastBtn.getAttribute('data-accepted-ip-stock') === 'true',
-        rejected_ip_stock: lastBtn.getAttribute('data-rejected-ip-stock') === 'true',
-        few_cases_accepted_ip_stock: lastBtn.getAttribute('data-few-cases-accepted-ip-stock') === 'true'
-      };
-    }
+function getCurrentStockStatus() {
+  const lastBtn = document.querySelector('.tray-scan-btn-Jig[data-batch-id]');
+  if (!lastBtn) {
     return {
       accepted_ip_stock: false,
       rejected_ip_stock: false,
       few_cases_accepted_ip_stock: false
     };
   }
+
+  // 🔒 Detect Accept Table
+  const tableType = lastBtn.getAttribute('data-table-type');
+
+  if (tableType === 'accept') {
+    // ✅ FORCE Accept Table behavior
+    return {
+      accepted_ip_stock: true,
+      rejected_ip_stock: false,
+      few_cases_accepted_ip_stock: false
+    };
+  }
+
+  // Default behavior (Completed / Partial / Reject tables)
+  return {
+    accepted_ip_stock: lastBtn.getAttribute('data-accepted-ip-stock') === 'true',
+    rejected_ip_stock: lastBtn.getAttribute('data-rejected-ip-stock') === 'true',
+    few_cases_accepted_ip_stock:
+      lastBtn.getAttribute('data-few-cases-accepted-ip-stock') === 'true'
+  };
+}
 
   function showError(message) {
     console.log("🚨 Showing Input Screening error:", message);
@@ -1476,10 +1491,10 @@ document.addEventListener("DOMContentLoaded", function () {
       const trayCapacity = link.getAttribute('data-tray-capacity') || "";
       const totalBatchQuantity = link.getAttribute('data-total-batch-quantity') || "0";
 
-      // Get stock status data
-      const acceptedIpStock = link.getAttribute('data-accepted-ip-stock') === 'true';
-      const rejectedIpStock = link.getAttribute('data-rejected-ip-stock') === 'true';
-      const fewCasesAcceptedIpStock = link.getAttribute('data-few-cases-accepted-ip-stock') === 'true';
+      // Get stock status data - FORCE for Accept Table
+      const acceptedIpStock = true;
+      const rejectedIpStock = false;
+      const fewCasesAcceptedIpStock = false;
 
       // Set model number in modal
       if (modalModelNo && modelNo) {
@@ -1502,13 +1517,15 @@ document.addEventListener("DOMContentLoaded", function () {
       let traysData = [];
       let rejectionSummary = {};
       try {
+        console.log("🔶 HARDCODED FLAGS APPLIED in Accept Table");
         const params = new URLSearchParams({
+          debug_fix: 'true',
           batch_id: batchId,
           stock_lot_id: stockLotId,
           lot_id: stockLotId,
-          accepted_ip_stock: acceptedIpStock,
-          rejected_ip_stock: rejectedIpStock,
-          few_cases_accepted_ip_stock: fewCasesAcceptedIpStock
+          accepted_ip_stock: 'true',
+          rejected_ip_stock: 'false',
+          few_cases_accepted_ip_stock: 'false'
         });
         
         const resp = await fetch(`/inputscreening/CompleteTable_tray_id_list/?${params}`);
@@ -1544,7 +1561,7 @@ function buildTableHTML(showValidationColumn = false) {
   // ✅ First, add all regular trays (with tray_id)
   if (traysData && traysData.length > 0) {
   traysData
-    .filter(tray => !tray.rejected_tray && tray.tray_id !== 'SHORTAGE') // Only accepted trays
+    .filter(tray => !tray.rejected_tray && !tray.delink_tray && tray.tray_id !== 'SHORTAGE') // Only accepted trays (exclude delinked)
     .forEach((tray, index) => {
       // ✅ FIXED: Proper S.no numbering
       let displaySNo;
