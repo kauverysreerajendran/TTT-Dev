@@ -6579,13 +6579,10 @@ function validateTrayInput(input) {
 
     // ✅ FIXED: Use progressive session allocations for accurate validation
     const progressiveSessionAllocations = collectSimpleTableSessionAllocations(input);
-    // ✅ FIX: Get reason ID for this input
-    const reasonId = getReasonIdForInput(input);
     const queryParams = new URLSearchParams({
       tray_id: trayId,
       lot_id: lotId,
       rejection_qty: individualTrayQty,
-      rejection_reason_id: reasonId, // ✅ Pass reason ID
       current_session_allocations: JSON.stringify(progressiveSessionAllocations)
     }).toString();
 
@@ -6786,19 +6783,13 @@ function validateTrayInput(input) {
     if (callback) callback(false);
     return;
   }
-
   const individualTrayQty = parseInt(input.getAttribute('data-tray-qty')) || 0;
   const progressiveSessionAllocations = collectSimpleTableSessionAllocations(input);
-  
-  // ✅ FIX: Get reason ID for this input to prevent double counting in backend
-  const reasonId = getReasonIdForInput(input);
-  console.log(`[Validation] Validating tray for reason ID: ${reasonId}`);
 
   const queryParams = new URLSearchParams({
     tray_id: trayId,
     lot_id: currentLotId,
     rejection_qty: individualTrayQty,
-    rejection_reason_id: reasonId, // ✅ Pass reason ID so backend knows this is an update, not a new addition
     current_session_allocations: JSON.stringify(progressiveSessionAllocations)
   }).toString();
 
@@ -6967,57 +6958,6 @@ function collectSimpleTableSessionAllocations(excludeInput) {
   console.log('📊 [Progressive Collection] FINAL allocations:', allocations);
   return allocations;
 
-}
-
-// ✅ NEW HELPER: Get the rejection reason ID associated with a specific tray input
-function getReasonIdForInput(targetInput) {
-  try {
-    const trayInputs = Array.from(document.querySelectorAll('#rejection-tray-table-body .tray-id-input, #rejection-tray-table-body .rejection-tray-id-input'));
-    const targetIndex = trayInputs.indexOf(targetInput);
-
-    if (targetIndex === -1) return '';
-
-    const rejectionQuantities = [];
-    document.querySelectorAll('.rejection-qty-input').forEach(qtyInput => {
-      const qty = parseInt(qtyInput.value) || 0;
-      const reasonId = qtyInput.getAttribute('data-reason-id');
-      const row = qtyInput.closest('tr');
-      if (qty > 0 && row) {
-        const reasonCell = row.cells[2];
-        const reasonText = reasonCell ? reasonCell.textContent.trim().toUpperCase() : '';
-        if (reasonText !== 'SHORTAGE') {
-          rejectionQuantities.push({ reason_id: reasonId, qty: qty });
-        }
-      }
-    });
-
-    let trayIndexCounter = 0;
-    // Get tray capacity dynamically
-    let trayCapacity = 12; // Default
-    const currentRow = document.querySelector('tr.highlighted-tray-scan') ||
-                       document.querySelector('[data-stock-lot-id]') ||
-                       document.querySelector('tbody tr');
-    
-    if (currentRow) {
-        const trayCapacityText = currentRow.cells[7]?.textContent || '';
-        if (trayCapacityText.includes('-')) {
-          trayCapacity = parseInt(trayCapacityText.split('-')[1]) || 12;
-        }
-    }
-
-    for (const rejection of rejectionQuantities) {
-        const numTraysNeeded = Math.ceil(rejection.qty / trayCapacity);
-        // Check if targetInput falls within this rejection's range
-        if (targetIndex >= trayIndexCounter && targetIndex < trayIndexCounter + numTraysNeeded) {
-            return rejection.reason_id;
-        }
-        trayIndexCounter += numTraysNeeded;
-    }
-    return '';
-  } catch (e) {
-    console.error('Error getting reason ID for input:', e);
-    return '';
-  }
 }
 
 

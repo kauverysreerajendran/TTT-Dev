@@ -723,6 +723,16 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                style="width: 28px; height: 28px; background-color: #0c8249; color: white; font-weight: bold; cursor: pointer;">
             T
           </div>
+        {% elif data.Draft_Saved %}
+          <div data-bs-toggle="tooltip" data-placement="right" data-bs-original-title="Tray Scan (Draft)" class="d-flex align-items-center justify-content-center rounded-circle ms-1"
+               style="width: 28px; height: 28px; background: linear-gradient(to right, #0c8249 50%, #d3d2d2 50%); color: white; font-weight: bold; cursor: pointer;">
+            T
+          </div>
+        {% elif data.tray_scan_status == 'started' %}
+          <div data-bs-toggle="tooltip" data-placement="right" data-bs-original-title="Tray Scan" class="d-flex align-items-center justify-content-center rounded-circle ms-1"
+               style="width: 28px; height: 28px; background: linear-gradient(to right, #0c8249 50%, #d3d2d2 50%); color: white; font-weight: bold; cursor: pointer;">
+            T
+          </div>
         {% else %}
           <div data-bs-toggle="tooltip" data-placement="right" data-bs-original-title="Tray Scan" class="d-flex align-items-center justify-content-center rounded-circle ms-1"
                style="width: 28px; height: 28px; background-color: #d3d2d2; color: white; font-weight: bold; cursor: pointer;">
@@ -3333,26 +3343,10 @@ function updateRowAfterTrayScan(batchId, needsTopTrayScan = true, isDraft = true
     const processStatusCell = targetRow.querySelector('td:nth-child(13)'); // Process Status column
     if (processStatusCell) {
         processStatusCell.innerHTML = `
-            <div
-                title="Tray Scan - Partial"
-                class="d-flex align-items-center justify-content-center rounded-circle ms-1"
-                style="
-                  width: 28px;
-                  height: 28px;
-                  background: linear-gradient(
-                    to right,
-                    green 50%,
-                    #bfbfbf 50%
-                  );
-                  color: white;
-                  font-weight: bold;
-                  line-height: 20px;
-                  text-align: center;
-                  padding-top: 1px;
-                  padding-right: 1px;"
-            >
-                T
-            </div>
+          <div data-bs-toggle="tooltip" data-placement="right" data-bs-original-title="Tray Scan" class="d-flex align-items-center justify-content-center rounded-circle ms-1"
+               style="width: 28px; height: 28px; background: linear-gradient(to right, #0c8249 50%, #d3d2d2 50%); color: white; font-weight: bold; cursor: pointer;">
+            T
+          </div>
         `;
         console.log('✅ Process status updated to partial completion');
     }
@@ -4790,7 +4784,7 @@ trayScanLinks.forEach((link) => {
                     .then(data => {
                     if (data.success) {
                         // ✅ CROSS-BROWSER AUTO-SAVE: Clear auto-saved data on successful top tray scan
-                        TrayModalCrossBrowserAutoSave.clearData();
+                        // TrayModalCrossBrowserAutoSave.clearData(); // Removed as function not defined
                         updateRowAfterTopTrayScan(batchId);
 
                         // 1. Close the modal first
@@ -4827,11 +4821,10 @@ trayScanLinks.forEach((link) => {
                         topTrayIdInput.focus();
                     })
                     .finally(() => {
-                        if (!data || !data.success) {
-                            topTrayScanBtn.disabled = false;
-                            topTrayScanBtn.textContent = 'Set Top Tray';
-                            topTrayScanBtn.style.opacity = '1';
-                        }
+                        // Always re-enable the button, as in success case the modal closes and page reloads
+                        topTrayScanBtn.disabled = false;
+                        topTrayScanBtn.textContent = 'Set Top Tray';
+                        topTrayScanBtn.style.opacity = '1';
                     });
                 };
             }
