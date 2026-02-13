@@ -3474,6 +3474,10 @@ def get_delink_tray_data(request):
 
         delink_indices = candidate_indices[:delink_count]
 
+        # ✅ FIX: Only delink when there is floating extra quantity to absorb
+        if floating_extra_qty == 0:
+            delink_indices = []
+
         # ---------------------------------------
         # Build response
         # ---------------------------------------
