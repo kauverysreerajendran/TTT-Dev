@@ -478,9 +478,57 @@ class IQFTrayValidate_Complete_APIView(APIView):
         try:
             data = request.data if hasattr(request, 'data') else json.loads(request.body.decode('utf-8'))
             tray_id = str(data.get('tray_id', '')).strip()
+            batch_id = str(data.get('batch_id', '')).strip()
 
+            print(f"[IQF Validation] Validating tray {tray_id} for batch {batch_id}")
+            
+            # 1. Basic Existence Check
             # Only check if tray_id exists in TrayId table
-            exists = TrayId.objects.filter(tray_id=tray_id).exists()
+            tray_obj = TrayId.objects.filter(tray_id=tray_id).first()
+            exists = bool(tray_obj)
+
+            if not exists:
+                return JsonResponse({
+                    'success': True,
+                    'exists': False,
+                    'error': f'Tray {tray_id} not found in system'
+                })
+
+            # 2. Tray Type Validation
+            if batch_id:
+                try:
+                    # Get expected tray type from batch
+                    # Note: batch_id in request might be lot_id or batch_id, handling both
+                    batch_obj = ModelMasterCreation.objects.filter(batch_id=batch_id).first()
+                    if not batch_obj:
+                         # Try as lot_id
+                         batch_obj = ModelMasterCreation.objects.filter(lot_id=batch_id).first()
+                    
+                    if batch_obj:
+                        expected_tray_type = batch_obj.tray_type
+                        
+                        # Get actual tray type
+                        actual_tray_type = tray_obj.tray_type
+                        
+                        print(f"   - Expected Type: {expected_tray_type}")
+                        print(f"   - Actual Type: {actual_tray_type}")
+                        
+                        # Normalize for comparison
+                        expected_norm = str(expected_tray_type).strip().lower() if expected_tray_type else ''
+                        actual_norm = str(actual_tray_type).strip().lower() if actual_tray_type else ''
+                        
+                        # Strict Validation: If batch has a type, tray must match
+                        if expected_norm:
+                            if expected_norm != actual_norm:
+                                return JsonResponse({
+                                    'success': False,
+                                    'exists': True,
+                                    'error': f'Tray Type Mismatch! Expected: {expected_tray_type}, Scanned: {actual_tray_type or "None"}'
+                                })
+                            
+                except Exception as val_e:
+                    print(f"   - Validation Error: {val_e}")
+                    # Don't block flow on error, but log it
 
             return JsonResponse({
                 'success': True,
@@ -2308,6 +2356,42 @@ class IQFTrayValidateAPIView(APIView):
                 print(f"[DEBUG] Tray '{tray_id}' found in TrayId for lot_ids: {tray_lot_ids}")
             
             print(f"[DEBUG] Final result - exists: {tray_exists}")
+            
+            # --- TRAY TYPE VALIDATION START ---
+            if tray_exists:
+                try:
+                    # Fetch Batch Object (ModelMasterCreation)
+                    # lot_id_input could be lot_id or batch_id
+                    mm_obj = ModelMasterCreation.objects.filter(lot_id=lot_id_input).first()
+                    if not mm_obj:
+                         mm_obj = ModelMasterCreation.objects.filter(batch_id=lot_id_input).first()
+                    
+                    if mm_obj:
+                         expected_type = mm_obj.tray_type
+                         
+                         # Fetch Tray Object
+                         # We know it exists for this lot_id from previous check
+                         tray_obj = TrayId.objects.filter(lot_id=lot_id_input, tray_id=tray_id).first()
+                         if tray_obj:
+                             actual_type = tray_obj.tray_type
+                             
+                             print(f"[DEBUG] Tray Type Validation: Expected='{expected_type}', Actual='{actual_type}'")
+                             
+                             norm_expected = str(expected_type).strip().lower() if expected_type else ''
+                             norm_actual = str(actual_type).strip().lower() if actual_type else ''
+
+                             # Strict Validation: If batch has a type, tray must match
+                             if norm_expected:
+                                if norm_expected != norm_actual:
+                                     return JsonResponse({
+                                        'success': False, 
+                                        'exists': True,
+                                        'error': f'Tray Type Mismatch! Expected: {expected_type}, Scanned: {actual_type or "None"}'
+                                     })
+                except Exception as val_error:
+                     print(f"[DEBUG] Validation Error: {val_error}")
+            # --- TRAY TYPE VALIDATION END ---
+
             print("="*50)
             
             return JsonResponse({
@@ -3040,6 +3124,40 @@ def iqf_reject_check_tray_id_simple(request):
             })
             
         # New tray available
+        
+        # Strict Tray Type Validation
+        try:
+            # batch_id might not be directly available, try to find via lot_id
+            mm_obj = ModelMasterCreation.objects.filter(lot_id=lot_id).first()
+            if not mm_obj:
+                 mm_obj = ModelMasterCreation.objects.filter(batch_id=lot_id).first()
+            
+            # Fallback: Check TotalStockModel if lot_id is provided
+            if not mm_obj:
+                ts_obj = TotalStockModel.objects.filter(lot_id=lot_id).first()
+                if ts_obj:
+                    mm_obj = ts_obj.batch_id
+
+            if mm_obj:
+                 expected_type = mm_obj.tray_type
+                 actual_type = tray_obj.tray_type
+                 
+                 norm_expected = str(expected_type).strip().lower() if expected_type else ''
+                 norm_actual = str(actual_type).strip().lower() if actual_type else ''
+
+                 # Strict Validation: If batch has a type, tray must match
+                 if norm_expected:
+                    if norm_expected != norm_actual:
+                         return JsonResponse({
+                            'exists': False, 
+                            'valid_for_rejection': False,
+                            'status_message': 'Wrong Tray Type',
+                            'error': f'Tray Type Mismatch! Expected: {expected_type}, Scanned: {actual_type or "None"}'
+                         })
+        except Exception as val_error:
+             print(f"[IQF Reject Validation] Validation Error: {val_error}")
+
+
         return JsonResponse({
             'exists': True,
             'valid_for_rejection': True,
@@ -3052,36 +3170,7 @@ def iqf_reject_check_tray_id_simple(request):
         return JsonResponse({'exists': False, 'valid_for_rejection': False, 'status_message': 'System Error'})
 
 
-    # New tray validation
-    if not tray_obj.lot_id or str(tray_obj.lot_id).strip() == '':
-        try:
-            selected_lot_obj = TotalStockModel.objects.filter(lot_id=lot_id).first()
-            if selected_lot_obj and hasattr(selected_lot_obj, 'batch_id'):
-                expected_tray_type = getattr(selected_lot_obj.batch_id, 'tray_type', None)
 
-                if (hasattr(tray_obj, 'tray_type') and
-                    tray_obj.tray_type and
-                    expected_tray_type and
-                    tray_obj.tray_type != expected_tray_type):
-                    return JsonResponse({
-                        'exists': False,
-                        'valid_for_rejection': False,
-                        'status_message': 'Wrong Tray Type'
-                    })
-        except Exception as e:
-            print(f"[DEBUG] Error checking tray type: {e}")
-
-        return JsonResponse({
-            'exists': True,
-            'valid_for_rejection': True,
-            'status_message': 'New Tray Available'
-        })
-
-    return JsonResponse({
-        'exists': False,
-        'valid_for_rejection': False,
-        'status_message': 'Need New Tray'
-    })
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])

@@ -3663,7 +3663,7 @@ def normalize_distribution(total_qty, tray_capacity, tray_count):
 
     remaining = total_qty
 
-    for i in range(tray_count):
+    for i in range(tray_count - 1, -1, -1):
         if remaining <= 0:
             break
         fill = min(tray_capacity, remaining)
