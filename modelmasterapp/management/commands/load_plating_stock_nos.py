@@ -211,7 +211,7 @@ class Command(BaseCommand):
                     ModelMaster.objects.create(
                         model_no=data['model_no'],
                         plating_stk_no=data['plating_stk_no'],
-                        polishing_stk_no=data['polishing_stk_no'],  # Added polishing stock number
+                        # polishing_stk_no=data['polishing_stk_no'],  # Added polishing stock number
                         version=data['version'].version_name,  # Use version_name from Version object
                         polish_finish=data['polish'],
                         ep_bath_type=data['bath'],

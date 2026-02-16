@@ -6832,7 +6832,7 @@ function applyCachedValidationResult(inputElement, errorSpan, data, trayId) {
       errorSpan.style.marginTop = '4px';
     }
   }
-  updateFormValidationState();
+  if (typeof updateFormValidationState === 'function') updateFormValidationState();
 }
 
 // ✅ NEW: Perform actual API validation

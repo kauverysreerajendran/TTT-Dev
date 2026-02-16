@@ -2107,7 +2107,7 @@ def get_accepted_tray_scan_data(request):
         original_distribution = get_actual_tray_distribution_for_delink(lot_id, stock)
 
         # ✅ CRITICAL: Capture reused_tray_indices
-        current_distribution, _, reused_tray_indices = (
+        current_distribution, _, reused_tray_indices, _ = (
             calculate_distribution_after_rejections(
                 lot_id, original_distribution
             )
@@ -3447,7 +3447,8 @@ def get_delink_tray_data(request):
         (
             current_distribution,
             raw_distribution,
-            reused_tray_indices
+            reused_tray_indices,
+            floating_extra_qty
         ) = calculate_distribution_after_rejections(
             lot_id, original_distribution
         )
@@ -3455,10 +3456,11 @@ def get_delink_tray_data(request):
         # ---------------------------------------
         # Compute counts
         # ---------------------------------------
-        zero_indices = [i for i, qty in enumerate(current_distribution) if qty == 0]
+        zero_indices = [i for i, qty in enumerate(raw_distribution) if qty == 0]
         Z = len(zero_indices)
         R = len(reused_tray_indices)
 
+        # Delink empty trays that are not reused
         delink_count = max(0, Z - R)
 
         # ---------------------------------------
@@ -3471,6 +3473,10 @@ def get_delink_tray_data(request):
         ]
 
         delink_indices = candidate_indices[:delink_count]
+
+        # ✅ FIX: Only delink when there is floating extra quantity to absorb
+        if floating_extra_qty == 0:
+            delink_indices = []
 
         # ---------------------------------------
         # Build response
@@ -3636,7 +3642,7 @@ def calculate_distribution_after_rejections(lot_id, original_distribution):
     print(f"DEBUG: Final normalized distribution: {normalized}")
     print(f"DEBUG: CLEAN reused_tray_indices: {reused_tray_indices}")
 
-    return normalized, raw_distribution, reused_tray_indices
+    return normalized, raw_distribution, reused_tray_indices, floating_extra_qty
 
 
 def normalize_distribution(total_qty, tray_capacity, tray_count):
@@ -4725,20 +4731,18 @@ def reject_check_tray_id_simple(request):
         top_tray_qty = top_tray.tray_quantity if top_tray else 0
         top_tray_id = top_tray.tray_id if top_tray else None
 
-        # Coverage calculation — Rule 1 & 2
-        remaining_after_top = max(0, total_rejected_qty - top_tray_qty)
+        # ✅ FIX: Calculate reuse based on how many existing trays become qty=0 after rejection
+        non_rejected_trays = IPTrayId.objects.filter(lot_id=current_lot_id, rejected_tray=False)
+        total_tray_count = non_rejected_trays.count()
+        total_qty = sum(t.tray_quantity or 0 for t in non_rejected_trays)
 
-        if remaining_after_top == 0:
-            # Rule 1: Rejection fits entirely within the top tray → no reuse needed
-            allowed_reusable_trays = 0
-        else:
-            # Rule 2: Overflow requires additional trays
-            allowed_reusable_trays = math.ceil(remaining_after_top / tray_capacity)
-
-
+        remaining_qty = max(0, total_qty - total_rejected_qty)
+        trays_needed = math.ceil(remaining_qty / tray_capacity) if remaining_qty > 0 else 0
+        allowed_reusable_trays = max(0, total_tray_count - trays_needed)
 
         print(f"[INPUT_REUSE] total_rejected={total_rejected_qty}, top_tray={top_tray_id}, "
-              f"top_tray_qty={top_tray_qty}, remaining_after_top={remaining_after_top}, "
+              f"total_qty={total_qty}, total_tray_count={total_tray_count}, "
+              f"remaining_qty={remaining_qty}, trays_needed={trays_needed}, "
               f"capacity={tray_capacity}, allowed_reusable_trays={allowed_reusable_trays}")
 
         # ---------------------------------------------------------
@@ -4755,6 +4759,8 @@ def reject_check_tray_id_simple(request):
             for t_id in alloc_tray_ids:
                 if not t_id:
                     continue
+                if t_id == tray_id:
+                    continue  # Don't count the current tray being scanned as used
                 # Top tray is NOT a reusable tray — it already exists
                 if top_tray and t_id == top_tray.tray_id:
                     continue
