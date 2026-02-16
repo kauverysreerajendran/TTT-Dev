@@ -1578,8 +1578,8 @@ class DayPlanningPickTableAPIView(APIView):
                 has_zero_top_tray = False
             # ✅ ENHANCED: Multiple conditions for needing top tray scan
             data['needs_top_tray_scan'] = bool(
-                (tray_scan_status and not moved_to_d_picker) or  # Original condition
-                has_zero_top_tray  # New condition: zero quantity top tray exists
+                (tray_scan_status and not moved_to_d_picker and not draft_saved) or  # Original condition, exclude draft
+                (has_zero_top_tray and not draft_saved)  # New condition: zero quantity top tray exists, exclude draft
             )
             print(f"🔍 Batch {data['batch_id']}: tray_scan_status={tray_scan_status}, moved_to_d_picker={moved_to_d_picker}, has_zero_top_tray={has_zero_top_tray}, needs_top_tray_scan={data['needs_top_tray_scan']}")
             if tray_capacity > 0:
@@ -1832,7 +1832,7 @@ class TrayIdScanAPIView(APIView):
             model_stock_no = batch_instance.model_stock_no
             version = batch_instance.version
             total_batch_quantity = batch_instance.total_batch_quantity
-            polish_finish_obj = PolishFinishType.objects.filter(polish_finish=batch_instance.polish_finish).first() 
+            polish_finish_obj = batch_instance.polish_finish if isinstance(batch_instance.polish_finish, PolishFinishType) else PolishFinishType.objects.filter(polish_finish=batch_instance.polish_finish).first()
             plating_color = batch_instance.plating_color
 
             # In the TrayIdScanAPIView post method, find this section and update it:
@@ -1848,7 +1848,7 @@ class TrayIdScanAPIView(APIView):
                     version=version,
                     total_stock=active_total_quantity,
                     polish_finish=polish_finish_obj,
-                    plating_color=Plating_Color.objects.filter(plating_color=plating_color).first() if plating_color else None,
+                    plating_color=batch_instance.plating_color if isinstance(batch_instance.plating_color, Plating_Color) else Plating_Color.objects.filter(plating_color=batch_instance.plating_color).first() if batch_instance.plating_color else None,
                     lot_id=lot_id,
                     tray_scan_status=True,  # ✅ Mark as True to indicate tray scanning started
                     last_process_module="DayPlanning",
@@ -2028,6 +2028,14 @@ class ValidateTopTrayAPIView(APIView):
                     'error': 'Batch not found'
                 }, status=404)
 
+            # Check if batch is already completed
+            if batch_instance.Moved_to_D_Picker:
+                return JsonResponse({
+                    'success': True,
+                    'valid': False,
+                    'message': 'Batch already completed'
+                })
+
             # ✅ NEW: First check if tray exists in TrayId table at all
             tray_in_system = TrayId.objects.filter(tray_id=tray_id).first()
             if not tray_in_system:
@@ -2037,21 +2045,29 @@ class ValidateTopTrayAPIView(APIView):
                     'error': f'Tray ID "{tray_id}" not found in system. Only pre-configured trays are allowed.'
                 })
 
-            # Check if tray exists in this specific batch
+            # Check if tray exists in this specific batch (TrayId or DraftTrayId)
             tray = TrayId.objects.filter(
                 tray_id=tray_id,
                 batch_id=batch_instance
             ).first()
 
-            if not tray:
+            draft_tray = DraftTrayId.objects.filter(
+                tray_id=tray_id,
+                batch_id=batch_instance
+            ).first()
+
+            if not tray and not draft_tray:
                 return JsonResponse({
                     'success': True,
                     'valid': False,
                     'error': f'Tray ID "{tray_id}" not found in this batch'
                 })
 
-            # Check if the tray is delinked
-            if tray.delink_tray:
+            # Use the tray from TrayId if exists, otherwise from DraftTrayId
+            selected_tray = tray if tray else draft_tray
+
+            # Check if the tray is delinked (only for TrayId trays)
+            if tray and tray.delink_tray:
                 return JsonResponse({
                     'success': True,
                     'valid': False,
@@ -2059,25 +2075,26 @@ class ValidateTopTrayAPIView(APIView):
                 })
 
             # Check if the tray has quantity 0
-            if tray.tray_quantity <= 0:
+            if selected_tray.tray_quantity <= 0:
                 return JsonResponse({
                     'success': True,
                     'valid': False,
                     'error': f'Tray ID "{tray_id}" has zero quantity and cannot be set as top tray'
                 })
 
-            # Validate tray type compatibility
-            validation_helper = TrayIdUniqueCheckAPIView()
-            validation_result = validation_helper.validate_tray_type_compatibility(tray, batch_id)
-            
-            if not validation_result['compatible']:
-                return JsonResponse({
-                    'success': True,
-                    'valid': False,
-                    'error': validation_result['error'],
-                    'batch_tray_type': validation_result['batch_tray_type'],
-                    'scanned_tray_type': validation_result['scanned_tray_type']
-                })
+            # Validate tray type compatibility (only for existing TrayId trays)
+            if tray:
+                validation_helper = TrayIdUniqueCheckAPIView()
+                validation_result = validation_helper.validate_tray_type_compatibility(tray, batch_id)
+                
+                if not validation_result['compatible']:
+                    return JsonResponse({
+                        'success': True,
+                        'valid': False,
+                        'error': validation_result['error'],
+                        'batch_tray_type': validation_result['batch_tray_type'],
+                        'scanned_tray_type': validation_result['scanned_tray_type']
+                    })
 
             # All checks passed: Valid tray for top tray selection
             return JsonResponse({
@@ -2125,18 +2142,42 @@ class TopTrayScanAPIView(APIView):
                     'error': 'Invalid batch ID.'
                 }, status=404)
 
+            # Check if batch is already completed
+            if batch_instance.Moved_to_D_Picker:
+                return JsonResponse({
+                    'success': True,
+                    'message': 'Batch already completed'
+                })
+
             with transaction.atomic():
-                # Check if the scanned tray ID exists in the same batch
+                # Check if the scanned tray ID exists in the same batch (TrayId or DraftTrayId)
                 existing_tray = TrayId.objects.filter(
                     tray_id=scanned_tray_id,
                     batch_id=batch_instance
                 ).first()
 
-                if not existing_tray:
+                draft_tray = DraftTrayId.objects.filter(
+                    tray_id=scanned_tray_id,
+                    batch_id=batch_instance
+                ).first()
+
+                if not existing_tray and not draft_tray:
                     return JsonResponse({
                         'success': False,
                         'error': f'Tray ID "{scanned_tray_id}" not found in this batch.'
                     }, status=400)
+
+                # If found in draft, create TrayId entry
+                if not existing_tray and draft_tray:
+                    existing_tray = TrayId.objects.create(
+                        tray_id=draft_tray.tray_id,
+                        tray_quantity=draft_tray.tray_quantity,
+                        batch_id=batch_instance,
+                        position=draft_tray.position,
+                        date=draft_tray.date,
+                        # Set other default fields as needed
+                    )
+                    draft_tray.delete()  # Remove from draft
 
                 # Check if this tray is delinked
                 if existing_tray.delink_tray:
@@ -2354,18 +2395,38 @@ class DraftTrayIdAPIView(APIView):
                 print(f"📊 Draft total calculation: Old total_batch_quantity={batch_instance.total_batch_quantity}, New total_drafted_qty={total_drafted_qty}")
                 batch_instance.total_batch_quantity = total_drafted_qty
                 batch_instance.Draft_Saved = True
+                
+                # ✅ CRITICAL FIX: Create or update TotalStockModel to set tray_scan_status
+                total_stock_obj, created = TotalStockModel.objects.get_or_create(
+                    batch_id=batch_instance,
+                    defaults={
+                        'model_stock_no': batch_instance.model_stock_no,
+                        'version': batch_instance.version,
+                        'total_stock': total_drafted_qty,
+                        'polish_finish': batch_instance.polish_finish if isinstance(batch_instance.polish_finish, PolishFinishType) else PolishFinishType.objects.filter(polish_finish=batch_instance.polish_finish).first(),
+                        'plating_color': batch_instance.plating_color if isinstance(batch_instance.plating_color, Plating_Color) else Plating_Color.objects.filter(plating_color=batch_instance.plating_color).first() if batch_instance.plating_color else None,
+                        'lot_id': lot_id,
+                        'tray_scan_status': True,  # Boolean field, not string
+                        'last_process_module': "DayPlanning",
+                        'next_process_module': "IP Screening",
+                    }
+                )
+                
+                if not created:
+                    # Update existing TotalStockModel
+                    total_stock_obj.tray_scan_status = True
+                    total_stock_obj.total_stock = total_drafted_qty
+                    total_stock_obj.save(update_fields=['tray_scan_status', 'total_stock'])
 
-                # If frontend sent top-tray verification state, persist it; otherwise leave as-is
+                # If frontend sent top-tray verification state, persist it; otherwise set based on top tray quantity
                 update_fields = ['Draft_Saved', 'total_batch_quantity']
                 if top_tray_qty_verified is not None:
                     batch_instance.top_tray_qty_verified = True if str(top_tray_qty_verified) in ['True', 'true', True] else False
                     update_fields.append('top_tray_qty_verified')
-                if verified_tray_qty is not None:
-                    try:
-                        batch_instance.verified_tray_qty = int(verified_tray_qty)
-                    except Exception:
-                        batch_instance.verified_tray_qty = batch_instance.verified_tray_qty or 0
-                    update_fields.append('verified_tray_qty')
+                else:
+                    # For draft, always set as verified to avoid showing top tray scan UI
+                    batch_instance.top_tray_qty_verified = True
+                    update_fields.append('top_tray_qty_verified')
 
                 batch_instance.save(update_fields=update_fields)
                 # Save the extra fields if any
@@ -2662,7 +2723,7 @@ class UpdateBatchQuantityAndColorAPIView(APIView):
                         'error': f'Plating color "{new_plating_color}" not found in Master Data',
                         'available_colors': available_colors
                     }, status=400)
-                obj.plating_color = new_plating_color
+                obj.plating_color = plating_color_obj
             
             # Save the changes
             update_fields = []
