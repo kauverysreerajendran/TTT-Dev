@@ -205,6 +205,47 @@ class IQFPickTableView(APIView):
             lot_id = data.get('stock_lot_id')
             total_stock_obj = TotalStockModel.objects.filter(lot_id=lot_id).first()
             if total_stock_obj:
+                # ✅ HEALING LOGIC: If iqf_physical_qty is 0/None and no missing qty recorded, try to recover from Brass QC/Audit
+                # This fixes the bug where "assigned quantity" is lost after draft save
+                current_physical_qty = total_stock_obj.iqf_physical_qty or 0
+                current_missing_qty = total_stock_obj.iqf_missing_qty or 0
+                
+                # Strict conditions: 
+                # 1. Physical qty is 0 or None
+                # 2. Missing qty is 0 or None (if user set missing, 0 physical is valid)
+                # 3. Not yet finalized (not fully accepted or rejected)
+                needs_healing = (
+                    current_physical_qty <= 0 and 
+                    current_missing_qty <= 0 and
+                    not total_stock_obj.iqf_acceptance and 
+                    not total_stock_obj.iqf_rejection
+                )
+
+                if needs_healing:
+                    try:
+                        # Determine source based on flag
+                        use_audit = getattr(total_stock_obj, 'send_brass_audit_to_iqf', False)
+                        
+                        if use_audit:
+                            reason_store = Brass_Audit_Rejection_ReasonStore.objects.filter(lot_id=lot_id).order_by('-id').first()
+                        else:
+                            reason_store = Brass_QC_Rejection_ReasonStore.objects.filter(lot_id=lot_id).order_by('-id').first()
+                        
+                        if reason_store and reason_store.total_rejection_quantity > 0:
+                            qty_to_heal = reason_store.total_rejection_quantity
+                            print(f"🚑 HEALING: Recovering iqf_physical_qty for {lot_id} -> {qty_to_heal}")
+                            
+                            # Persist the recovered quantity
+                            total_stock_obj.iqf_physical_qty = qty_to_heal
+                            total_stock_obj.iqf_missing_qty = 0
+                            total_stock_obj.save(update_fields=['iqf_physical_qty', 'iqf_missing_qty'])
+                            
+                            # Update local object for immediate use in this view
+                            total_stock_obj.iqf_physical_qty = qty_to_heal
+                    except Exception as e:
+                        print(f"⚠️ HEALING FAILED for {lot_id}: {str(e)}")
+
+                # Standard assignment using (possibly healed) value
                 if total_stock_obj.iqf_physical_qty and total_stock_obj.iqf_physical_qty > 0:
                     data['available_qty'] = total_stock_obj.iqf_physical_qty
                 else:
