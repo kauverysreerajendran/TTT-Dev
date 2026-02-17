@@ -2,7 +2,7 @@
 {% load static %}
 {% load stock_filters %} 
 {% block content %}
-<script>console.log("🔥 CRITICAL DEBUG: IS_PickTable.html LOADED 🔥");</script>
+ 
   <style>
     /* ✅ FIX: Ensure acceptedTrayCancelBtn is always accessible */
     #acceptedTrayCancelBtn {
@@ -4716,7 +4716,7 @@ function displayReadOnlyRejectionData(rows, detailsDiv, stockLotId) {
   html += `
       </div>
       <div class="readonly-footer">
-        <button type="button" class="btn btn-secondary" id="closeRejectionModalBtn">Close</button>
+        <button type="button" class="btn btn-secondary" onclick="closeRejectionModal()">Close</button>
       </div>
     </div>
     
@@ -4806,12 +4806,6 @@ function displayReadOnlyRejectionData(rows, detailsDiv, stockLotId) {
     </style>`;
 
   detailsDiv.innerHTML = html;
-
-  // ✅ ADD: Event listener for close rejection modal button in read-only mode
-  const closeRejectionModalBtn = document.getElementById('closeRejectionModalBtn');
-  if (closeRejectionModalBtn) {
-    closeRejectionModalBtn.addEventListener('click', closeRejectionModal);
-  }
 }
 
 // ✅ NEW: Function to open set top tray window directly
@@ -5017,12 +5011,6 @@ style="max-height: 320px !important; border: 1px solid #dee2e6; border-radius: 1
               if (draftData) {
                 loadDraftDataIntoForm(draftData);
               }
-
-  // ✅ ADD: Event listener for close rejection modal button to fix CSP violation
-  const closeRejectionModalBtn = document.getElementById('closeRejectionModalBtn');
-  if (closeRejectionModalBtn) {
-    closeRejectionModalBtn.addEventListener('click', closeRejectionModal);
-  }
 
   // ✅ NEW: Add event listener for Lot Rejection checkbox
   const batchRejectionCheckbox = document.getElementById('batchRejection');
@@ -5254,21 +5242,21 @@ window.loadDraftDataIntoForm = function(draftData) {
           const trayIdCell = row.querySelector('td:last-child');
           
           if (trayIdCell) {
-            const tInputs = trayIdCell.querySelectorAll('.rejection-tray-id-input');
-            console.log(`Found ${tInputs.length} tray inputs for reason ${reasonId}`);
+            const trayInputs = trayIdCell.querySelectorAll('.rejection-tray-id-input');
+            console.log(`Found ${trayInputs.length} tray inputs for reason ${reasonId}`);
             
             // ✅ FIXED: Load each tray into the corresponding input
             traysForReason.forEach((scan, index) => {
-              if (index < tInputs.length) {
-                 const tInput = tInputs[index];
-                 const trayCapacity = parseInt(tInput.getAttribute('data-tray-capacity')) || 0;
-                 if (tInput && tInput.value !== undefined) {
-                   tInput.value = scan.tray_id;
-                   console.log(`✅ Set tray ${index + 1}: ${scan.tray_id} (qty: ${scan.tray_qty}, capacity: ${trayCapacity})`);
-                 } else {
-                   console.warn('⚠️ [loadDraftDataIntoForm] Tray input is null or invalid at index', index);
-                   return;
-                 }
+              if (index < trayInputs.length) {
+                const trayInput = trayInputs[index];
+                const trayCapacity = parseInt(trayInput.getAttribute('data-tray-capacity')) || 0;
+                if (trayInput && trayInput.value !== undefined) {
+                  trayInput.value = scan.tray_id;
+                  console.log(`✅ Set tray ${index + 1}: ${scan.tray_id} (qty: ${scan.tray_qty}, capacity: ${trayCapacity})`);
+                } else {
+                  console.warn('⚠️ [loadDraftDataIntoForm] Tray input is null or invalid at index', index);
+                  return;
+                }
 
                 // ✅ FIXED: First check if this tray was previously validated by backend
                 setTimeout(async () => {
@@ -5280,7 +5268,7 @@ window.loadDraftDataIntoForm = function(draftData) {
                       const data = await response.json();
                       
                       // ✅ CRITICAL FIX: Store complete backend response data for frontend validation
-                      tInput._backendResponseData = data;
+                      trayInput._backendResponseData = data;
                       console.log(`✅ [loadDraftDataIntoForm] Stored complete backend response data for frontend validation on ${scan.tray_id}`);
                       
                       // ✅ GLOBAL FIX: Store available quantities globally for all tray validations in this lot
@@ -5293,20 +5281,20 @@ window.loadDraftDataIntoForm = function(draftData) {
                       
                       if (data.success && data.message === 'Perfect capacity match!') {
                         // Mark as backend validated and show success state
-                        tInput._isBackendValidated = true;
-                        tInput._isValid = true;
-                        tInput.style.backgroundColor = '#d4edda';
-                        tInput.style.borderColor = '#28a745';
-                        tInput.style.borderWidth = '2px';
+                        trayInput._isBackendValidated = true;
+                        trayInput._isValid = true;
+                        trayInput.style.backgroundColor = '#d4edda';
+                        trayInput.style.borderColor = '#28a745';
+                        trayInput.style.borderWidth = '2px';
                         
                         // ✅ NEW: Store actual tray quantity from backend response
                         if (data.tray_actual_quantity) {
-                          tInput._backendTrayQuantity = data.tray_actual_quantity;
+                          trayInput._backendTrayQuantity = data.tray_actual_quantity;
                           console.log(`✅ [loadDraftDataIntoForm] Stored backend tray quantity: ${data.tray_actual_quantity} for ${scan.tray_id}`);
                         }
                         
                         // Update error span with success message
-                        const errorSpan = tInput.parentElement?.parentElement?.querySelector('.rejection-tray-error');
+                        const errorSpan = trayInput.parentElement?.parentElement?.querySelector('.rejection-tray-error');
                         if (errorSpan) {
                           errorSpan.innerHTML = '✅ Valid for re-use - Perfect capacity match';
                           errorSpan.style.display = 'block';
@@ -5322,16 +5310,16 @@ window.loadDraftDataIntoForm = function(draftData) {
                         console.log(`✅ [loadDraftDataIntoForm] Backend validated ${scan.tray_id} as valid`);
                       } else {
                         // Show draft styling for invalid/unvalidated trays
-                        tInput.style.backgroundColor = '#fff3cd';
-                        tInput.style.borderColor = '#f39c12';
-                        tInput.style.borderWidth = '2px';
+                        trayInput.style.backgroundColor = '#fff3cd';
+                        trayInput.style.borderColor = '#f39c12';
+                        trayInput.style.borderWidth = '2px';
                         
                         // ✅ NEW: Extract actual tray quantity from error message for accurate validation
                         if (data.error && data.error.includes('but tray has')) {
                           const match = data.error.match(/but tray has (\d+) pieces/);
                           if (match) {
                             const actualQty = parseInt(match[1]);
-                            tInput._extractedTrayQuantity = actualQty;
+                            trayInput._extractedTrayQuantity = actualQty;
                             console.log(`✅ [loadDraftDataIntoForm] Extracted actual tray quantity from error: ${actualQty} for ${scan.tray_id}`);
                           }
                         }
@@ -5340,9 +5328,9 @@ window.loadDraftDataIntoForm = function(draftData) {
                       }
                     } else {
                       // No lot ID available, use draft styling
-                      tInput.style.backgroundColor = '#fff3cd';
-                      tInput.style.borderColor = '#f39c12';
-                      tInput.style.borderWidth = '2px';
+                      trayInput.style.backgroundColor = '#fff3cd';
+                      trayInput.style.borderColor = '#f39c12';
+                      trayInput.style.borderWidth = '2px';
                     }
                     
                     // Trigger validation after status check to update proceed button
@@ -5358,9 +5346,9 @@ window.loadDraftDataIntoForm = function(draftData) {
                   } catch (error) {
                     console.warn('⚠️ Failed to validate draft tray:', error);
                     // Fallback to draft styling
-                    tInput.style.backgroundColor = '#fff3cd';
-                    tInput.style.borderColor = '#f39c12';
-                    tInput.style.borderWidth = '2px';
+                    trayInput.style.backgroundColor = '#fff3cd';
+                    trayInput.style.borderColor = '#f39c12';
+                    trayInput.style.borderWidth = '2px';
                   }
                 }, 100);
                 
@@ -5368,7 +5356,7 @@ window.loadDraftDataIntoForm = function(draftData) {
                 
                 // ✅ NEW: Update the data-tray-qty attribute to match the saved quantity
                 if (scan.tray_qty) {
-                  tInput.setAttribute('data-tray-qty', scan.tray_qty);
+                  trayInput.setAttribute('data-tray-qty', scan.tray_qty);
                 }
               } else {
                 console.log(`  ⚠️ No input available for tray ${index + 1}: ${scan.tray_id}`);
@@ -5392,18 +5380,18 @@ window.loadDraftDataIntoForm = function(draftData) {
                   
                   traysForReason.forEach((scan, index) => {
                     if (index < newTrayInputs.length) {
-                      const ti = newTrayInputs[index];
-                      if (ti && ti.value !== undefined) {
-                        ti.value = scan.tray_id;
+                      const trayInput = newTrayInputs[index];
+                      if (trayInput && trayInput.value !== undefined) {
+                        trayInput.value = scan.tray_id;
                         // Immediately trigger validation for loaded value
-                        ti.dispatchEvent(new Event('input', { bubbles: true }));
-                        ti.dispatchEvent(new Event('blur', { bubbles: true }));
-                        ti.style.backgroundColor = '#fff3cd';
-                        ti.style.borderColor = '#f39c12';
-                        ti.style.borderWidth = '2px';
+                        trayInput.dispatchEvent(new Event('input', { bubbles: true }));
+                        trayInput.dispatchEvent(new Event('blur', { bubbles: true }));
+                        trayInput.style.backgroundColor = '#fff3cd';
+                        trayInput.style.borderColor = '#f39c12';
+                        trayInput.style.borderWidth = '2px';
                         
                         if (scan.tray_qty) {
-                          ti.setAttribute('data-tray-qty', scan.tray_qty);
+                          trayInput.setAttribute('data-tray-qty', scan.tray_qty);
                         }
                         
                         console.log(`  🔄 Re-loaded tray ${index + 1}: ${scan.tray_id}`);
@@ -5784,43 +5772,39 @@ function generateDynamicTrayIdInputs(row, quantity, trayIdCell) {
     trayNumber.textContent = `${i + 1}`;
     
     // Tray ID input
-    const tInput = document.createElement('input');
-    tInput.type = 'text';
-    tInput.className = 'form-control rejection-tray-id-input';
-    tInput.style.cssText = `
+    const trayInput = document.createElement('input');
+    trayInput.type = 'text';
+    trayInput.className = 'form-control rejection-tray-id-input';
+    trayInput.style.cssText = `
       flex: 1; font-size: 12px; padding: 6px 10px;
       border: 2px solid #ced4da; border-radius: 6px;
       transition: all 0.2s ease; text-align: left; font-weight: 500;
     `;
-    tInput.placeholder = `Scan Tray ID ${i + 1}`;
+    trayInput.placeholder = `Scan Tray ID ${i + 1}`;
     
     // Set data attributes
-    tInput.setAttribute('data-tray-index', i);
-    tInput.setAttribute('data-tray-capacity', trayCapacity);
-    tInput.setAttribute('data-tray-qty', trayQty);
-    tInput.setAttribute('data-is-complete', trayQty === trayCapacity);
-    tInput.setAttribute('data-is-partial', trayQty < trayCapacity);
-    tInput.setAttribute('data-reason-id', reasonId);
-    tInput.setAttribute('data-rejection-qty', quantity);
-    tInput.setAttribute('data-rejection-reason', reasonText);
-    tInput.setAttribute('data-expected-total-trays', traysNeeded);
-    tInput.setAttribute('data-tray-position-in-rejection', i + 1);
-    
-    // ✅ NEW: Store original quantity for delink logic
-    tInput._originalQty = trayQty;
+    trayInput.setAttribute('data-tray-index', i);
+    trayInput.setAttribute('data-tray-capacity', trayCapacity);
+    trayInput.setAttribute('data-tray-qty', trayQty);
+    trayInput.setAttribute('data-is-complete', trayQty === trayCapacity);
+    trayInput.setAttribute('data-is-partial', trayQty < trayCapacity);
+    trayInput.setAttribute('data-reason-id', reasonId);
+    trayInput.setAttribute('data-rejection-qty', quantity);
+    trayInput.setAttribute('data-rejection-reason', reasonText);
+    trayInput.setAttribute('data-expected-total-trays', traysNeeded);
+    trayInput.setAttribute('data-tray-position-in-rejection', i + 1);
     
     // ✅ NEW: Add event listeners for duplicate validation
-    tInput.addEventListener('change', function() {
-      validateDuplicateTrayIds();
-      updateFormValidationState();
+    trayInput.addEventListener('change', function() {
+      setTimeout(() => {
+        validateDuplicateTrayIds();
+      }, 100);
     });
     
-    tInput.addEventListener('input', function() {
-      // Clear error display on input
-      const errorSpan = this.parentElement.parentElement.querySelector('.rejection-tray-error');
-      if (errorSpan) {
-        errorSpan.style.display = 'none';
-      }
+    trayInput.addEventListener('paste', function() {
+      setTimeout(() => {
+        validateDuplicateTrayIds();
+      }, 200);
     });
     
     // Error span for this specific tray
@@ -5846,7 +5830,7 @@ function generateDynamicTrayIdInputs(row, quantity, trayIdCell) {
     `;
     
     trayInputRow.appendChild(trayNumber);
-    trayInputRow.appendChild(tInput);
+    trayInputRow.appendChild(trayInput);
     
     trayInputGroup.appendChild(trayInputRow);
     trayInputGroup.appendChild(errorSpan);
@@ -6206,16 +6190,14 @@ function addInstantTrayValidationToInputs(trayIdCell) {
       const currentSessionAllocations = collectCurrentSessionAllocations();
       
       // Build validation request
-      const queryParamsObject = {
+      const queryParams = new URLSearchParams({
         tray_id: trayId,
         lot_id: lotId,
         rejection_qty: rejectionQty,
         rejection_reason_id: rejectionReasonId,
         current_session_allocations: JSON.stringify(currentSessionAllocations),
-        is_draft: (typeof isDraftMode !== 'undefined' && isDraftMode) ? 'true' : 'false'
-      };
-      
-      const queryParams = new URLSearchParams(queryParamsObject);
+        is_draft: isDraftMode ? 'true' : 'false'
+      });
       
       console.log('🔧 [InstantValidation] API call with params:', queryParams.toString());
       
@@ -6844,7 +6826,7 @@ function applyCachedValidationResult(inputElement, errorSpan, data, trayId) {
       errorSpan.style.marginTop = '4px';
     }
   }
-  if (typeof updateFormValidationState === 'function') updateFormValidationState();
+  updateFormValidationState();
 }
 
 // ✅ NEW: Perform actual API validation
@@ -7989,16 +7971,14 @@ function interceptFormSubmission() {
        document.querySelectorAll('.rejection-qty-input').forEach(function(qtyInput) {
          qtyInput.addEventListener('input', function() {
            const row = qtyInput.closest('tr');
-           const tInput = row.querySelector('.rejection-tray-id-input');
-           if (tInput) {
-             if (parseInt(qtyInput.value) > 0) {
-               tInput.disabled = false;
-               tInput.required = true;
-             } else {
-               tInput.value = '';
-               tInput.disabled = true;
-               tInput.required = false;
-             }
+           const trayInput = row.querySelector('.rejection-tray-id-input');
+           if (parseInt(qtyInput.value) > 0) {
+             trayInput.disabled = false;
+             trayInput.required = true;
+           } else {
+             trayInput.value = '';
+             trayInput.disabled = true;
+             trayInput.required = false;
            }
            
            // ✅ Check tray capacity violations after quantity change
@@ -8712,16 +8692,6 @@ function interceptFormSubmission() {
    console.log('📤 [handleTrayWiseRejection] Server response received:', data);
    if (data.success) {
      console.log('✅ [handleTrayWiseRejection] Rejection saved successfully!');
-     
-     // ✅ Check if delink is required after rejection
-     if (data.delink_required) {
-       console.log('🔗 [handleTrayWiseRejection] Delink required - showing delink modal with', data.empty_trays_count, 'empty trays');
-       
-       // Show delink modal instead of accepted tray modal
-       showDelinkModal(stockLotId, data.empty_trays_count);
-       return; // Exit early, don't show accepted tray modal
-     }
-     
      // Disable all inputs
      document.querySelectorAll('.rejection-qty-input, .rejection-tray-id-input').forEach(input => {
        input.disabled = true;
@@ -9024,49 +8994,36 @@ function interceptFormSubmission() {
        return modal?.dataset?.stockLotId || '';
      }
    
-    // ✅ SIMPLIFIED: collectCurrentSessionAllocations function for frontend compatibility
-    // UPDATED: Now includes tray_ids for backend validation
-    function collectCurrentSessionAllocations(excludeInput) {
-      const allocations = [];
-      
-      console.log('📊 [collectCurrentSessionAllocations] Starting allocation collection...');
-      
-      document.querySelectorAll('.rejection-qty-input').forEach(qtyInput => {
-        const qty = parseInt(qtyInput.value) || 0;
-        const reasonId = qtyInput.getAttribute('data-reason-id');
-        
-        if (qty > 0) {
-          const row = qtyInput.closest('tr');
-          const reasonCell = row.cells[2];
-          const reasonText = reasonCell ? reasonCell.textContent.trim() : '';
-          
-          // Collect tray IDs for this reason
-          const trayIdCell = row.querySelector('td:last-child');
-          const tInputs = trayIdCell ? trayIdCell.querySelectorAll('.rejection-tray-id-input') : [];
-          const trayIds = [];
-          
-          tInputs.forEach(ti => {
-            const val = ti.value.trim();
-            if (ti !== excludeInput && val) {
-              trayIds.push(val);
-            }
-          });
-          
-          console.log(`📋 [collectCurrentSessionAllocations] Processing reason ${reasonId} (${reasonText}): qty=${qty}, trayIds=[${trayIds.join(', ')}]`);
-          
-          allocations.push({
-            reason_id: reasonId,
-            reason_text: reasonText,
-            qty: qty,
-            rejection_qty: qty,
-            tray_ids: trayIds  // ✅ CRITICAL: Include tray IDs for reuse limit check
-          });
-        }
-      });
-      
-      console.log('📊 [collectCurrentSessionAllocations] FINAL allocations:', allocations);
-      return allocations;
-    }
+   // ✅ SIMPLIFIED: collectCurrentSessionAllocations function for frontend compatibility
+   function collectCurrentSessionAllocations(excludeInput) {
+     const allocations = [];
+     
+     console.log('📊 [collectCurrentSessionAllocations] Starting allocation collection...');
+     
+     document.querySelectorAll('.rejection-qty-input').forEach(qtyInput => {
+       const qty = parseInt(qtyInput.value) || 0;
+       const reasonId = qtyInput.getAttribute('data-reason-id');
+       
+       if (qty > 0) {
+         const row = qtyInput.closest('tr');
+         const reasonCell = row.cells[2];
+         const reasonText = reasonCell ? reasonCell.textContent.trim() : '';
+         
+         console.log(`📋 [collectCurrentSessionAllocations] Processing reason ${reasonId} (${reasonText}): qty=${qty}`);
+         
+         // For the new simplified logic, we just need the basic rejection quantities
+         allocations.push({
+           reason_id: reasonId,
+           reason_text: reasonText,
+           qty: qty,
+           rejection_qty: qty  // Add both for compatibility
+         });
+       }
+     });
+     
+     console.log('📊 [collectCurrentSessionAllocations] FINAL allocations:', allocations);
+     return allocations;
+   }
 
    // ✅ ENHANCED: Update rejection scan counter with quantity tracking
    function updateRejectionScanCounter() {
@@ -9513,47 +9470,6 @@ document.addEventListener('DOMContentLoaded', function() {
   setTimeout(startDraftButtonMonitoring, 1000);
 });
    
-function showDelinkModal(lotId, emptyTraysCount) {
-  console.log('🔗 [showDelinkModal] Showing delink modal for lot:', lotId, 'with', emptyTraysCount, 'empty trays');
-  
-  // Close the rejection modal first
-  const rejectionModal = document.getElementById("trayScanModal");
-  if (rejectionModal) {
-    rejectionModal.style.display = "none";
-    rejectionModal.classList.remove("open");
-    console.log('🔗 [showDelinkModal] Rejection modal closed');
-  }
-  
-  // Fetch accepted tray scan data and show modal with delink focus
-  console.log('🔗 [showDelinkModal] Fetching accepted tray scan data for delink');
-  
-  fetch(`/inputscreening/get_accepted_tray_scan_data/?lot_id=${encodeURIComponent(lotId)}`)
-    .then(res => {
-      console.log('🔗 [showDelinkModal] API Response status:', res.status);
-      return res.json();
-    })
-    .then(rescanData => {
-      console.log('🔗 [showDelinkModal] API Response data:', rescanData);
-      if (rescanData.success) {
-        console.log('🔗 [showDelinkModal] Showing accepted tray modal with delink focus');
-        
-        // Add delink notification to the data
-        rescanData.delink_required = true;
-        rescanData.empty_trays_count = emptyTraysCount;
-        
-        showAcceptedTrayModal(rescanData, lotId, rescanData.has_draft || false);
-        console.log('🔗 [showDelinkModal] Delink modal shown successfully');
-      } else {
-        console.error('❌ [showDelinkModal] API returned error:', rescanData.error);
-        alert('Failed to load delink data: ' + (rescanData.error || 'Unknown error'));
-      }
-    })
-    .catch(error => {
-      console.error('❌ [showDelinkModal] Error fetching delink data:', error);
-      alert('Error opening delink window: ' + error.message);
-    });
-}
-
 function showAcceptedTrayModal(rescanData, lotId, isDraft) {
   console.log('🔍 [showAcceptedTrayModal] === STARTING ===');
   console.log('🔍 Input rescanData:', rescanData);
@@ -9590,24 +9506,14 @@ function showAcceptedTrayModal(rescanData, lotId, isDraft) {
 
   ` : '';
 
-  // ✅ NEW: Delink required alert
-  const delinkAlert = rescanData.delink_required ? `
-    <div class="alert alert-warning alert-dismissible fade show" role="alert" style="margin-bottom: 15px; border-left: 4px solid #ffc107;">
-      <i class="fa fa-exclamation-triangle" style="color: #856404;"></i>
-      <strong>Delink Required:</strong> ${rescanData.empty_trays_count || 0} empty tray(s) created by rejection. Please scan delink trays below.
-      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
-  ` : '';
-
-  const headerColor = isDraft ? '#f39c12' : (rescanData.delink_required ? '#dc3545' : '#028084');
+  const headerColor = isDraft ? '#f39c12' : '#028084';
   const inputStyle = isDraft ? 'background-color: #fff3cd; border-color: #f39c12; border-width: 2px;' : '';
   
   // ✅ COMPLETE: Full modal HTML
   let html = `
     ${draftAlert}
-    ${delinkAlert}
     <!-- ✅ UPDATED: Compact header section -->
-    <div class="d-flex justify-content-between align-items-center mb-2" style="padding: 8px 12px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid ${headerColor}; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+    <div class="d-flex justify-content-between align-items-center mb-2" style="padding: 8px 12px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid ${isDraft ? '#f39c12' : '#028084'}; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
       <h4 class="mb-0" style="font-size: 18px; font-weight: 600; color: #2c3e50; display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden;">
         <i class="fa fa-layer-group" style="color: ${headerColor}; font-size: 12px;"></i>
         Input Screening / <span style="color: #616161;">${modelNo}</span>${draftIndicator}
@@ -9618,11 +9524,10 @@ function showAcceptedTrayModal(rescanData, lotId, isDraft) {
       </button>
     </div>
 
-    <!-- ✅ FIXED: Delink Section ALWAYS rendered (hidden by default), loadDelinkTrayData controls visibility -->
-    <div id="delinkSection" style="display: none;">
-      <div class="d-flex justify-content-between align-items-center mb-2" style="padding: 6px 10px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 6px; border-left: 4px solid #dc3545; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+    <!-- ✅ UPDATED: Delink Section with premium styling -->
+    <div id="delinkSection">
+      <div class="d-flex justify-content-between align-items-center mb-2" style="padding: 6px 10px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 6px; border-left: 3px solid #028084; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
         <h5 class="mb-0" style="font-size: 16px; font-weight: 600; color: #2c3e50; display: flex; align-items: center; gap: 6px;">
-          <i class="fa fa-exclamation-triangle" style="color: #dc3545;"></i>
           Delink Trays
         </h5>
 
@@ -9637,13 +9542,13 @@ function showAcceptedTrayModal(rescanData, lotId, isDraft) {
 
       <!-- ✅ REDESIGNED: Compact table styling matching rejection form colors -->
       <div class="table-responsive" style="border: 1px solid #dee2e6; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); background: #fff; scrollbar-width: none; -ms-overflow-style: none; display: grid; grid-template-columns: 1fr; overflow: auto !important;  margin-bottom: 12px;">
-        <table class="table table-bordered text-center mb-0" style="font-size: 11px; border-collapse: collapse; border-color: #dc3545;">
-          <thead style="background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); position: relative;">
+        <table class="table table-bordered text-center mb-0" style="font-size: 11px; border-collapse: collapse; border-color: #028084;">
+          <thead style="background: linear-gradient(135deg, #028084 0%, #0056b3 100%); position: relative;">
             <tr style="border: 1px solid #282f3a;">
-              <th style="background-color: #dc3545 !important; padding: 8px 6px; font-size: 10px; font-weight: 700; border: 1px solid #282f3a; width: 50px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.2);">
+              <th style="background-color: #028084 !important; padding: 8px 6px; font-size: 10px; font-weight: 700; border: 1px solid #282f3a; width: 50px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.2);">
                 S.No
               </th>
-              <th style="background-color: #dc3545 !important; padding: 8px 10px; font-size: 10px; font-weight: 700; border: 1px solid #282f3a; border-left: 1px solid rgba(255,255,255,0.2); color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.2);">
+              <th style="background-color: #028084 !important; padding: 8px 10px; font-size: 10px; font-weight: 700; border: 1px solid #282f3a; border-left: 1px solid rgba(255,255,255,0.2); color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.2);">
                 De-Link Tray ID
               </th>
             </tr>
@@ -9942,14 +9847,14 @@ function loadDelinkTrayData(lotId) {
     .then(data => {
       console.log('🔍 [loadDelinkTrayData] Response data:', data);
 
-      // ✅ FIXED: Show or hide delink section based on ACTUAL API data (not pre-rendered condition)
+      // Hide or show the delink section based on tray count
       if (delinkSection) {
-        if (data.success && data.delink_trays && data.delink_trays.length > 0) {
-          delinkSection.style.display = '';
-          console.log('🔍 [loadDelinkTrayData] Showing delink section with', data.delink_trays.length, 'trays');
-        } else {
+        if (data.delink_trays && data.delink_trays.length === 0) {
           delinkSection.style.display = 'none';
-          console.log('🔍 [loadDelinkTrayData] Hiding delink section - no delink trays from API');
+          console.log('🔍 [loadDelinkTrayData] Hiding delink section - no trays');
+        } else {
+          delinkSection.style.display = '';
+          console.log('🔍 [loadDelinkTrayData] Showing delink section');
         }
       }
 
@@ -13085,30 +12990,12 @@ document.addEventListener("DOMContentLoaded", function () {
       let apiUrl = '';
       let queryParams = {};
 
-        if (type === 'rejection') {
-          const rejectionQty = parseInt(this.getAttribute('data-tray-qty')) || 0;
-          const rejectionReasonId = this.getAttribute('data-reason-id') || '';
-          
-          console.log(`DEBUG: Checking for collectCurrentSessionAllocationsWithNewTrayTracking... Type: ${typeof collectCurrentSessionAllocationsWithNewTrayTracking}`);
-          
-          // alert("DEBUG: Frontend Logic Updated - 1"); // Temporary check
-          
-          let currentSessionAllocations = [];
-          
-          if (typeof window.collectCurrentSessionAllocationsWithNewTrayTracking === 'function') {
-             console.log("DEBUG: Using window.collectCurrentSessionAllocationsWithNewTrayTracking");
-             currentSessionAllocations = window.collectCurrentSessionAllocationsWithNewTrayTracking(this);
-          } else if (typeof collectCurrentSessionAllocationsWithNewTrayTracking === 'function') {
-             console.log("DEBUG: Using local collectCurrentSessionAllocationsWithNewTrayTracking");
-             currentSessionAllocations = collectCurrentSessionAllocationsWithNewTrayTracking(this);
-          } else {
-             console.warn("DEBUG: Falling back to OLD collectCurrentSessionAllocations (Missing tray_ids!)");
-             currentSessionAllocations = (typeof collectCurrentSessionAllocations === 'function' ? collectCurrentSessionAllocations() : []);
-          }
-           
-          console.log('DEBUG: Payload allocations being sent:', currentSessionAllocations);
-
-          queryParams = {
+      if (type === 'rejection') {
+        const rejectionQty = parseInt(this.getAttribute('data-tray-qty')) || 0;
+        const rejectionReasonId = this.getAttribute('data-reason-id') || '';
+        const currentSessionAllocations = collectCurrentSessionAllocations();
+        
+        queryParams = {
           tray_id: trayId,
           lot_id: lotId,
           rejection_qty: rejectionQty,
@@ -13175,68 +13062,6 @@ document.addEventListener("DOMContentLoaded", function () {
     childList: true,
     subtree: true
   });
-
-   // ✅ NEW: Enhanced session allocation collection with NEW tray tracking
-   window.collectCurrentSessionAllocationsWithNewTrayTracking = function(excludeInput) {
-     const allocations = [];
-     
-     console.log('📊 [NEW Tray Aware Collection] Starting allocation collection...');
-     
-     document.querySelectorAll('.rejection-qty-input').forEach(qtyInput => {
-       const qty = parseInt(qtyInput.value) || 0;
-       const reasonId = qtyInput.getAttribute('data-reason-id');
-       
-       if (qty > 0) {
-         const row = qtyInput.closest('tr');
-         const reasonCell = row.cells[2];
-         const reasonText = reasonCell ? reasonCell.textContent.trim() : '';
-         const trayIdCell = row.querySelector('td:last-child');
-         const trayInputs = trayIdCell.querySelectorAll('.rejection-tray-id-input');
-         
-         const validTrayAllocations = [];
-         let validTrayCount = 0;
-         
-         trayInputs.forEach((trayInput, index) => {
-           const trayId = trayInput.value.trim();
-           
-           if (trayInput === excludeInput) {
-             return; // Skip current input
-           }
-           
-           if (trayId) {
-             const errorSpan = trayInput.parentElement.querySelector('.rejection-tray-error');
-             const hasError = errorSpan && 
-                              errorSpan.style.display === 'block' && 
-                              (errorSpan.textContent.includes('❌') || errorSpan.style.color === '#721c24');
-             
-             if (!hasError) {
-               const individualTrayQty = parseInt(trayInput.getAttribute('data-tray-qty')) || 0;
-               
-               validTrayAllocations.push({
-                 tray_id: trayId,
-                 tray_qty: individualTrayQty
-               });
-               validTrayCount++;
-             }
-           }
-         });
-         
-         if (validTrayCount > 0) {
-           validTrayAllocations.forEach(trayAllocation => {
-             allocations.push({
-               reason_id: reasonId,
-               reason_text: reasonText,
-               qty: trayAllocation.tray_qty,
-               tray_ids: [trayAllocation.tray_id] // ✅ Include tray_ids
-             });
-           });
-         }
-       }
-     });
-     
-     console.log('📊 [NEW Tray Aware Collection] FINAL allocations:', allocations);
-     return allocations;
-   };
 });
 </script>
 
@@ -13697,13 +13522,13 @@ window.testScenario310 = function() {
   
   try {
     // Find tray inputs with JB-A00310
-    const tInputs = Array.from(document.querySelectorAll('.rejection-tray-id-input'))
+    const trayInputs = Array.from(document.querySelectorAll('.rejection-tray-id-input'))
       .filter(input => input.value.trim() === 'JB-A00310');
     
-    console.log(`Found ${tInputs.length} inputs with tray ID JB-A00310`);
+    console.log(`Found ${trayInputs.length} inputs with tray ID JB-A00310`);
     
-    if (tInputs.length > 0) {
-      const validationResult = validateTrayCapacityAcrossRejections('JB-A00310', tInputs[0]);
+    if (trayInputs.length > 0) {
+      const validationResult = validateTrayCapacityAcrossRejections('JB-A00310', trayInputs[0]);
       console.log('Validation result:', validationResult);
       
       if (!validationResult.valid) {
@@ -13775,9 +13600,6 @@ document.addEventListener("DOMContentLoaded", function () {
 </script>
 
 <script nonce="{{ csp_nonce }}">
-// ✅ NEW: Function to show delink modal after rejection when delink is required
-
-
 document.addEventListener("DOMContentLoaded", function () {
   // Find all Draft buttons (by id or class, update selector as needed)
   document.querySelectorAll('button[id*="Draft"],button[class*="Draft"]').forEach(function(btn) {
