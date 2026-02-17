@@ -240,6 +240,9 @@ LOGGING = {
         'simple': {
             'format': '%(asctime)s %(levelname)s %(name)s %(message)s'
         },
+        'input_screening': {
+            'format': '%(asctime)s | %(levelname)s | %(message)s'
+        },
     },
     'handlers': {
         'jig_pick_table_file': {
@@ -261,6 +264,12 @@ LOGGING = {
             'filename': 'latency.log',
             'formatter': 'simple',
         },
+        'input_screening_file': {
+            'level': 'DEBUG',
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(BASE_DIR, 'input_screening_debug.log'),
+            'formatter': 'input_screening',
+        },
     },
     'loggers': {
         'jig_pick_table': {
@@ -276,6 +285,11 @@ LOGGING = {
         'watchcase_tracker.middleware.latency_middleware': {
             'handlers': ['latency_file'],
             'level': 'INFO',
+            'propagate': False,
+        },
+        'input_screening': {
+            'handlers': ['input_screening_file'],
+            'level': 'DEBUG',
             'propagate': False,
         },
     },
