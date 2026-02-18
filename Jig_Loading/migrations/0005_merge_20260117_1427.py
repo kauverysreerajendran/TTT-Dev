@@ -6,7 +6,6 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('Jig_Loading', '0003_rename_jig_loading__user_ba_ba9b8_idx_jig_loading_user_id_77a274_idx_and_more'),
         ('Jig_Loading', '0004_add_missing_fields'),
     ]
 

@@ -3033,7 +3033,7 @@ def brass_get_delink_tray_data(request):
             })
             
         print(f"🔧 [Delink Logic] Generated {len(delink_trays)} delink rows")
-        empty_tray_positions = list(range(delink_needed))
+        empty_tray_positions = list(range(delink_count))
 
         if len(delink_trays) == 0:
             return Response({

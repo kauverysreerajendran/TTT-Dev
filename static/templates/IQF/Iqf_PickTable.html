@@ -5173,77 +5173,11 @@ function waitForElement(selector, timeout = 1000) {
 
 // ✅ FIXED: Update buildRejectionFormHTML to use stored values
 function buildRejectionFormHTML(detailsDiv, stockLotId, batchId, hasLotRejectionDraft, hasTrayRejectionDraft) {
-  // ✅ GLOBAL DELEGATED LISTENER - Attached once to document to handle dynamic content
-  if (!window.iqfBatchRejectionListenerActive) {
-    window.iqfBatchRejectionListenerActive = true;
-    console.log('🔧 [IQF] Attaching GLOBAL delegated Batch Rejection listener to document');
-    
-    document.addEventListener('change', function(e) {
-      if (e.target && e.target.id === 'batchRejection') {
-        const isChecked = e.target.checked;
-        console.log('🔄 [DELEGATION] Batch Rejection Checkbox Changed:', isChecked);
-        
-        // Use global values for robustness
-        const lotQty = parseInt(window.currentModalValues?.lotQty) || 0;
-        
-        const rejectionReasonsSection = document.getElementById('rejection-reasons-section');
-        const lotRejectionRemarksSection = document.getElementById('lotRejectionRemarksSection');
-        
-        if (isChecked) {
-           // Hide reasons, show remarks
-           if (rejectionReasonsSection) rejectionReasonsSection.style.display = 'none';
-           if (lotRejectionRemarksSection) lotRejectionRemarksSection.style.display = 'block';
-           
-           // Disable inputs (non-destructive)
-           document.querySelectorAll('.rejection-qty-input').forEach(input => input.disabled = true);
-           
-           // Set Total
-           console.log('✅ [DELEGATION] Setting Total to Lot Qty:', lotQty);
-           const totalQtyElement = document.getElementById('rejection-total-qty');
-           const brassTotalElement = document.getElementById('brass-rejection-total-qty');
-           if (totalQtyElement) totalQtyElement.textContent = lotQty;
-           if (brassTotalElement) brassTotalElement.textContent = lotQty;
-           
-           // Hide accepted
-           if (typeof hideAcceptedTrayTable === 'function') {
-               hideAcceptedTrayTable();
-           } else {
-               const acceptedSection = document.getElementById('accepted-tray-table-container');
-               if (acceptedSection) acceptedSection.style.display = 'none';
-           }
-        } else {
-           // Show reasons, hide remarks
-           if (rejectionReasonsSection) rejectionReasonsSection.style.display = 'block';
-           if (lotRejectionRemarksSection) lotRejectionRemarksSection.style.display = 'none';
-           
-           // Enable inputs
-           document.querySelectorAll('.rejection-qty-input').forEach(input => input.disabled = false);
-           
-           // Clear remarks
-           const lotRemarksInput = document.getElementById('lotRejectionRemarksInput');
-           if (lotRemarksInput) lotRemarksInput.value = '';
-           
-           // Recalculate
-           let totalQty = 0;
-           document.querySelectorAll('.rejection-qty-input').forEach(input => {
-               totalQty += parseInt(input.value) || 0;
-           });
-           console.log('✅ [DELEGATION] Recalculated Total from Inputs:', totalQty);
-           
-           const totalQtyElement = document.getElementById('rejection-total-qty');
-           const brassTotalElement = document.getElementById('brass-rejection-total-qty');
-           if (totalQtyElement) totalQtyElement.textContent = totalQty;
-           if (brassTotalElement) brassTotalElement.textContent = totalQty;
-        }
-      }
-    });
-  }
-
   // ✅ Get the stored values from global variable
   const displayModelNo = window.currentModalValues?.modelNo || 'N/A';
-  let displayLotQty = window.currentModalValues?.lotQty || '0';
+  const displayLotQty = window.currentModalValues?.lotQty || '0';
   const displayMissingQty = window.currentModalValues?.missingQty || '0';
-  let displayPhysicalQty = window.currentModalValues?.physicalQty || '0';
+  const displayPhysicalQty = window.currentModalValues?.physicalQty || '0';
   
   console.log('🎯 Building HTML with values:', {
     displayModelNo, displayLotQty, displayMissingQty, displayPhysicalQty
@@ -5432,30 +5366,6 @@ function buildRejectionFormHTML(detailsDiv, stockLotId, batchId, hasLotRejection
       const brassRejectionQtyMap = data.brass_rejection_qty_map || {};
       const allBrassZero = Object.values(brassRejectionQtyMap).every(qty => !qty || qty === 0);
       const lotRejectedComment = data.lot_rejected_comment || "";
-      const apiTotalRejectionQty = data.total_rejection_quantity || 0;
-
-      // ✅ FIX: When lot was rejected via Lot Rejection (no individual reason quantities),
-      // use the total_rejection_quantity from the API as the lot qty
-      if (allBrassZero && lotRejectedComment && apiTotalRejectionQty > 0) {
-        displayLotQty = String(apiTotalRejectionQty);
-        
-        // Recalculate physical qty as well
-        const lotQtyNum = parseInt(displayLotQty) || 0;
-        const missingQtyNum = parseInt(displayMissingQty) || 0;
-        displayPhysicalQty = String(Math.max(0, lotQtyNum - missingQtyNum));
-        
-        console.log('✅ Overriding displayLotQty & displayPhysicalQty with API data:', {
-            lot: displayLotQty,
-            physical: displayPhysicalQty
-        });
-        
-        // ✅ PERSIST THE FIX: Update global modal values too, otherwise setModalHeaderValues will revert it to 0
-        if (window.currentModalValues) {
-            window.currentModalValues.lotQty = displayLotQty;
-            window.currentModalValues.physicalQty = displayPhysicalQty;
-            console.log('✅ Updated window.currentModalValues to persist correct values');
-        }
-      }
 
       if (rejectionReasons.length === 0) {
         modalBodyContent.innerHTML = `
@@ -5762,15 +5672,9 @@ function buildRejectionFormHTML(detailsDiv, stockLotId, batchId, hasLotRejection
 
       // Calculate brass total automatically
       let totalBrassQty = 0;
-      if (allBrassZero && lotRejectedComment) {
-        // ✅ FIX: When lot was rejected via Lot Rejection (no individual reason quantities),
-        // show the lot qty as the total since the entire lot was rejected
-        totalBrassQty = parseInt(displayLotQty) || 0;
-      } else {
-        rejectionReasons.forEach((reason) => {
-          totalBrassQty += brassRejectionQtyMap[reason.rejection_reason] || 0;
-        });
-      }
+      rejectionReasons.forEach((reason) => {
+        totalBrassQty += brassRejectionQtyMap[reason.rejection_reason] || 0;
+      });
       const brassTotalElement = document.getElementById('brass-rejection-total-qty');
       if (brassTotalElement) brassTotalElement.textContent = totalBrassQty;
 
@@ -5829,13 +5733,45 @@ function buildRejectionFormHTML(detailsDiv, stockLotId, batchId, hasLotRejection
       const rejectionReasonsSection = document.getElementById('rejection-reasons-section');
       const lotRejectionRemarksSection = document.getElementById('lotRejectionRemarksSection');
       
-      /*
-      // ❌ REMOVED: Direct event listener was unreliable due to DOM overwrites.
-      // Replaced by global delegated event listener at end of file.
       if (batchRejectionCheckbox) {
-         console.log('ℹ️ [CHECKBOX] Direct listener attachment skipped (delegation active)');
+        batchRejectionCheckbox.addEventListener('change', function() {
+          if (this.checked) {
+            // When Lot Rejection is checked: Hide rejection reasons table, show only remarks section
+            rejectionReasonsSection.style.display = 'none';
+            lotRejectionRemarksSection.style.display = 'block';
+            
+            // Clear all rejection reason quantities when switching to lot rejection
+            const qtyInputs = document.querySelectorAll('.rejection-qty-input');
+            qtyInputs.forEach(input => {
+              input.value = '';
+            });
+            
+            // Update total quantities to 0
+            const totalQtyElement = document.getElementById('rejection-total-qty');
+            const brassTotalElement = document.getElementById('brass-rejection-total-qty');
+            if (totalQtyElement) totalQtyElement.textContent = '0';
+            if (brassTotalElement) brassTotalElement.textContent = '0';
+          } else {
+            // When Lot Rejection is unchecked: Show rejection reasons table, hide remarks section
+            rejectionReasonsSection.style.display = 'block';
+            lotRejectionRemarksSection.style.display = 'none';
+            
+            // Clear lot rejection remarks when switching back
+            const lotRemarksInput = document.getElementById('lotRejectionRemarksInput');
+            if (lotRemarksInput) {
+              lotRemarksInput.value = '';
+            }
+            
+            // Recalculate brass total
+            let totalBrassQty = 0;
+            rejectionReasons.forEach((reason) => {
+              totalBrassQty += brassRejectionQtyMap[reason.rejection_reason] || 0;
+            });
+            const brassTotalElement = document.getElementById('brass-rejection-total-qty');
+            if (brassTotalElement) brassTotalElement.textContent = totalBrassQty;
+          }
+        });
       }
-      */
 
       // ✅ CRITICAL: Load draft data AFTER table is fully populated
       console.log('🔧 [DRAFT-TIMING] Table fully built, now setting up event listeners and loading drafts');
@@ -5886,7 +5822,30 @@ function setupEnhancedFormEventListeners(batchId, stockLotId, hasLotRejectionDra
     console.log('⚠️ [AUTO-SAVE] Cannot setup auto-save - missing lotId or autoSaveManager');
   }
 
+  if (batchRejectionCheckbox && rejectionTableBody) {
+    batchRejectionCheckbox.addEventListener("change", function () {
+      const inputs = rejectionTableBody.querySelectorAll("input");
 
+      if (this.checked) {
+        if (lotRejectionRemarksSection) {
+          lotRejectionRemarksSection.style.display = "block";
+        }
+        inputs.forEach(input => {
+          input.disabled = true;
+          input.value = "";
+        });
+        document.getElementById('rejection-total-qty').textContent = "0";
+        hideAcceptedTrayTable();
+      } else {
+        if (lotRejectionRemarksSection) {
+          lotRejectionRemarksSection.style.display = "none";
+        }
+        inputs.forEach(input => {
+          input.disabled = false;
+        });
+      }
+    });
+  }
 
   // ✅ FIXED: Enhanced rejection quantity validation against Physical Qty
 document.querySelectorAll('.rejection-qty-input').forEach(function(input, idx, allInputs) {
@@ -7050,17 +7009,58 @@ function addAcceptedTrayIdValidation() {
     return '';
   }
   
-  // Use the global validation system for instant validation
-  if (window.IQFTrayValidation) {
-    const currentLotId = getCurrentLotId();
-    const container = document.getElementById('accepted-tray-table-container') || document;
-    
-    // ✅ AUTO-SAVE: Setup auto-save for accepted tray container
-    if (currentLotId) {
-      window.IQFTrayValidation.onModalOpen(container, currentLotId);
-    } else {
-      window.IQFTrayValidation.attachToContainer(container);
+  // ✅ AUTO-SAVE: Save accepted tray IDs to backend after each successful scan
+  function autoSaveAcceptedTrays() {
+    const lotId = getCurrentLotId();
+    if (!lotId) {
+      console.log('⚠️ [AUTO-SAVE] No lot_id found, skipping auto-save');
+      return;
     }
+    
+    // Collect all scanned accepted tray IDs
+    const allInputs = document.querySelectorAll('.accepted-tray-id-input');
+    const trayIds = [];
+    allInputs.forEach(function(inp) {
+      const val = inp.value.trim();
+      if (val && inp.validationState === 'success') {
+        trayIds.push(val);
+      }
+    });
+    
+    if (trayIds.length === 0) {
+      console.log('⚠️ [AUTO-SAVE] No valid tray IDs to save');
+      return;
+    }
+    
+    // Get CSRF token
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || 
+                      document.cookie.split(';').find(c => c.trim().startsWith('csrftoken='))?.split('=')[1] || '';
+    
+    const payload = {
+      lot_id: lotId,
+      is_auto_save: true,
+      delink_trays: trayIds,
+      top_tray_id: '',
+      top_tray_qty: 0
+    };
+    
+    console.log('💾 [AUTO-SAVE] Saving accepted trays:', trayIds);
+    
+    fetch('/iqf/iqf_save_accepted_tray_draft/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken
+      },
+      body: JSON.stringify(payload)
+    })
+    .then(res => res.json())
+    .then(data => {
+      console.log('✅ [AUTO-SAVE] Saved:', data);
+    })
+    .catch(err => {
+      console.error('❌ [AUTO-SAVE] Error:', err);
+    });
   }
   
   // Keep existing duplicate check logic for accepted trays
@@ -7194,6 +7194,9 @@ function addAcceptedTrayIdValidation() {
             if (!isNaN(currentIndex) && currentIndex + 1 < allInputs.length) {
               allInputs[currentIndex + 1].focus();
             }
+            
+            // ✅ AUTO-SAVE after successful validation
+            autoSaveAcceptedTrays();
           } else if (isError) {
             // ✅ Error state with instant auto-select
             input.style.borderColor = '#dc3545';
@@ -11520,8 +11523,6 @@ window.IQFTrayValidation = (function() {
     saveAllModalInputs: saveAllModalInputs
   };
 })();
-
-
 
 // Initialize validation on DOM ready
 document.addEventListener("DOMContentLoaded", function () {
