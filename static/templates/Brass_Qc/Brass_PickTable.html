@@ -851,6 +851,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                         <input type="number"
                           class="missing-qty-input"
                           value="{{ data.brass_missing_qty|default_if_none:'' }}"
+                          autocomplete="off"
                           style="width: 36px; padding: 1px 3px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px;"
                           {% if data.brass_qc_accepted_qty_verified %}disabled{% endif %} />
                       </span>
@@ -3988,6 +3989,7 @@ function showAcceptedTrayModal(rescanData, lotId, isDraft, delinkOnlyMode = fals
               <input type="number" 
                      value="${topTrayQty}" 
                      readonly 
+                     autocomplete="off"
                      style="width: 70px; padding: 8px 6px; text-align: center; border: 2px solid #ddd; border-radius: 6px; font-weight: 700; font-size: 14px;" />
             </div>
           </div>
@@ -5478,6 +5480,7 @@ function showEditableRejectionForm(stockLotId, batchId, detailsDiv, row) {
                      min="0"
                      class="form-control rejection-qty-input"
                      name="quantity_{{ forloop.counter }}"
+                     autocomplete="off"
                      style="width: 65px; height: 25px !important; padding: 6px !important; font-size: 12px; text-align: center; border: 2px solid #e1e5e9; border-radius: 6px; font-weight: 600; transition: all 0.3s ease;"
                      data-reason-id="{{ reason.rejection_reason_id }}" />
             </td>
@@ -6790,15 +6793,23 @@ function validateTrayInput(input) {
   const individualTrayQty = parseInt(input.getAttribute('data-tray-qty')) || 0;
   const progressiveSessionAllocations = collectSimpleTableSessionAllocations(input);
   
-  // ✅ FIX: Get reason ID for this input to prevent double counting in backend
+  // ✅ FLEXIBLE: Get reason ID for this input (supports flexible assignment)
   const reasonId = getReasonIdForInput(input);
   console.log(`[Validation] Validating tray for reason ID: ${reasonId}`);
+
+  // ✅ FLEXIBLE: Get the actual rejection quantity for this reason
+  const rejectionQty = getRejectionQtyForReason(reasonId);
+  console.log(`[Validation] Rejection quantity for reason ${reasonId}: ${rejectionQty}`);
+  
+  // ✅ FLEXIBLE: Allow validation even if reasonId is empty (for reusable trays)
+  const effectiveRejectionQty = rejectionQty > 0 ? rejectionQty : 1; // Minimum 1 for validation
+  const effectiveReasonId = reasonId || 'FLEXIBLE_REUSE'; // Allow flexible reuse
 
   const queryParams = new URLSearchParams({
     tray_id: trayId,
     lot_id: currentLotId,
-    rejection_qty: individualTrayQty,
-    rejection_reason_id: reasonId, // ✅ Pass reason ID so backend knows this is an update, not a new addition
+    rejection_qty: effectiveRejectionQty,  // ✅ FIXED: Use actual rejection quantity with minimum
+    rejection_reason_id: effectiveReasonId, // ✅ Support flexible reuse
     current_session_allocations: JSON.stringify(progressiveSessionAllocations)
   }).toString();
 
@@ -6846,7 +6857,7 @@ function validateTrayInput(input) {
         if (data.validation_type === 'existing_no_space') {
           errorMessage += ' (Need NEW tray)';
         } else if (data.validation_type === 'existing_insufficient') {
-          errorMessage += ` (Have ${data.total_current}, need ${individualTrayQty})`;
+          errorMessage += ` (Have ${data.total_current}, need ${rejectionQty})`;
         }
 
         if (errorDiv) {
@@ -6890,83 +6901,52 @@ function validateTrayInput(input) {
 }
 }
 
-// ✅ COMPLETE: Progressive session collection for multiple rejection rows
+// ✅ FLEXIBLE: Progressive session collection for multiple rejection rows - supports flexible tray reuse
 function collectSimpleTableSessionAllocations(excludeInput) {
   const allocations = [];
-  console.log('📊 [Progressive Collection] Starting...');
-  // Get all tray inputs
+  console.log('📊 [Flexible Collection] Starting...');
+  
+  // Get all tray inputs up to but not including the current input being validated
   const trayInputs = Array.from(document.querySelectorAll('#rejection-tray-table-body .tray-id-input, #rejection-tray-table-body .rejection-tray-id-input'));
   const currentInputIndex = trayInputs.indexOf(excludeInput);
-
-  // Collect all rejection quantities from the rejection reasons table
-  const rejectionQuantities = [];
-  document.querySelectorAll('.rejection-qty-input').forEach(qtyInput => {
-    const qty = parseInt(qtyInput.value) || 0;
-    const reasonId = qtyInput.getAttribute('data-reason-id');
-    const row = qtyInput.closest('tr');
-    if (qty > 0 && row) {
-      const reasonCell = row.cells[2];
-      const reasonText = reasonCell ? reasonCell.textContent.trim().toUpperCase() : '';
-      // Skip SHORTAGE
-      if (reasonText === 'SHORTAGE') return;
-      rejectionQuantities.push({
-        reason_id: reasonId,
-        reason_text: reasonText,
-        qty: qty
-      });
-      console.log(`📊 [Progressive Collection] Found rejection: reason=${reasonText}, qty=${qty}`);
+  
+  // Only consider trays before the current input to avoid double-counting
+  const previousTrayInputs = currentInputIndex >= 0 ? trayInputs.slice(0, currentInputIndex) : trayInputs;
+  
+  console.log(`📊 [Flexible Collection] Processing ${previousTrayInputs.length} previous tray inputs`);
+  
+  // Collect actual tray allocations from filled inputs
+  previousTrayInputs.forEach((trayInput, index) => {
+    const trayId = trayInput.value.trim();
+    if (trayId) {
+      // Get the rejection reason and quantity for this specific tray
+      const reasonId = getReasonIdForInput(trayInput);
+      const rejectionQty = getRejectionQtyForReason(reasonId);
+      
+      if (reasonId && rejectionQty > 0) {
+        // Check if we already have an allocation for this reason
+        let existingAllocation = allocations.find(alloc => alloc.reason_id === reasonId);
+        
+        if (existingAllocation) {
+          // Add this tray to the existing allocation
+          existingAllocation.tray_ids.push(trayId);
+        } else {
+          // Create new allocation for this reason
+          allocations.push({
+            reason_id: reasonId,
+            reason_text: getReasonTextById(reasonId),
+            qty: rejectionQty,
+            tray_ids: [trayId]
+          });
+        }
+        
+        console.log(`📊 [Flexible Collection] Added tray ${trayId} for reason ${reasonId} (qty: ${rejectionQty})`);
+      }
     }
   });
-
-  // Map tray inputs to their corresponding rejection quantities
-  let trayIndexCounter = 0;
-  for (const rejection of rejectionQuantities) {
-    const rejectionQty = rejection.qty;
-    // Calculate how many trays this rejection needs
-    const currentRow = document.querySelector('tr.highlighted-tray-scan') ||
-                       document.querySelector('[data-stock-lot-id]') ||
-                       document.querySelector('tbody tr');
-    let trayCapacity = 12;
-    if (currentRow) {
-      const trayCapacityText = currentRow.cells[7]?.textContent || '';
-      if (trayCapacityText.includes('-')) {
-        trayCapacity = parseInt(trayCapacityText.split('-')[1]) || 12;
-      }
-    }
-    const numTraysNeeded = Math.ceil(rejectionQty / trayCapacity);
-
-    // FIX: Include the current input in the allocation check (<= instead of <)
-    const collectedTrayIds = [];
-    for (let i = 0; i < numTraysNeeded && trayIndexCounter <= currentInputIndex; i++) {
-      if (trayIndexCounter < trayInputs.length) {
-        const trayInput = trayInputs[trayIndexCounter];
-        const trayId = trayInput.value.trim();
-        if (trayId) {
-          collectedTrayIds.push(trayId);
-          console.log(`📊 [Progressive Collection] Added tray ${trayId} for rejection ${rejection.reason_text}`);
-        }
-      }
-      trayIndexCounter++;
-    }
-
-    // Only add to allocations if this rejection is COMPLETELY before or at current input
-    if (collectedTrayIds.length === numTraysNeeded) {
-      allocations.push({
-        reason_id: rejection.reason_id,
-        reason_text: rejection.reason_text,
-        qty: rejectionQty,
-        tray_ids: collectedTrayIds
-      });
-      console.log(`📊 [Progressive Collection] COMPLETED rejection: ${rejection.reason_text}, qty=${rejectionQty}, trays=${collectedTrayIds}`);
-    } else {
-      console.log(`📊 [Progressive Collection] INCOMPLETE rejection: ${rejection.reason_text}, need ${numTraysNeeded} trays, have ${collectedTrayIds.length}`);
-      break;
-    }
-  }
-
-  console.log('📊 [Progressive Collection] FINAL allocations:', allocations);
+  
+  console.log('📊 [Flexible Collection] FINAL allocations:', allocations);
   return allocations;
-
 }
 
 // ✅ NEW HELPER: Get the rejection reason ID associated with a specific tray input
@@ -7016,6 +6996,35 @@ function getReasonIdForInput(targetInput) {
     return '';
   } catch (e) {
     console.error('Error getting reason ID for input:', e);
+    return '';
+  }
+}
+
+// ✅ NEW HELPER: Get the rejection quantity for a specific reason ID
+function getRejectionQtyForReason(reasonId) {
+  try {
+    const qtyInput = document.querySelector(`.rejection-qty-input[data-reason-id="${reasonId}"]`);
+    return qtyInput ? parseInt(qtyInput.value) || 0 : 0;
+  } catch (e) {
+    console.error('Error in getRejectionQtyForReason:', e);
+    return 0;
+  }
+}
+
+// ✅ NEW HELPER: Get the rejection reason text by ID
+function getReasonTextById(reasonId) {
+  try {
+    const qtyInput = document.querySelector(`.rejection-qty-input[data-reason-id="${reasonId}"]`);
+    if (qtyInput) {
+      const row = qtyInput.closest('tr');
+      if (row) {
+        const reasonCell = row.cells[2];
+        return reasonCell ? reasonCell.textContent.trim() : '';
+      }
+    }
+    return '';
+  } catch (e) {
+    console.error('Error getting reason text by ID:', e);
     return '';
   }
 }
@@ -9386,6 +9395,7 @@ function fetchDelinkCalculation(lotId, missingQty) {
         });
 }
 
+// Delink Tray Population
 function populateDelinkTables(data) {
     console.log('📋 Populating compact delink tables with data:', data);
     

@@ -3126,7 +3126,7 @@ window.triggerAutoSave = function() {
   
   // ✅ NEW: Set auto-save active flag and show indicator
   window.isAutoSaveActive = true;
-  showAutoSaveIndicator();
+  // showAutoSaveIndicator(); // Disabled - no indicator shown
   
   const trayScanModal = document.getElementById("trayScanModal");
   if (trayScanModal) {
@@ -5554,22 +5554,22 @@ window.loadDraftDataIntoForm = function(draftData) {
    if (currentValue > maxAllowed) {
      currentInput.value = maxAllowed;
      
-     // Show helpful message
-     let helpSpan = document.createElement('span');
-     helpSpan.className = 'qty-help';
-     helpSpan.style.color = '#f39c12';
-     helpSpan.style.fontSize = '12px';
-     helpSpan.style.display = 'block';
-     helpSpan.style.marginTop = '2px';
-     helpSpan.textContent = `Max allowed: ${maxAllowed} (Total limit: ${availableQty})`;
-     currentInput.parentElement.appendChild(helpSpan);
+     // Suggestion disabled - no help message shown
+     // let helpSpan = document.createElement('span');
+     // helpSpan.className = 'qty-help';
+     // helpSpan.style.color = '#f39c12';
+     // helpSpan.style.fontSize = '12px';
+     // helpSpan.style.display = 'block';
+     // helpSpan.style.marginTop = '2px';
+     // helpSpan.textContent = `Max allowed: ${maxAllowed} (Total limit: ${availableQty})`;
+     // currentInput.parentElement.appendChild(helpSpan);
      
      // Auto-hide the help message after 3 seconds
-     setTimeout(() => {
-       if (helpSpan.parentNode) {
-         helpSpan.parentNode.removeChild(helpSpan);
-       }
-     }, 3000);
+     // setTimeout(() => {
+     //   if (helpSpan.parentNode) {
+     //     helpSpan.parentNode.removeChild(helpSpan);
+     //   }
+     // }, 3000);
    }
    
    // Get final adjusted value
