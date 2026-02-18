@@ -1874,13 +1874,36 @@ class BQTrayRejectionAPIView(APIView):
                 print(f"ℹ️ [check_delink_required] No original distribution - no delink needed")
                 return False
             
-            # Calculate current distribution after rejections
-            current_distribution = brass_calculate_distribution_after_rejections_enhanced(lot_id, original_distribution)
-            print(f"🔍 [check_delink_required] Current distribution: {current_distribution}")
+            # SET-BASED LOGIC: Identify which trays MUST stay
+            rejections = list(Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id))
+            total_rejected = sum(int(r.rejected_tray_quantity or 0) for r in rejections)
+            missing_qty = stock.brass_missing_qty or 0
+            original_physical_qty = stock.brass_physical_qty or 0
+            final_accepted_qty = max(0, original_physical_qty - total_rejected - missing_qty)
             
-            # Check for empty trays (quantity = 0)
-            empty_trays = [qty for qty in current_distribution if qty == 0]
-            empty_tray_count = len(empty_trays)
+            tray_objs = list(BrassTrayId.objects.filter(lot_id=lot_id).order_by('tray_quantity', 'id'))
+            tray_capacity = get_brass_tray_capacity_for_lot(lot_id) or 12
+            
+            rejection_tray_ids = set(r.rejected_tray_id for r in rejections if r.rejected_tray_id)
+            staying_ids = rejection_tray_ids.copy()
+            
+            needed_for_items = math.ceil(final_accepted_qty / tray_capacity)
+            
+            # Priority: top_tray first
+            top_tray_obj = next((t for t in tray_objs if t.top_tray and t.tray_id not in rejection_tray_ids), None)
+            if top_tray_obj and needed_for_items > 0:
+                staying_ids.add(top_tray_obj.tray_id)
+                needed_for_items -= 1
+            
+            # Others
+            remaining_candidates = [t for t in tray_objs if t.tray_id not in staying_ids]
+            for t in remaining_candidates:
+                if needed_for_items > 0:
+                    staying_ids.add(t.tray_id)
+                    needed_for_items -= 1
+            
+            delink_indices = [idx for idx, t in enumerate(tray_objs) if t.tray_id not in staying_ids]
+            empty_tray_count = len(delink_indices)
             
             print(f"🔍 [check_delink_required] Empty trays found: {empty_tray_count}")
             
@@ -3125,45 +3148,75 @@ def brass_get_delink_tray_data(request):
         if not original_distribution:
             return Response({'success': True, 'delink_trays': [], 'message': 'No tray distribution found'})
 
-        # Apply rejections first
-        current_distribution = brass_calculate_distribution_after_rejections_enhanced(lot_id, original_distribution)
-        print(f"🔍 [brass_get_delink_tray_data] Current distribution after rejections: {current_distribution}")
+        # 1. Fetch all currently associated trays
+        tray_objs = list(BrassTrayId.objects.filter(lot_id=lot_id).order_by('tray_quantity', 'id'))
+        tray_count = len(tray_objs)
+        
+        if tray_count == 0:
+            return Response({'success': True, 'delink_trays': [], 'message': 'No tray distribution found'})
 
-        # ✅ NEW: Apply missing_qty (shortage) after rejections
+        tray_capacity = get_brass_tray_capacity_for_lot(lot_id) or 12
+        
+        # 2. Rejections and Accepted Quantity
+        rejections = list(Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id))
+        total_rejected = sum(int(r.rejected_tray_quantity or 0) for r in rejections)
         missing_qty = stock.brass_missing_qty or 0
-        if missing_qty > 0:
-            print(f"🔍 [brass_get_delink_tray_data] Applying missing_qty: {missing_qty}")
-            current_distribution = brass_consume_shortage_from_distribution(current_distribution, missing_qty)
-            print(f"🔍 [brass_get_delink_tray_data] Distribution after missing_qty: {current_distribution}")
-
-        # ✅ REFACTORED: Delink based on physical tray count reduction (len(original) - len(current))
-        # Zero-quantity trays are removed during distribution calculation.
+        original_physical_qty = stock.brass_physical_qty or 0
+        final_accepted_qty = max(0, original_physical_qty - total_rejected - missing_qty)
         
-        original_count = len(original_distribution)
-        final_count = len(current_distribution)
-        delink_count = max(0, original_count - final_count)
+        # 3. SET-BASED LOGIC: Identify which trays MUST stay
+        # Rule A: Any tray scanned for rejection MUST stay
+        rejection_tray_ids = set(r.rejected_tray_id for r in rejections if r.rejected_tray_id)
+        staying_ids = rejection_tray_ids.copy()
         
-        print(f"🔧 [Delink Logic] Original count: {original_count}, Final count: {final_count}, Delink needed: {delink_count}")
+        # Rule B: Trays needed for the accepted items
+        needed_for_items = math.ceil(final_accepted_qty / tray_capacity)
         
+        # Priority 1: Pick 'Top Tray' first if it's NOT a rejection tray
+        top_tray_obj = next((t for t in tray_objs if t.top_tray and t.tray_id not in rejection_tray_ids), None)
+        if top_tray_obj and needed_for_items > 0:
+            staying_ids.add(top_tray_obj.tray_id)
+            needed_for_items -= 1
+            
+        # Priority 2: Pick from other existing trays that are NOT rejection trays
+        remaining_candidates = [t for t in tray_objs if t.tray_id not in staying_ids]
+        for t in remaining_candidates:
+            if needed_for_items > 0:
+                staying_ids.add(t.tray_id)
+                needed_for_items -= 1
+        
+        # 4. Delink = any tray in BrassTrayId that is NOT in staying_ids
         delink_trays = []
+        delink_indices = []
+        current_distribution = [0] * tray_count
+        temp_accepted = final_accepted_qty
+
+        for idx, t in enumerate(tray_objs):
+            if t.tray_id in staying_ids:
+                # If it's for items (not for rejection), fill it in distribution
+                if t.tray_id not in rejection_tray_ids and temp_accepted > 0:
+                    chunk = min(temp_accepted, tray_capacity)
+                    current_distribution[idx] = chunk
+                    temp_accepted -= chunk
+                else:
+                    # Rejection tray or extra stay tray (empty)
+                    current_distribution[idx] = 0
+            else:
+                # Not staying -> Delink
+                delink_indices.append(idx)
+                delink_trays.append({
+                    'sno': idx + 1,
+                    'tray_id': t.tray_id,
+                    'tray_quantity': t.tray_quantity,
+                    'current_qty': 0,
+                    'needs_delink': True,
+                    'reason': 'Physical tray emptied'
+                })
         
-        # We assume the smallest trays were removed/emptied first (optimization logic).
-        # We pick the 'delink_count' smallest capacities from original to show as delinked.
-        sorted_original = sorted(original_distribution)
+        print(f"🔧 [Robust Delink] Accepted: {final_accepted_qty}, Staying IDs: {staying_ids}, Delinks: {len(delink_trays)}")
         
-        for i in range(delink_count):
-            capacity = sorted_original[i] if i < len(sorted_original) else 0
-            
-            delink_trays.append({
-                'tray_number': i + 1,
-                'original_capacity': capacity,
-                'current_qty': 0,
-                'needs_delink': True,
-                'reason': 'Physical tray removed/emptied'
-            })
-            
-        print(f"🔧 [Delink Logic] Generated {len(delink_trays)} delink rows")
-        empty_tray_positions = list(range(delink_count))
+        empty_tray_positions = delink_indices
+        final_normalized_distribution = [q for q in current_distribution if q > 0]
 
         if len(delink_trays) == 0:
             return Response({
@@ -3295,61 +3348,56 @@ def calculate_brass_delink_logic(lot_id, rej_qty):
 
 def brass_calculate_distribution_after_rejections_enhanced(lot_id, original_distribution):
     """
-    Enhanced calculation with detailed logging for debugging delink logic.
-    Properly handles NEW tray rejections vs EXISTING tray rejections.
+    Enhanced simulation for UI logs. Uses the same robust set-based logic as delink calculation.
     """
-    current_distribution = original_distribution.copy()
-    
-    # Get all rejections for this lot ordered by creation
-    rejections = Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id).order_by('id')
-    
-    print(f"🔧 [Enhanced Distribution Calc] Starting with: {original_distribution}")
-    print(f"🔧 [Enhanced Distribution Calc] Processing {rejections.count()} rejections for lot {lot_id}")
-    
-    for idx, rejection in enumerate(rejections):
-        rejected_qty = int(rejection.rejected_tray_quantity) if rejection.rejected_tray_quantity else 0
-        tray_id = rejection.rejected_tray_id
-        reason = rejection.rejection_reason.rejection_reason if rejection.rejection_reason else 'Unknown'
+    try:
+        stock = TotalStockModel.objects.filter(lot_id=lot_id).first()
+        if not stock:
+            return original_distribution, set()
+            
+        rejections = list(Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id))
+        total_rejected = sum(int(r.rejected_tray_quantity or 0) for r in rejections)
+        missing_qty = stock.brass_missing_qty or 0
+        original_physical_qty = stock.brass_physical_qty or 0
+        final_accepted_qty = max(0, original_physical_qty - total_rejected - missing_qty)
         
-        if rejected_qty <= 0:
-            continue
+        tray_capacity = get_brass_tray_capacity_for_lot(lot_id) or 12
+        tray_objs = list(BrassTrayId.objects.filter(lot_id=lot_id).order_by('tray_quantity', 'id'))
+        tray_count = len(tray_objs)
         
-        print(f"🔧 [Enhanced Distribution Calc] Rejection {idx + 1}:")
-        print(f"   - Reason: {reason}")
-        print(f"   - Qty: {rejected_qty}")
-        print(f"   - Tray ID: '{tray_id}'")
-        print(f"   - Before: {current_distribution}")
+        rejection_tray_ids = set(r.rejected_tray_id for r in rejections if r.rejected_tray_id)
+        staying_ids = rejection_tray_ids.copy()
         
-        # ✅ ENHANCED: Handle SHORTAGE rejections properly
-        if not tray_id or tray_id.strip() == '':
-            # SHORTAGE rejection - consume from existing trays
-            print(f"   - SHORTAGE rejection detected")
-            current_distribution = brass_consume_shortage_from_distribution(current_distribution, rejected_qty)
-            print(f"   - After SHORTAGE: {current_distribution}")
-            continue
+        needed_for_items = math.ceil(final_accepted_qty / tray_capacity)
         
-        # ✅ ENHANCED: Check if NEW tray was used for non-SHORTAGE rejections
-        is_new_tray = is_new_tray_by_id(tray_id)
-        print(f"   - is_new_tray_by_id('{tray_id}') = {is_new_tray}")
+        top_tray_obj = next((t for t in tray_objs if t.top_tray and t.tray_id not in rejection_tray_ids), None)
+        if top_tray_obj and needed_for_items > 0:
+            staying_ids.add(top_tray_obj.tray_id)
+            needed_for_items -= 1
+            
+        remaining_candidates = [t for t in tray_objs if t.tray_id not in staying_ids]
+        for t in remaining_candidates:
+            if needed_for_items > 0:
+                staying_ids.add(t.tray_id)
+                needed_for_items -= 1
         
-        if is_new_tray:
-            # NEW tray creates empty trays by freeing up space
-            print(f"   - NEW tray used - freeing up {rejected_qty} space in existing trays")
-            current_distribution = brass_free_up_space_optimally(current_distribution, rejected_qty)
-            print(f"   - After NEW tray free-up: {current_distribution}")
-        else:
-            # EXISTING tray removes entire tray from distribution
-            print(f"   - EXISTING tray used - removing tray from distribution")
-            current_distribution = brass_remove_rejected_tray_from_distribution(current_distribution, rejected_qty)
-            print(f"   - After EXISTING tray removal: {current_distribution}")
-    
-    print(f"🔧 [Enhanced Distribution Calc] FINAL distribution: {current_distribution}")
-    
-    # ✅ ENHANCED: Analyze empty positions
-    empty_positions = [i for i, qty in enumerate(current_distribution) if qty == 0]
-    print(f"🔧 [Enhanced Distribution Calc] Empty positions: {empty_positions}")
-    
-    return current_distribution
+        res_distribution = [0] * tray_count
+        reused_indices = set()
+        temp_qty = final_accepted_qty
+        
+        for idx, t in enumerate(tray_objs):
+            if t.tray_id in rejection_tray_ids:
+                reused_indices.add(idx)
+                res_distribution[idx] = 0
+            elif t.tray_id in staying_ids and temp_qty > 0:
+                chunk = min(temp_qty, tray_capacity)
+                res_distribution[idx] = chunk
+                temp_qty -= chunk
+                
+        return res_distribution, reused_indices
+    except Exception as e:
+        print(f"Error in enhanced calculation: {e}")
+        return original_distribution, set()
 
 def brass_calculate_distribution_after_rejections(lot_id, original_distribution):
     """
