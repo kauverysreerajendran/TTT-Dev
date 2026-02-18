@@ -3864,11 +3864,60 @@ def iqf_get_remaining_trays(request):
     
     try:
         # 1. Get all initial IQF tray IDs for this lot (original trays after IP verification)
-        iqf_trays = IQFTrayId.objects.filter(
-            lot_id=lot_id,
-            IP_tray_verified=True
-            # Removed rejected_tray=True filter to include all original trays
-        ).order_by('id')
+        # ✅ FIXED: Recover tray IDs from multiple sources since active IQFTrayId/DPTrayId_History might be incomplete
+        
+        # Get history from various sources to ensure we have ALL trays
+        dp_history_ids = set(DPTrayId_History.objects.filter(lot_id=lot_id, IP_tray_verified=True).values_list('tray_id', flat=True))
+        brass_ids = set(BrassTrayId.objects.filter(lot_id=lot_id).values_list('tray_id', flat=True))
+        ip_ids = set(IPTrayId.objects.filter(lot_id=lot_id).values_list('tray_id', flat=True))
+        
+        # Get list of tray IDs that have rejections for this lot
+        rejected_scan_tray_ids = set(IQF_Rejected_TrayScan.objects.filter(lot_id=lot_id).exclude(tray_id='').values_list('tray_id', flat=True))
+        
+        # Combine all known tray IDs and filter out None/Empty
+        all_known_tray_ids = (dp_history_ids | brass_ids | ip_ids | rejected_scan_tray_ids)
+        all_known_tray_ids = {t for t in all_known_tray_ids if t} # Remove None and empty strings
+        
+        print(f"[DEBUG] Found trays - DP: {len(dp_history_ids)}, Brass: {len(brass_ids)}, IP: {len(ip_ids)}, Scan: {len(rejected_scan_tray_ids)}")
+        print(f"[DEBUG] Valid combined tray IDs: {all_known_tray_ids}")
+        
+        if all_known_tray_ids:
+            # Filter IQFTrayId for these specific trays, regardless of their current lot_id status
+            found_iqf_trays = list(IQFTrayId.objects.filter(
+                tray_id__in=all_known_tray_ids
+            ).distinct().order_by('id'))
+            
+            # Identify missing tray IDs
+            found_ids = {t.tray_id for t in found_iqf_trays}
+            missing_ids = all_known_tray_ids - found_ids
+            
+            if missing_ids:
+                print(f"[DEBUG] Missing IQFTrayId records for: {missing_ids}. Reconstructing...")
+                # Create temporary objects for missing trays
+                for mid in missing_ids:
+                    # Provide defaults as if they were new/reset trays
+                    # We assume capacity will be filled later or treated as empty initially
+                    temp_tray = IQFTrayId(
+                        tray_id=mid,
+                        lot_id=lot_id, # Assume they belong to this lot
+                        tray_quantity=0, # Default to 0, let logic distribute
+                        IP_tray_verified=True,
+                        rejected_tray=False,
+                        delink_tray=False 
+                    )
+                    found_iqf_trays.append(temp_tray)
+            
+            iqf_trays = found_iqf_trays
+        else:
+            # Fallback to standard query if no history found (unlikely for valid stock)
+            iqf_trays = list(IQFTrayId.objects.filter(
+                lot_id=lot_id,
+                IP_tray_verified=True
+            ).order_by('id'))
+        
+        print(f"[DEBUG] Total iqf_trays found (recovered + reconstructed): {len(iqf_trays)}")
+        print(f"[DEBUG] Trays: {[t.tray_id for t in iqf_trays]}")
+
         
         # Get total rejection quantity from Brass_QC_Rejection_ReasonStore table
         stock = TotalStockModel.objects.filter(lot_id=lot_id).first()
