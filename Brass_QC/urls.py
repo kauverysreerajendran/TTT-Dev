@@ -24,10 +24,13 @@ urlpatterns = [
     path('brass_tray_validate/', BrassTrayValidateAPIView.as_view(), name='brass_tray_validate'),
     path('brass_save_single_top_tray_scan/', brass_save_single_top_tray_scan, name='brass_save_single_top_tray_scan'),
     path('brass_reject_check_tray_id_simple/', brass_reject_check_tray_id_simple, name='brass_reject_check_tray_id_simple'),
+    path('brass_validate_scenario_reuse/', brass_validate_scenario_reuse, name='brass_validate_scenario_reuse'),
     
     path('brass_get_delink_tray_data/', brass_get_delink_tray_data, name='brass_get_delink_tray_data'),
     path('brass_delink_check_tray_id/', brass_delink_check_tray_id, name='brass_delink_check_tray_id'),
     path('brass_top_tray_check_tray_id/', brass_top_tray_check_tray_id, name='brass_top_tray_check_tray_id'),
+    
+    path('fetch_delink_calculation_for_batch_rejection/', fetch_delink_calculation_for_batch_rejection, name='fetch_delink_calculation_for_batch_rejection'),
     
     path('brass_CompleteTable_tray_id_list/', BrassTrayIdList_Complete_APIView.as_view(), name='brass_CompleteTable_tray_id_list'),
     path('brass_complete_tray_validate/', BrassTrayValidate_Complete_APIView.as_view(), name='brass_complete_tray_validate'),

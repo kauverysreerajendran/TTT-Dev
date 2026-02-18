@@ -510,6 +510,7 @@ class IS_Accepted_form(APIView):
                 total_stock_data.rejected_ip_stock =False
                 
             total_stock_data.accepted_Ip_stock = True
+            total_stock_data.accepted_tray_scan_status = True
     
             # Use total_stock
             physical_qty = total_stock_data.total_stock

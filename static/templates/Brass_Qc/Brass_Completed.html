@@ -3822,15 +3822,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 
                 // Check if we got an empty array when we expected data
+                // For completed lots, empty trays is normal - don't retry
                 if (data.success && (!data.trays || data.trays.length === 0)) {
-                    // For rejected lots, empty data might mean the backend hasn't synced yet
-                    if (retryCount < 3) {
-                        console.log('⚠️ Empty tray data, retrying in 1 second...');
-                        setTimeout(() => {
-                            fetchTrayDetails(lotId, trayDetailsDiv, retryCount + 1);
-                        }, 1000); // Increased retry delay
-                        return;
-                    }
+                    console.log('ℹ️ No tray data available for this completed lot');
+                    // Don't retry for completed lots - just show empty state
+                    buildTrayDetailsHTML(data, trayDetailsDiv);
+                    return;
                 }
                 
                 if (data.success) {
