@@ -3365,18 +3365,15 @@ def get_rejection_draft(request):
     except Exception as e:
         return Response({'success': False, 'error': str(e)}, status=500)
 
-# Delink Tray Data View - 
-# This is the corrected version with the new logic to 
-# exclude reused trays and handle shortage properly
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_delink_tray_data(request):
     """
     Get delink tray data based on empty trays after all rejections are applied.
-
+    
     CORRECTED LOGIC:
     - Only create delink rows for trays that have 0 quantity after rejections
-    - Do NOT ask for delink if the tray was reused for rejection (i.e., emptied and reused)
     - SHORTAGE rejections don't need separate delink rows
     - The empty tray logic already handles cases where shortage creates empty trays
     """
@@ -3384,43 +3381,30 @@ def get_delink_tray_data(request):
         lot_id = request.GET.get('lot_id')
         if not lot_id:
             return Response({'success': False, 'error': 'No lot_id provided'}, status=400)
-
+        
         stock = TotalStockModel.objects.filter(lot_id=lot_id).first()
         if not stock:
             return Response({'success': False, 'error': 'No stock record found for this lot'}, status=404)
-
+        
         original_distribution = get_actual_tray_distribution_for_delink(lot_id, stock)
         current_distribution = calculate_distribution_after_rejections(lot_id, original_distribution)
-
-        # --- NEW LOGIC: Exclude trays that were reused for rejection ---
-        # 1. Get all tray_ids that were used for rejection (reused trays)
-        reused_tray_ids = set()
-        for rejection in IP_Rejected_TrayScan.objects.filter(lot_id=lot_id):
-            if rejection.rejected_tray_id:
-                reused_tray_ids.add(rejection.rejected_tray_id)
-
-        # 2. Get all tray_ids and their positions from the original distribution
-        tray_objs = list(IPTrayId.objects.filter(lot_id=lot_id).order_by('date'))
-        tray_id_by_position = {i: tray.tray_id for i, tray in enumerate(tray_objs)}
-
-        # 3. Find empty trays that are NOT reused for rejection
-        empty_trays = []
-        for i, qty in enumerate(current_distribution):
-            tray_id = tray_id_by_position.get(i)
-            if qty == 0 and tray_id and tray_id not in reused_tray_ids:
-                empty_trays.append(i)
-
+        
+        # ✅ FIXED: Only create delink rows for empty trays (quantity = 0)
+        empty_trays = [i for i, qty in enumerate(current_distribution) if qty == 0]
         delink_data = []
-        for idx, tray_index in enumerate(empty_trays):
+        
+        for i, tray_index in enumerate(empty_trays):
             original_qty = original_distribution[tray_index] if tray_index < len(original_distribution) else 0
-            tray_id = tray_id_by_position.get(tray_index, '')
             delink_data.append({
-                'sno': idx + 1,
+                'sno': i + 1,
                 'tray_id': '',  # Empty - user will scan to delink
                 'tray_quantity': original_qty,
                 'tray_index': tray_index,
                 'source': 'empty_tray'
             })
+
+        # ✅ REMOVED: No longer adding automatic delink rows for SHORTAGE
+        # The empty tray logic above already handles cases where shortage creates empty trays
 
         return Response({
             'success': True,
@@ -3432,9 +3416,8 @@ def get_delink_tray_data(request):
             'empty_trays_count': len(empty_trays),
             'debug_info': {
                 'empty_tray_indices': empty_trays,
-                'reused_tray_ids': list(reused_tray_ids),
-                'reasoning': 'Only trays with 0 quantity after rejections and not reused for rejection need delink',
-                'logic': 'Delink rows = trays with 0 quantity after all rejections, excluding reused trays',
+                'reasoning': 'Only trays with 0 quantity after rejections need delink',
+                'logic': 'Delink rows = trays with 0 quantity after all rejections',
                 'examples': {
                     'case1': '[14,16] → shortage 4 → [10,16] → no empty trays → no delink',
                     'case2': '[14,16] → shortage 14 → [0,16] → 1 empty tray → 1 delink'
@@ -3445,8 +3428,8 @@ def get_delink_tray_data(request):
         import traceback
         traceback.print_exc()
         return Response({'success': False, 'error': str(e)}, status=500)
-    
-    
+
+
 def calculate_distribution_after_rejections(lot_id, original_distribution):
     """
     Calculate the current tray distribution after applying all rejections.

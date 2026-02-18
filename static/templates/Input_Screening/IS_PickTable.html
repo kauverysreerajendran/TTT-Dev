@@ -9592,11 +9592,7 @@ function showAcceptedTrayModal(rescanData, lotId, isDraft) {
 
   // ✅ NEW: Delink required alert
   const delinkAlert = rescanData.delink_required ? `
-    <div class="alert alert-warning alert-dismissible fade show" role="alert" style="margin-bottom: 15px; border-left: 4px solid #ffc107;">
-      <i class="fa fa-exclamation-triangle" style="color: #856404;"></i>
-      <strong>Delink Required:</strong> ${rescanData.empty_trays_count || 0} empty tray(s) created by rejection. Please scan delink trays below.
-      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
+    
   ` : '';
 
   const headerColor = isDraft ? '#f39c12' : (rescanData.delink_required ? '#dc3545' : '#028084');
@@ -9635,7 +9631,7 @@ function showAcceptedTrayModal(rescanData, lotId, isDraft) {
         </div>
       </div>
 
-      <!-- ✅ REDESIGNED: Compact table styling matching rejection form colors -->
+      <!-- ✅ Delink Section -->
       <div class="table-responsive" style="border: 1px solid #dee2e6; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); background: #fff; scrollbar-width: none; -ms-overflow-style: none; display: grid; grid-template-columns: 1fr; overflow: auto !important;  margin-bottom: 12px;">
         <table class="table table-bordered text-center mb-0" style="font-size: 11px; border-collapse: collapse; border-color: #dc3545;">
           <thead style="background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); position: relative;">

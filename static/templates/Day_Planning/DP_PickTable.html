@@ -789,6 +789,11 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                style="border: 1px solid #dc3545; background-color: #f8d7da; color: #721c24; font-size: 13px; white-space: nowrap; padding: 5px;">
             On Hold
           </div>
+        {% elif data.Draft_Saved %}
+          <div class="d-inline-block px-3 fw-semibold text-center rounded-pill"
+               style="border: 1px solid #ffc107; background-color: #fff3cd; color: #856404; font-size: 13px; white-space: nowrap; padding: 5px;">
+            Draft
+          </div>
         {% else %}
           <div class="d-inline-block px-3 fw-semibold text-center rounded-pill"
                style="border: 1px solid #a6a6a6; background-color: #dcdada; color: #505050; font-size: 13px; white-space: nowrap; padding: 5px;">
@@ -3600,7 +3605,7 @@ function rebuildTrayScanTable(currentData, newRowCount, trayCapacity, topTrayQty
         html += `
             <div style="min-height:32px;">${sNo}</div>
             <div style="min-height:32px;">
-                <input type="text" class="form-control tray-id-input" value="${existingTrayId}" data-draft-id="${existingDraftId}" data-position="${i+1}" style="width: 100%;" />
+                <input type="text" class="form-control tray-id-input" value="${existingTrayId}" data-draft-id="${existingDraftId}" data-position="${i+1}" style="width: 100%;" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
             </div>
             <div style="min-height:32px;">
                 ${
