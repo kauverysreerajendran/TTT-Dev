@@ -6584,11 +6584,17 @@ function validateTrayInput(input) {
     const progressiveSessionAllocations = collectSimpleTableSessionAllocations(input);
     // ✅ FIX: Get reason ID for this input
     const reasonId = getReasonIdForInput(input);
+    // Calculate total rejection across ALL reason rows
+    let totalRejQty = 0;
+    document.querySelectorAll('.rejection-qty-input').forEach(inp => {
+      totalRejQty += parseInt(inp.value) || 0;
+    });
     const queryParams = new URLSearchParams({
       tray_id: trayId,
       lot_id: lotId,
       rejection_qty: individualTrayQty,
       rejection_reason_id: reasonId, // ✅ Pass reason ID
+      total_rejection_qty: totalRejQty,
       current_session_allocations: JSON.stringify(progressiveSessionAllocations)
     }).toString();
 
@@ -6805,11 +6811,17 @@ function validateTrayInput(input) {
   const effectiveRejectionQty = rejectionQty > 0 ? rejectionQty : 1; // Minimum 1 for validation
   const effectiveReasonId = reasonId || 'FLEXIBLE_REUSE'; // Allow flexible reuse
 
+  // Calculate total rejection across ALL reason rows
+  let totalRejQtyAll = 0;
+  document.querySelectorAll('.rejection-qty-input').forEach(inp => {
+    totalRejQtyAll += parseInt(inp.value) || 0;
+  });
   const queryParams = new URLSearchParams({
     tray_id: trayId,
     lot_id: currentLotId,
     rejection_qty: effectiveRejectionQty,  // ✅ FIXED: Use actual rejection quantity with minimum
     rejection_reason_id: effectiveReasonId, // ✅ Support flexible reuse
+    total_rejection_qty: totalRejQtyAll,
     current_session_allocations: JSON.stringify(progressiveSessionAllocations)
   }).toString();
 
