@@ -2306,49 +2306,74 @@ def brass_reject_check_tray_id_simple(request):
 
     # -----------------------------------------------------------------
     # STEP 5: COVERAGE-BASED PHYSICAL REUSE
-    # Calculate max_reusable_trays = total_trays - ceil(accepted_qty / tray_capacity)
-    # We calculate total rejection from DB + session, NOT from the per-row rejection_qty param
+    # Uses brass_physical_qty (= lot_qty - missing_qty) as the TRUE total,
+    # NOT the sum of BrassTrayId quantities which may include missing items.
     # -----------------------------------------------------------------
 
-    # 5a. Get the TOTAL rejection quantity for this lot
-    # Source 1: Saved rejections in DB
+    # 5a. Get tray capacity
+    tray_capacity = get_brass_tray_capacity_for_lot(current_lot_id)
+    if not tray_capacity or tray_capacity <= 0:
+        tray_capacity = 12  # safe fallback
+
+    # 5b. Get brass_physical_qty from TotalStockModel
+    total_stock = TotalStockModel.objects.filter(lot_id=current_lot_id).first()
+    physical_qty = 0
+    if total_stock and hasattr(total_stock, 'brass_physical_qty') and total_stock.brass_physical_qty:
+        physical_qty = int(total_stock.brass_physical_qty)
+
+    # 5c. Get original distribution from BrassTrayId (may include missing items)
+    original_tray_quantities = get_brass_original_tray_distribution(current_lot_id)
+    original_total = sum(original_tray_quantities)
+
+    # 5d. Calculate missing qty and reduce from original distribution (smallest first)
+    missing_qty = max(0, original_total - physical_qty) if physical_qty > 0 else 0
+
+    # Build the physical distribution by subtracting missing from smallest trays first
+    physical_distribution = original_tray_quantities.copy()
+    remaining_missing = missing_qty
+    if remaining_missing > 0:
+        sorted_indices = sorted(range(len(physical_distribution)), key=lambda i: physical_distribution[i])
+        for idx in sorted_indices:
+            if remaining_missing <= 0:
+                break
+            consume = min(physical_distribution[idx], remaining_missing)
+            physical_distribution[idx] -= consume
+            remaining_missing -= consume
+
+    # Remove empty trays from physical distribution
+    active_tray_quantities = [q for q in physical_distribution if q > 0]
+    physical_trays = len(active_tray_quantities)
+    delink_count = len(original_tray_quantities) - physical_trays
+
+    # 5e. Get total rejection qty from all sources
     saved_rejections = Brass_QC_Rejected_TrayScan.objects.filter(lot_id=current_lot_id)
     total_saved_rejection = sum(int(r.rejected_tray_quantity or 0) for r in saved_rejections)
-    
-    # Source 2: Session allocations (unsaved, from frontend)
+
     total_session_rejection = 0
     for alloc in current_session_allocations:
         qty = int(alloc.get('qty', 0))
         if qty > 0:
             total_session_rejection += qty
 
-    # The total rejection is the MAX of all sources:
-    # - frontend_total_rejection: sum of ALL rejection-qty-input values (most reliable)
-    # - total_saved_rejection: from DB
-    # - total_session_rejection: from session allocations
     total_rejection_qty = max(frontend_total_rejection, total_saved_rejection, total_session_rejection)
-    
-    # If none have data yet, use the current rejection_qty as minimum
     if total_rejection_qty == 0:
         total_rejection_qty = rejection_qty
 
-    # 5b. Get original tray quantities and calculate max_reusable_trays
-    original_tray_quantities = get_brass_original_tray_distribution(current_lot_id)
-    
-    # 5c. Calculate reusable trays using TOTAL rejection
-    # Pass total rejection as a single quantity (not per-row)
-    reusable_indices, final_quantities, reuse_plan = get_reusable_trays_after_rejection(
-        original_tray_quantities, [total_rejection_qty]
-    )
-    
-    sufficient_capacity = reuse_plan['sufficient_capacity']
-    max_reusable_trays = reuse_plan.get('max_reusable_trays', 0)
-    
-    print(f"[BRASS_REUSE] Total rejection: saved={total_saved_rejection}, session={total_session_rejection}, "
-          f"effective={total_rejection_qty}")
-    print(f"[BRASS_REUSE] Enhanced calculation: sufficient_capacity={sufficient_capacity}, "
-          f"max_reusable_trays={max_reusable_trays}, original_trays={original_tray_quantities}")
-    
+    # 5f. Calculate max_reusable_trays from PHYSICAL qty
+    import math
+    accepted_qty = max(0, physical_qty - total_rejection_qty)
+    trays_needed_for_accepted = math.ceil(accepted_qty / tray_capacity) if accepted_qty > 0 else 0
+    max_reusable_trays = max(0, physical_trays - trays_needed_for_accepted)
+    sufficient_capacity = total_rejection_qty <= physical_qty
+
+    print(f"[BRASS_REUSE] physical_qty={physical_qty}, original_total={original_total}, "
+          f"missing_qty={missing_qty}, physical_trays={physical_trays}, delink_count={delink_count}")
+    print(f"[BRASS_REUSE] physical_distribution={physical_distribution}, "
+          f"active_tray_quantities={active_tray_quantities}")
+    print(f"[BRASS_REUSE] total_rejection_qty={total_rejection_qty} "
+          f"(frontend={frontend_total_rejection}, saved={total_saved_rejection}, session={total_session_rejection})")
+    print(f"[BRASS_REUSE] accepted_qty={accepted_qty}, trays_needed={trays_needed_for_accepted}, "
+          f"max_reusable_trays={max_reusable_trays}, sufficient_capacity={sufficient_capacity}")
     # Check sufficient capacity (applies to BOTH flexible and standard)
     if not sufficient_capacity:
         return JsonResponse({
@@ -2418,7 +2443,7 @@ def brass_reject_check_tray_id_simple(request):
     # Global reuse is confirmed — tray-level qty is for UI/logging only.
     # -----------------------------------------------------------------
     if brass_tray_obj:
-        tray_cap = brass_tray_obj.tray_capacity or reuse_plan.get('tray_capacity', 12)
+        tray_cap = brass_tray_obj.tray_capacity or tray_capacity
 
         # Calculate session qty already allocated to this tray (informational)
         session_qty_for_tray = 0
@@ -3119,8 +3144,8 @@ def brass_get_delink_tray_data(request):
         if not original_distribution:
             return Response({'success': True, 'delink_trays': [], 'message': 'No tray distribution found'})
 
-        # 1. Fetch all currently associated trays
-        tray_objs = list(BrassTrayId.objects.filter(lot_id=lot_id).order_by('tray_quantity', 'id'))
+        # 1. Fetch all currently associated trays (exclude already-rejected ones)
+        tray_objs = list(BrassTrayId.objects.filter(lot_id=lot_id, rejected_tray=False).order_by('tray_quantity', 'id'))
         tray_count = len(tray_objs)
         
         if tray_count == 0:
@@ -3133,7 +3158,8 @@ def brass_get_delink_tray_data(request):
         total_rejected = sum(int(r.rejected_tray_quantity or 0) for r in rejections)
         missing_qty = stock.brass_missing_qty or 0
         original_physical_qty = stock.brass_physical_qty or 0
-        final_accepted_qty = max(0, original_physical_qty - total_rejected - missing_qty)
+        # brass_physical_qty is ALREADY (lot_qty - missing_qty), so do NOT subtract missing_qty again
+        final_accepted_qty = max(0, original_physical_qty - total_rejected)
         
         # 3. SET-BASED LOGIC: Identify which trays MUST stay
         # Rule A: Any tray scanned for rejection MUST stay
@@ -3175,16 +3201,27 @@ def brass_get_delink_tray_data(request):
             else:
                 # Not staying -> Delink
                 delink_indices.append(idx)
+                # Determine if this delink is due to missing qty
+                # Missing qty consumes the smallest trays first
+                is_missing_delink = False
+                if missing_qty > 0 and hasattr(t, 'tray_quantity'):
+                    # Check if this tray was consumed by missing_qty
+                    # (smallest trays are consumed first for missing)
+                    tray_q = t.tray_quantity or 0
+                    if tray_q <= missing_qty:
+                        is_missing_delink = True
+                
                 delink_trays.append({
                     'sno': idx + 1,
                     'tray_id': t.tray_id,
                     'tray_quantity': t.tray_quantity,
                     'current_qty': 0,
                     'needs_delink': True,
-                    'reason': 'Physical tray emptied'
+                    'reason': 'Missing - Physical tray emptied' if is_missing_delink else 'Physical tray emptied'
                 })
         
-        print(f"🔧 [Robust Delink] Accepted: {final_accepted_qty}, Staying IDs: {staying_ids}, Delinks: {len(delink_trays)}")
+        print(f"🔧 [Robust Delink] Accepted: {final_accepted_qty}, missing_qty: {missing_qty}, "
+              f"Staying IDs: {staying_ids}, Delinks: {len(delink_trays)}")
         
         empty_tray_positions = delink_indices
         final_normalized_distribution = [q for q in current_distribution if q > 0]
