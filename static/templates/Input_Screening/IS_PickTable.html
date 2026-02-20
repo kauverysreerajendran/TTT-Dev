@@ -4166,6 +4166,67 @@ if (redoBtn && validateInput) {
    document.addEventListener("DOMContentLoaded", function () {
      // Use event delegation to handle dynamically created buttons
      document.addEventListener('click', function(e) {
+       // ✅ Check if the clicked element is a Delete button
+       const deleteBtn = e.target.closest('.delete-batch-btn') || 
+                        (e.target.tagName === 'IMG' && e.target.alt === 'Delete' && e.target.closest('a[class*="delete-batch-btn"]'));
+       
+       if (deleteBtn) {
+         e.preventDefault();
+         
+         const row = deleteBtn.closest('tr');
+         if (!row) return;
+         
+         const batchId = deleteBtn.getAttribute('data-batch-id');
+         const stockLotId = deleteBtn.getAttribute('data-stock-lot-id');
+         
+         if (!batchId || !stockLotId) {
+           Swal.fire('Error', 'Batch ID or Stock Lot ID not found!', 'error');
+           return;
+         }
+         
+         Swal.fire({
+           title: 'Are you sure?',
+           text: 'Do you really want to delete this batch?',
+           icon: 'warning',
+           showCancelButton: true,
+           confirmButtonColor: '#d33',
+           cancelButtonColor: '#3085d6',
+           confirmButtonText: 'Yes, delete it!',
+           cancelButtonText: 'Cancel'
+         }).then((result) => {
+           if (result.isConfirmed) {
+             fetch('/inputscreening/ip_delete_batch/', {
+               method: 'POST',
+               headers: {
+                 'Content-Type': 'application/json',
+                 'X-CSRFToken': getCookie('csrftoken')
+               },
+               body: JSON.stringify({ batch_id: batchId, stock_lot_id: stockLotId })
+             })
+             .then(res => res.json())
+             .then(data => {
+               if (data.success) {
+                 row.remove();
+                 Swal.fire({
+                   icon: 'success',
+                   title: 'Deleted!',
+                   text: 'Batch has been deleted successfully.',
+                   timer: 2000,
+                   showConfirmButton: false
+                 });
+               } else {
+                 Swal.fire('Error', data.message || 'Failed to delete batch', 'error');
+               }
+             })
+             .catch(error => {
+               console.error('Delete error:', error);
+               Swal.fire('Error', 'An error occurred while deleting the batch', 'error');
+             });
+           }
+         });
+         return;
+       }
+       
        // Check if the clicked element is an Accept button
        if (e.target.closest('.btn-twitter')) {
          const acceptBtn = e.target.closest('.btn-twitter');
@@ -4281,36 +4342,8 @@ if (redoBtn && validateInput) {
        });
      }
    
-      // DELETE BUTTON HANDLER
-   document.querySelectorAll('.delete-batch-btn').forEach(function(btn) {
-     btn.addEventListener('click', function(e) {
-       e.preventDefault();
-       const row = btn.closest('tr');
-       if (!row) return;
-       const batchId = btn.getAttribute('data-batch-id');
-       const stockLotId = btn.getAttribute('data-stock-lot-id');
-       if (!batchId || !stockLotId) {
-         Swal.fire('Error', 'Batch ID or Stock Lot ID not found!', 'error');
-         return;
-       }
-       Swal.fire({
-         title: 'Are you sure?',
-         text: 'Do you really want to delete this batch?',
-         icon: 'warning',
-         showCancelButton: true,
-         confirmButtonColor: '#d33',
-         cancelButtonColor: '#3085d6',
-         confirmButtonText: 'Yes, delete it!',
-         cancelButtonText: 'Cancel'
-       }).then((result) => {
-         if (result.isConfirmed) {
-           fetch('/inputscreening/ip_delete_batch/', {
-             method: 'POST',
-             headers: {
-               'Content-Type': 'application/json',
-               'X-CSRFToken': getCookie('csrftoken')
-             },
-             body: JSON.stringify({ batch_id: batchId, stock_lot_id: stockLotId })
+      // DELETE BUTTON HANDLER - REMOVED (Now handled via event delegation)
+      // Event delegation is used instead to handle dynamically created delete buttons
            })
            .then(res => res.json())
            .then(data => {
@@ -11108,16 +11141,12 @@ function addAcceptedTrayFormInterceptor() {
    }
    });
    
-   // Re-attach Delete button listeners
-   document.querySelectorAll('.delete-batch-btn').forEach(function(btn) {
-   btn.addEventListener('click', function(e) {
-     // Your existing delete button logic here
-   });
-   });
+   // Re-attach Delete button listeners - REMOVED (Using event delegation instead)
+   // Delete button functionality is now handled via event delegation in the main click listener
    
    // Re-attach any other dynamic event listeners as needed
    }
-   // Helper function to reattach other event listeners
+   // Helper function to reattach other event listeners - DUPLICATE FUNCTION
    function reattachOtherEventListeners() {
    // Re-attach Accept button listeners
    document.addEventListener('click', function(e) {
@@ -11126,12 +11155,8 @@ function addAcceptedTrayFormInterceptor() {
    }
    });
    
-   // Re-attach Delete button listeners
-   document.querySelectorAll('.delete-batch-btn').forEach(function(btn) {
-   btn.addEventListener('click', function(e) {
-     // Your existing delete button logic here
-   });
-   });
+   // Re-attach Delete button listeners - REMOVED (Using event delegation instead)
+   // Delete button functionality is now handled via event delegation in the main click listener
    
    // Re-attach any other dynamic event listeners as needed
    }
@@ -12711,6 +12736,11 @@ document.addEventListener("DOMContentLoaded", function () {
            const el = document.getElementById(id);
            if (el) el.style.pointerEvents = "auto";
          });
+         // ✅ Allow pointer events for delete buttons (both button and image)
+         document.querySelectorAll('.delete-batch-btn, img[alt="Delete"], a[class*="delete-batch-btn"]').forEach(el => {
+           el.style.pointerEvents = 'auto';
+           el.style.cursor = 'pointer';
+         });
          // Restrict pointer events for holding rows but preserve cursor style
          document.querySelectorAll('tr.row-inactive, tr.row-inactive *').forEach(el => {
            el.style.cursor = "pointer";
@@ -12721,6 +12751,11 @@ document.addEventListener("DOMContentLoaded", function () {
          modalIds.forEach(id => {
            const el = document.getElementById(id);
            if (el) el.style.pointerEvents = "";
+         });
+         // Reset pointer events for delete buttons
+         document.querySelectorAll('.delete-batch-btn, img[alt="Delete"], a[class*="delete-batch-btn"]').forEach(el => {
+           el.style.pointerEvents = '';
+           el.style.cursor = '';
          });
          // Restore pointer events for holding rows but preserve cursor style
          document.querySelectorAll('tr.row-inactive, tr.row-inactive *').forEach(el => {

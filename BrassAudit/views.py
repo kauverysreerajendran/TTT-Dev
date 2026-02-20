@@ -817,18 +817,17 @@ class BATrayDelinkAndTopTrayUpdateAPIView(APIView):
             for delink_tray_id in delink_tray_ids:
                 print(f"[DELINK] Processing tray: {delink_tray_id}")
                 
-                # BrassTrayId - Remove from lot completely
-                brass_delink_tray_obj = BrassAuditTrayId.objects.filter(tray_id=delink_tray_id, lot_id=lot_id).first()
-                if brass_delink_tray_obj:
-                    brass_delink_tray_obj.delink_tray = True
-                    brass_delink_tray_obj.lot_id = None
-                    brass_delink_tray_obj.batch_id = None
-                    brass_delink_tray_obj.IP_tray_verified = False
-                    brass_delink_tray_obj.top_tray = False
-                    brass_delink_tray_obj.save(update_fields=[
-                        'delink_tray', 'lot_id', 'batch_id', 'IP_tray_verified', 'top_tray'
-                    ])
-                    print(f"✅ Delinked BrassTrayId tray: {delink_tray_id}")
+                # BrassAuditTrayId - Delink ALL matching records (handle duplicates)
+                ba_delink_count = BrassAuditTrayId.objects.filter(tray_id=delink_tray_id, lot_id=lot_id).update(
+                    delink_tray=True, lot_id=None, batch_id=None, IP_tray_verified=False, top_tray=False
+                )
+                if ba_delink_count:
+                    print(f"✅ Delinked {ba_delink_count} BrassAuditTrayId record(s) for tray: {delink_tray_id}")
+                
+                # Also remove from Brass_Audit_Accepted_TrayID_Store
+                ba_store_deleted = Brass_Audit_Accepted_TrayID_Store.objects.filter(tray_id=delink_tray_id, lot_id=lot_id).delete()
+                if ba_store_deleted[0]:
+                    print(f"✅ Removed {ba_store_deleted[0]} Brass_Audit_Accepted_TrayID_Store record(s) for delinked tray: {delink_tray_id}")
     
                 # IPTrayId - Mark as delinked
                 ip_delink_tray_obj = IPTrayId.objects.filter(tray_id=delink_tray_id, lot_id=lot_id).first()
@@ -4779,8 +4778,11 @@ class PickTrayIdList_Complete_APIView(APIView):
                 for tray in trays_list:
                     tray_id = getattr(tray, 'tray_id', None)
                     if tray_id:
+                        # Skip trays delinked in BrassTrayId (handles duplicate record edge cases)
+                        if BrassTrayId.objects.filter(lot_id=lot_id, tray_id=tray_id, delink_tray=True).exists():
+                            continue
                         # Query BrassAuditTrayId to check if this tray has top_tray=True
-                        audit_tray = BrassAuditTrayId.objects.filter(lot_id=lot_id, tray_id=tray_id, top_tray=True).first()
+                        audit_tray = BrassAuditTrayId.objects.filter(lot_id=lot_id, tray_id=tray_id, top_tray=True, delink_tray=False).first()
                         if audit_tray:
                             top_tray = tray
                             audit_top_tray_obj = audit_tray  # Store for updated qty retrieval
@@ -4789,11 +4791,15 @@ class PickTrayIdList_Complete_APIView(APIView):
             except Exception as e:
                 print(f"⚠️ [DATABASE TOP TRAY] Error checking BrassAuditTrayId: {e}")
 
-            # If no top_tray found from database, use the tray with smallest quantity
+            # If no top_tray found from database, use the tray with smallest quantity (excluding delinked)
             if not top_tray:
                 print(f"⚠️ [TOP TRAY FALLBACK] No top_tray flag found, selecting tray with smallest quantity")
                 smallest_tray = None
                 for tray in trays_list:
+                    tray_id = getattr(tray, 'tray_id', None)
+                    # Skip trays delinked in BrassTrayId
+                    if tray_id and BrassTrayId.objects.filter(lot_id=lot_id, tray_id=tray_id, delink_tray=True).exists():
+                        continue
                     tray_qty = int(getattr(tray, 'tray_qty', getattr(tray, 'tray_quantity', 0)) or 0)
                     if smallest_tray is None or tray_qty < int(getattr(smallest_tray, 'tray_qty', getattr(smallest_tray, 'tray_quantity', 0)) or 0):
                         smallest_tray = tray
@@ -4841,9 +4847,17 @@ class PickTrayIdList_Complete_APIView(APIView):
             for tray in sorted(other_trays, key=lambda x: getattr(x, 'tray_id', None)):
                 tray_id = getattr(tray, 'tray_id', None)
                 
+                # ✅ FIXED: Cross-reference with BrassTrayId to catch delinked trays (handles duplicate records)
+                try:
+                    if BrassTrayId.objects.filter(lot_id=lot_id, tray_id=tray_id, delink_tray=True).exists():
+                        print(f"   ⚠️ SKIPPING delinked tray: {tray_id} (delinked in BrassTrayId)")
+                        continue
+                except Exception:
+                    pass
+                
                 # ✅ FIXED: Check if this tray still exists in BrassAuditTrayId (skip if delinked)
                 try:
-                    audit_tray = BrassAuditTrayId.objects.filter(lot_id=lot_id, tray_id=tray_id).first()
+                    audit_tray = BrassAuditTrayId.objects.filter(lot_id=lot_id, tray_id=tray_id, delink_tray=False).first()
                     if audit_tray:
                         other_tray_qty = int(audit_tray.tray_quantity or 0)
                     else:

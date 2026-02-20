@@ -3878,7 +3878,75 @@ document.addEventListener('DOMContentLoaded', function() {
 
             console.log(`📊 Tray breakdown: ${rejectedTrays.length} rejected, ${acceptedTrays.length} accepted`);
 
-            // If there are rejected trays, show rejected section
+            // ✅ FIXED: Show ACCEPTED section FIRST
+            if (acceptedTrays.length > 0) {
+                console.log(`✅ Adding ${acceptedTrays.length} accepted trays to display`);
+                html += `
+                    <tr style="background-color: #e8f5e8; font-weight: bold;">
+                        <td colspan="3" style="text-align: center; color: #2e7d32; padding: 8px;">
+                            ✅ ACCEPTED TRAYS
+                        </td>
+                    </tr>
+                `;
+
+                // Find top tray among accepted
+                const topAcceptedTray = acceptedTrays.find(tray => {
+                    return tray.brass_top_tray || tray.ip_top_tray || tray.top_tray;
+                });
+
+                if (topAcceptedTray) {
+                    let displayQuantity = topAcceptedTray.tray_qty;
+                    if (topAcceptedTray.ip_top_tray_qty !== null && topAcceptedTray.ip_top_tray_qty !== undefined) {
+                        displayQuantity = topAcceptedTray.ip_top_tray_qty;
+                    } else if (topAcceptedTray.brass_top_tray_qty !== null && topAcceptedTray.brass_top_tray_qty !== undefined) {
+                        displayQuantity = topAcceptedTray.brass_top_tray_qty;
+                    }
+
+                    console.log(`🔝 Found top accepted tray: ${topAcceptedTray.tray_id} (qty: ${displayQuantity})`);
+
+                    html += `
+                        <tr class="top-tray-row" style="background:#e3f2fd;">
+                            <td>${rowCounter} (Top Tray)</td>
+                            <td>
+                                <input type="text" class="form-control" value="${topAcceptedTray.tray_id || ''}" readonly style="width: 100%;" />
+                            </td>
+                            <td>
+                                <input type="number" class="form-control" value="${displayQuantity || ''}" readonly style="width: 100%;" />
+                            </td>
+                        </tr>
+                    `;
+                    rowCounter++;
+                }
+
+                // Add regular accepted trays
+                const regularAcceptedTrays = acceptedTrays.filter(tray => {
+                    return !(tray.brass_top_tray || tray.ip_top_tray || tray.top_tray);
+                });
+
+                regularAcceptedTrays.sort((a, b) => {
+                    const trayIdA = a.tray_id || '';
+                    const trayIdB = b.tray_id || '';
+                    return trayIdA.localeCompare(trayIdB);
+                });
+
+                regularAcceptedTrays.forEach((tray) => {
+                    console.log(`  - Accepted tray ${rowCounter}: ${tray.tray_id} (qty: ${tray.tray_qty || 0})`);
+                    html += `
+                        <tr>
+                            <td>${rowCounter}</td>
+                            <td>
+                                <input type="text" class="form-control" value="${tray.tray_id || ''}" readonly style="width: 100%;" />
+                            </td>
+                            <td>
+                                <input type="number" class="form-control" value="${tray.tray_qty || 0}" readonly style="width: 100%;" />
+                            </td>
+                        </tr>
+                    `;
+                    rowCounter++;
+                });
+            }
+
+            // Then show REJECTED section
             if (rejectedTrays.length > 0) {
                 html += `
                     <tr style="background-color: #ffebee; font-weight: bold;">
@@ -3928,74 +3996,6 @@ document.addEventListener('DOMContentLoaded', function() {
                             </td>
                             <td>
                                 <input type="number" class="form-control" value="${displayQty}" readonly style="width: 100%;" />
-                            </td>
-                        </tr>
-                    `;
-                    rowCounter++;
-                });
-            }
-            
-            // Show accepted section (can coexist with rejected section)
-            if (acceptedTrays.length > 0) {
-                console.log(`✅ Adding ${acceptedTrays.length} accepted trays to display`);
-                html += `
-                    <tr style="background-color: #e8f5e8; font-weight: bold;">
-                        <td colspan="3" style="text-align: center; color: #2e7d32; padding: 8px;">
-                            ✅ ACCEPTED TRAYS
-                        </td>
-                    </tr>
-                `;
-
-                // Find top tray among accepted
-                const topTray = acceptedTrays.find(tray => {
-                    return tray.brass_top_tray || tray.ip_top_tray || tray.top_tray;
-                });
-
-                if (topTray) {
-                    let displayQuantity = topTray.tray_qty;
-                    if (topTray.ip_top_tray_qty !== null && topTray.ip_top_tray_qty !== undefined) {
-                        displayQuantity = topTray.ip_top_tray_qty;
-                    } else if (topTray.brass_top_tray_qty !== null && topTray.brass_top_tray_qty !== undefined) {
-                        displayQuantity = topTray.brass_top_tray_qty;
-                    }
-
-                    console.log(`🔝 Found top accepted tray: ${topTray.tray_id} (qty: ${displayQuantity})`);
-
-                    html += `
-                        <tr class="top-tray-row" style="background:#e3f2fd;">
-                            <td>${rowCounter} (Top Tray)</td>
-                            <td>
-                                <input type="text" class="form-control" value="${topTray.tray_id || ''}" readonly style="width: 100%;" />
-                            </td>
-                            <td>
-                                <input type="number" class="form-control" value="${displayQuantity || ''}" readonly style="width: 100%;" />
-                            </td>
-                        </tr>
-                    `;
-                    rowCounter++;
-                }
-
-                // Add regular accepted trays
-                const regularAcceptedTrays = acceptedTrays.filter(tray => {
-                    return !(tray.brass_top_tray || tray.ip_top_tray || tray.top_tray);
-                });
-
-                regularAcceptedTrays.sort((a, b) => {
-                    const trayIdA = a.tray_id || '';
-                    const trayIdB = b.tray_id || '';
-                    return trayIdA.localeCompare(trayIdB);
-                });
-
-                regularAcceptedTrays.forEach((tray) => {
-                    console.log(`  - Accepted tray ${rowCounter}: ${tray.tray_id} (qty: ${tray.tray_qty || 0})`);
-                    html += `
-                        <tr>
-                            <td>${rowCounter}</td>
-                            <td>
-                                <input type="text" class="form-control" value="${tray.tray_id || ''}" readonly style="width: 100%;" />
-                            </td>
-                            <td>
-                                <input type="number" class="form-control" value="${tray.tray_qty || 0}" readonly style="width: 100%;" />
                             </td>
                         </tr>
                     `;

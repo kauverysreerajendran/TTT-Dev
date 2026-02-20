@@ -5676,8 +5676,7 @@ function buildRejectionFormHTML(detailsDiv, stockLotId, batchId, hasLotRejection
         totalBrassQty += brassRejectionQtyMap[reason.rejection_reason] || 0;
       });
       const brassTotalElement = document.getElementById('brass-rejection-total-qty');
-      // ✅ FIXED: Show Physical Qty instead of calculated total
-      if (brassTotalElement) brassTotalElement.textContent = displayPhysicalQty;
+      if (brassTotalElement) brassTotalElement.textContent = totalBrassQty;
 
       // ✅ Add character count functionality for remarks
       const acceptanceRemarksInput = document.getElementById('acceptanceRemarksInput');
@@ -5769,8 +5768,7 @@ function buildRejectionFormHTML(detailsDiv, stockLotId, batchId, hasLotRejection
               totalBrassQty += brassRejectionQtyMap[reason.rejection_reason] || 0;
             });
             const brassTotalElement = document.getElementById('brass-rejection-total-qty');
-            // ✅ FIXED: Show Physical Qty instead of calculated total
-            if (brassTotalElement) brassTotalElement.textContent = displayPhysicalQty;
+            if (brassTotalElement) brassTotalElement.textContent = totalBrassQty;
           }
         });
       }
@@ -5915,8 +5913,7 @@ document.querySelectorAll('.rejection-qty-input').forEach(function(input, idx, a
     const totalQtyElement = document.getElementById('rejection-total-qty');
     const brassTotalElement = document.getElementById('brass-rejection-total-qty');
     if (totalQtyElement) totalQtyElement.textContent = totalEnteredQty;
-    // ✅ FIXED: Keep showing Physical Qty (maxAllowedQty) instead of calculated total
-    if (brassTotalElement) brassTotalElement.textContent = maxAllowedQty;
+    if (brassTotalElement) brassTotalElement.textContent = totalBrassQty;
 
     try {
       const capacityResult = await fetchTrayCapacityDynamic(stockLotId);

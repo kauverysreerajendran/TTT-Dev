@@ -16,7 +16,7 @@ class IQFTrayId(models.Model):
     date = models.DateTimeField(default=timezone.now)
     user = models.ForeignKey(User, on_delete=models.CASCADE, blank=True, null=True)
     top_tray = models.BooleanField(default=False)
-    remaining_qty = models.IntegerField(null=False, help_text="Remaining quantity in tray after rejection distribution", default=0)
+
 
     delink_tray = models.BooleanField(default=False, help_text="Is tray delinked")
     delink_tray_qty = models.CharField(max_length=50, null=True, blank=True, help_text="Delinked quantity")
