@@ -5472,6 +5472,15 @@ function handleTrayWiseRejection() {
     return;
   }
 
+  if (!availableTrays || availableTrays.length === 0) {
+  if (msgDiv) {
+    msgDiv.style.color = "#d32f2f";
+    msgDiv.textContent = "Please add tray details before proceeding.";
+  }
+  document.getElementById("proceedButton").disabled = false;
+  return;
+  }
+
   // ✅ STEP 3: Check if total available capacity is sufficient
   const totalAvailableCapacity = availableTrays.reduce((sum, tray) => sum + tray.capacity, 0);
   if (totalRejectionQty > totalAvailableCapacity) {
