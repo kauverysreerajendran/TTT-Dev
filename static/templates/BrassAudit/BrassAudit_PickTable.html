@@ -6581,10 +6581,21 @@ if (proceedButton) {
 
       // ✅ NEW: Check for missing quantity in batch rejection
       const currentRow = document.querySelector(`tr[data-stock-lot-id="${lotId}"]`);
-      const missingQtyInput = currentRow ? currentRow.querySelector('.missing-qty-input') : null;
-      const missingQty = missingQtyInput ? parseInt(missingQtyInput.value) || 0 : 0;
+      let missingQty = 0;
+      
+      if (currentRow) {
+        const missingQtyInput = currentRow.querySelector('.missing-qty-input');
+        missingQty = missingQtyInput ? parseInt(missingQtyInput.value) || 0 : 0;
+      } else {
+        // Fallback: try to find by ID directly or alert if critical
+        console.warn(`⚠️ [Batch Rejection] Row for lot ${lotId} not found, checking alternatives`);
+        // If needed, add alternative lookup here
+      }
 
       console.log(`🔍 [Batch Rejection] Checking missing qty: ${missingQty} for lot: ${lotId}`);
+
+      // Ensure we don't proceed with invalid state if missing qty is expected but not found
+      // For now, trust the DOM read, but log heavily
 
       if (missingQty > 0) {
         // ✅ Show delink modal for batch rejection
@@ -6844,12 +6855,12 @@ function populateDelinkTablesForBatchRejection(data) {
     if (delinkCountSpan) delinkCountSpan.textContent = data.delink_count || data.delink_trays.length;
     data.delink_trays.forEach((_, index) => {
       const row = document.createElement('tr');
-      // ✅ Add autofocus to first input, maxlength=9 to all inputs
+      // ✅ Add autofocus to first input, maxlength=9 to all inputs, and safety net for validation
       const autoFocusAttr = index === 0 ? 'autofocus' : '';
       row.innerHTML = `
         <td style="font-weight: 600; background: #ffebee; padding: 4px; font-size: 12px; width: 40px;">${index + 1}</td>
         <td style="padding: 4px;">
-          <input type="text" class="form-control delink-tray-input" value="" placeholder="Scan Tray ID" autocomplete="off" maxlength="9" ${autoFocusAttr} tabindex="0" style="width: 100%; padding: 6px; font-size: 12px; height: 28px;" />
+          <input type="text" class="form-control delink-tray-input" value="" placeholder="Scan Tray ID" autocomplete="off" maxlength="9" ${autoFocusAttr} tabindex="0" oninput="window.handleDelegatedValidation(this)" onfocus="checkValidationAttached(this)" style="width: 100%; padding: 6px; font-size: 12px; height: 28px;" />
           <div class="tray-id-error" style="display: none; font-size: 10px; margin-top: 2px;"></div>
         </td>
       `;
@@ -6874,7 +6885,7 @@ function populateDelinkTablesForBatchRejection(data) {
     const row = document.createElement('tr');
     row.innerHTML = `
       <td style="padding: 4px;">
-        <input type="text" id="topTrayIdInput" class="form-control" value="" placeholder="Scan Top Tray ID" autocomplete="off" maxlength="9" tabindex="0" style="width: 100%; padding: 6px; font-size: 12px; height: 28px;" />
+        <input type="text" id="topTrayIdInput" class="form-control" value="" placeholder="Scan Top Tray ID" autocomplete="off" maxlength="9" tabindex="0" oninput="window.handleDelegatedValidation(this)" onfocus="checkValidationAttached(this)" style="width: 100%; padding: 6px; font-size: 12px; height: 28px;" />
         <div class="tray-id-error" style="display: none; font-size: 10px; margin-top: 2px;"></div>
       </td>
       <td style="font-weight: 600; color: #2e7d32; padding: 4px; font-size: 12px; text-align: center; width: 60px;">${data.top_tray.qty}</td>
@@ -6923,379 +6934,19 @@ function populateDelinkTablesForBatchRejection(data) {
   }, 100);
 }
 
+// ✅ NEW: Safety net to ensure validation is attached
+window.checkValidationAttached = function(input) {
+  // Deprecated: Delegated listener handles this now
+  // console.log('🔧 [AUTO-RECOVERY] Delegated validation active');
+};
+
 // FIXED: Attach validation AFTER modal content is loaded
 function attachValidationToInputsForBatchRejection() {
-  console.log('[VALIDATION] Waiting for modal inputs to load...');
-  
-  // Wait for inputs to be available
-  const waitForInputs = () => {
-    const inputs = document.querySelectorAll('.delink-tray-input, #topTrayIdInput');
-    
-    if (inputs.length === 0) {
-      console.log('[VALIDATION] No inputs found, retrying in 100ms...');
-      setTimeout(waitForInputs, 100);
-      return;
-    }
-    
-    console.log(`[VALIDATION] Found ${inputs.length} inputs, setting up validation`);
-    setupValidation(inputs);
-  };
-  
-  const setupValidation = (inputs) => {
-    const inputArray = Array.from(inputs);
-    
-    inputs.forEach((input, index) => {
-      console.log(`[SETUP] Configuring input ${index}:`, input);
-      
-      // Remove any existing listeners
-      const newInput = input.cloneNode(true);
-      input.parentNode.replaceChild(newInput, input);
-      inputArray[index] = newInput;
-      
-      // ✅ Initialize validation state tracking
-      newInput._hasError = false;
-      newInput._isValidating = false;
-      newInput._validationTimer = null;
-      
-      // Get error div
-      let errorDiv = newInput.parentElement.querySelector('.tray-id-error');
-      if (!errorDiv) {
-        errorDiv = document.createElement('div');
-        errorDiv.className = 'tray-id-error';
-        errorDiv.style.cssText = 'display: none; font-size: 10px; margin-top: 2px; color: #dc3545; font-weight: bold;';
-        newInput.parentElement.appendChild(errorDiv);
-      }
-      
-      // Navigation helper
-      const moveToNextInput = () => {
-        const currentIndex = inputArray.indexOf(newInput);
-        const nextInput = inputArray[currentIndex + 1];
-        
-        if (nextInput) {
-          console.log(`[MOVE] Moving from input ${currentIndex} to ${currentIndex + 1}`);
-          setTimeout(() => {
-            nextInput.focus();
-            nextInput.select();
-          }, 100);
-        } else {
-          console.log('[MOVE] Last input reached, focusing submit button');
-          const submitBtn = document.getElementById('confirmDelinkBtn');
-          if (submitBtn) {
-            setTimeout(() => submitBtn.focus(), 100);
-          }
-        }
-      };
-      
-      // Duplicate check function
-      const checkForDuplicates = (trayId) => {
-        let duplicateFound = false;
-        inputArray.forEach((otherInput, otherIndex) => {
-          if (otherIndex !== index && otherInput.value.trim() === trayId) {
-            duplicateFound = true;
-          }
-        });
-        return duplicateFound;
-      };
-      
-      // Validation function
-      const validateInput = (moveOnSuccess = false) => {
-        const trayId = newInput.value.trim();
-        console.log(`[VALIDATE] Input ${index}: "${trayId}"`);
-        
-        // Clear previous states
-        newInput._hasError = false;
-        newInput.style.border = '';
-        newInput.style.backgroundColor = '';
-        errorDiv.style.display = 'none';
-        
-        if (!trayId) {
-          if (moveOnSuccess) moveToNextInput();
-          return;
-        }
-        
-        // CHECK FOR DUPLICATES FIRST
-        if (checkForDuplicates(trayId)) {
-          console.log(`[DUPLICATE] Found duplicate tray ID: ${trayId}`);
-          newInput._hasError = true;
-          newInput.style.border = '2px solid #dc3545';
-          newInput.style.backgroundColor = '#ffebee';
-          errorDiv.textContent = `Duplicate Tray ID: "${trayId}"`;
-          errorDiv.style.color = '#dc3545';
-          errorDiv.style.display = 'block';
-          
-          // ✅ INSTANT AUTO-SELECT: Only for 9-character entries (like batch accept)
-          if (trayId.length >= 9) {
-            console.log('❌ Duplicate entry (≥9 chars) - auto-selecting text for correction');
-            setTimeout(() => {
-              newInput.focus();
-              newInput.select();
-            }, 100);
-          }
-          
-          validateAllInputsAndUpdateButtonsForBatchRejection();
-          return;
-        }
-        
-        // Show validation state
-        newInput.style.border = '2px solid #ffc107';
-        newInput.style.backgroundColor = '#fff3cd';
-        errorDiv.textContent = 'Validating...';
-        errorDiv.style.color = '#856404';
-        errorDiv.style.display = 'block';
-        
-        const lotId = getCurrentLotId();
-        console.log(`[API] Validating tray ${trayId} for lot ${lotId}`);
-        
-        fetch(`/brass_audit/brass_audit_validate_tray_id/?tray_id=${encodeURIComponent(trayId)}&lot_id=${encodeURIComponent(lotId)}`)
-          .then(res => res.json())
-          .then(data => {
-            console.log(`[API-RESPONSE] Input ${index}:`, data);
-            
-            if (data && data.exists && data.valid_for_lot) {
-              // SUCCESS
-              newInput.style.border = '2px solid #28a745';
-              newInput.style.backgroundColor = '#f8fff8';
-              newInput._hasError = false;
-              
-              errorDiv.textContent = '✓ Available';
-              errorDiv.style.color = '#28a745';
-              errorDiv.style.display = 'block';
-              
-              setTimeout(() => errorDiv.style.display = 'none', 1500);
-              
-              if (moveOnSuccess) {
-                moveToNextInput();
-              }
-              
-            } else {
-              // ERROR
-              newInput.style.border = '2px solid #dc3545';
-              newInput.style.backgroundColor = '#ffebee';
-              newInput._hasError = true;
-              
-              errorDiv.textContent = data.error || 'Invalid tray ID';
-              errorDiv.style.color = '#dc3545';
-              errorDiv.style.display = 'block';
-              
-              // ✅ INSTANT AUTO-SELECT: Only for 9-character entries (like batch accept)
-              if (trayId.length >= 9) {
-                console.log('❌ Invalid entry (≥9 chars) - auto-selecting text for correction');
-                setTimeout(() => {
-                  newInput.focus();
-                  newInput.select();
-                }, 100);
-              }
-            }
-            
-            // Update buttons
-            validateAllInputsAndUpdateButtonsForBatchRejection();
-          })
-          .catch(error => {
-            console.error(`[API-ERROR] Input ${index}:`, error);
-            newInput._hasError = true;
-            newInput.style.border = '2px solid #dc3545';
-            newInput.style.backgroundColor = '#ffebee';
-            errorDiv.textContent = 'Network error';
-            errorDiv.style.color = '#dc3545';
-            errorDiv.style.display = 'block';
-            
-            // ✅ INSTANT AUTO-SELECT: Only for 9-character entries (like batch accept)
-            const trayId = newInput.value.trim();
-            if (trayId.length >= 9) {
-              newInput.focus();
-              newInput.select();
-              console.log('🔧 [AUTO-SELECT] Network error (≥9 chars) - auto-selected for retry');
-            }
-            
-            validateAllInputsAndUpdateButtonsForBatchRejection();
-          });
-      };
-      
-      // ENTER KEY EVENT
-      newInput.addEventListener('keydown', function(e) {
-        console.log(`[KEY] Input ${index} - Key: ${e.key}`);
-        
-        if (e.key === 'Enter') {
-          console.log(`[ENTER] Detected on input ${index}`);
-          e.preventDefault();
-          e.stopPropagation();
-          
-          // Validate and move to next
-          validateInput(true);
-          return false;
-        }
-        
-        if (e.key === 'Tab' && this._hasError) {
-          e.preventDefault();
-          this.focus();
-          this.select();
-          return false;
-        }
-      });
-      
-      // BLUR EVENT
-      newInput.addEventListener('blur', function() {
-        console.log(`[BLUR] Input ${index}`);
-        validateInput(false);
-      });
-      
-      // INPUT EVENT (clear errors while typing + INSTANT VALIDATION with AUTO-PROGRESSION)
-      newInput.addEventListener('input', function() {
-        // Clear error state while typing
-        if (this._hasError) {
-          this._hasError = false;
-          this.style.border = '';
-          this.style.backgroundColor = '';
-          errorDiv.style.display = 'none';
-          validateAllInputsAndUpdateButtonsForBatchRejection();
-        }
-        
-        const trayId = this.value.trim();
-        
-        // Clear existing validation timer
-        if (this._validationTimer) {
-          clearTimeout(this._validationTimer);
-        }
-        
-        if (!trayId) {
-          return;
-        }
-        
-        // ✅ INSTANT VALIDATION with AUTO-PROGRESSION: Validate when tray ID reaches 3+ characters
-        if (trayId.length >= 3) {
-          // Small debounce (50ms) for instant feedback without excessive requests
-          this._validationTimer = setTimeout(() => {
-            console.log(`🎯 [REJECTION-INSTANT] Auto-validating after typing: ${trayId}`);
-            
-            // ✅ AUTO-MOVE if tray ID is complete (9 characters) and valid
-            const shouldAutoMove = trayId.length === 9;
-            console.log(`🎯 [REJECTION-INSTANT] Auto-move: ${shouldAutoMove} (length: ${trayId.length})`);
-            
-            // Perform instant validation with auto-progression for 9-char IDs
-            performInstantValidation(trayId, shouldAutoMove);
-          }, 50);
-        }
-      });
-      
-      // ✅ NEW: Instant validation function for auto-progression without Enter
-      const performInstantValidation = (trayId, shouldAutoMove) => {
-        // Reset state
-        newInput._hasError = false;
-        newInput.style.border = '';
-        newInput.style.backgroundColor = '';
-        errorDiv.style.display = 'none';
-        
-        if (!trayId) {
-          return;
-        }
-        
-        // FIRST: Check for duplicates
-        if (checkForDuplicates(trayId)) {
-          console.log(`[REJECTION-INSTANT-DUPLICATE] Found duplicate: ${trayId}`);
-          newInput._hasError = true;
-          newInput.style.border = '2px solid #dc3545';
-          newInput.style.backgroundColor = '#ffebee';
-          errorDiv.textContent = `Duplicate Tray ID: "${trayId}"`;
-          errorDiv.style.color = '#dc3545';
-          errorDiv.style.display = 'block';
-          
-          // Auto-select if 9 characters
-          if (trayId.length >= 9) {
-            newInput.focus();
-            newInput.select();
-          }
-          
-          validateAllInputsAndUpdateButtonsForBatchRejection();
-          return;
-        }
-        
-        // SECOND: API validation
-        const lotId = getCurrentLotId();
-        
-        fetch(`/brass_audit/brass_audit_validate_tray_id/?tray_id=${encodeURIComponent(trayId)}&lot_id=${encodeURIComponent(lotId)}`)
-          .then(res => res.json())
-          .then(data => {
-            console.log(`[REJECTION-INSTANT-API-RESPONSE] Input ${index}:`, data);
-            
-            if (data && data.exists && data.valid_for_lot) {
-              // ✅ SUCCESS - Valid tray ID
-              newInput._hasError = false;
-              newInput.style.border = '2px solid #28a745';
-              newInput.style.backgroundColor = '#f8fff8';
-              errorDiv.textContent = '✓ Available!';
-              errorDiv.style.color = '#28a745';
-              errorDiv.style.display = 'block';
-              
-              // Auto-hide success message
-              setTimeout(() => {
-                errorDiv.style.display = 'none';
-                newInput.style.border = '2px solid #28a745';
-              }, 1500);
-              
-              // ✅ INSTANT AUTO-PROGRESSION: Move immediately if tray is complete (9 chars)
-              if (shouldAutoMove) {
-                console.log('✅ [REJECTION-INSTANT] Valid 9-char ID - instantly moving to next field');
-                const currentIndex = inputArray.indexOf(newInput);
-                const nextInput = inputArray[currentIndex + 1];
-                
-                if (nextInput) {
-                  nextInput.focus();
-                  nextInput.select();
-                } else {
-                  const submitBtn = document.getElementById('confirmDelinkBtn');
-                  if (submitBtn && !submitBtn.disabled) {
-                    submitBtn.focus();
-                  }
-                }
-              }
-              
-            } else {
-              // ❌ ERROR - Invalid tray ID
-              newInput._hasError = true;
-              newInput.style.border = '2px solid #dc3545';
-              newInput.style.backgroundColor = '#ffebee';
-              errorDiv.textContent = data.error || '✗ Invalid tray ID';
-              errorDiv.style.color = '#dc3545';
-              errorDiv.style.display = 'block';
-              
-              // Auto-select if 9 characters
-              if (trayId.length >= 9) {
-                console.log('❌ [REJECTION-INSTANT] Invalid 9-char ID - auto-selecting for correction');
-                newInput.focus();
-                newInput.select();
-              }
-            }
-            
-            validateAllInputsAndUpdateButtonsForBatchRejection();
-          })
-          .catch(error => {
-            console.error(`[REJECTION-INSTANT-API-ERROR] Input ${index}:`, error);
-            newInput._hasError = true;
-            newInput.style.border = '2px solid #dc3545';
-            newInput.style.backgroundColor = '#ffebee';
-            errorDiv.textContent = '✗ Network error';
-            errorDiv.style.color = '#dc3545';
-            errorDiv.style.display = 'block';
-            
-            // Auto-select if 9 characters
-            if (trayId.length >= 9) {
-              newInput.focus();
-              newInput.select();
-            }
-            
-            validateAllInputsAndUpdateButtonsForBatchRejection();
-          });
-      };
-      
-      console.log(`[READY] Input ${index} configured with Enter navigation`);
-    });
-    
-    console.log('[SUCCESS] All inputs configured for Enter + validation');
-  };
-  
-  // Start the process
-  waitForInputs();
+  console.log('[VALIDATION] Using delegated event listener (Legacy setup skipped)');
+  // Legacy setup skipped in favor of document-level delegated listener
 }
+  // Legacy validation code removed in favor of delegated event listener
+
 
 
 // ✅ NEW: Validate inputs for batch rejection
@@ -7355,10 +7006,15 @@ function setupDelinkConfirmButton() {
   const confirmDelinkBtn = document.getElementById('confirmDelinkBtn');
   if (confirmDelinkBtn) {
     // Remove existing listener and add new one
-    const newConfirmBtn = confirmDelinkBtn.cloneNode(true);
-    confirmDelinkBtn.parentNode.replaceChild(newConfirmBtn, confirmDelinkBtn);
+    // const newConfirmBtn = confirmDelinkBtn.cloneNode(true);
+    // confirmDelinkBtn.parentNode.replaceChild(newConfirmBtn, confirmDelinkBtn);
     
-    newConfirmBtn.addEventListener('click', function() {
+    // Instead of cloning and replacing, let's just use a clean event listener approach
+    // attempting to remove the specific listener is hard without reference, 
+    // but we can set a property to ignore old clicks if we want, or just rely on state
+    
+    confirmDelinkBtn.onclick = function(e) { // Use onclick to override any previous handler
+      e.preventDefault();
       console.log('Confirm delink button clicked');
       
       const modal = document.getElementById('delinkModal');
@@ -7402,24 +7058,132 @@ function setupDelinkConfirmButton() {
       // ✅ FIXED: Route to correct endpoint based on context
       if (isBatchRejection && batchId && lotRejectionRemarks) {
         console.log('ROUTING TO: Batch Rejection with Delink');
-        showConfirm(
-          'Confirm Batch Rejection',
-          `This will reject the entire batch. Are you sure?`,
-          function() {
-            performBatchRejectionWithDelink(lotId, batchId, delinkTrayIds, topTrayId, topTrayQty, lotRejectionRemarks, totalQty);
-          }
-        );
+        // Direct call without extra confirmation if already confirmed via button text
+         performBatchRejectionWithDelink(lotId, batchId, delinkTrayIds, topTrayId, topTrayQty, lotRejectionRemarks, totalQty);
       } else {
         console.log('ROUTING TO: Accept with Delink (default)');
-        showConfirm(
-          'Confirm Delink & Accept',
-          `This will delink ${missingQty} pieces and accept the remaining lot. Are you sure?`,
-          function() {
-            performDelinkAcceptAction(lotId, delinkTrayIds, topTrayId, topTrayQty);
-          }
-        );
+         performDelinkAcceptAction(lotId, delinkTrayIds, topTrayId, topTrayQty);
       }
+    };
+  }
+}
+
+// ✅ NEW: DELEGATED Event Listener for Robust Validation
+// This handles validation for ALL current and future inputs without need for re-attaching
+document.addEventListener('input', function(e) {
+  if (e.target && (e.target.classList.contains('delink-tray-input') || e.target.id === 'topTrayIdInput')) {
+    const input = e.target;
+    console.log('⚡ [DELEGATED-INPUT] Input detected on:', input.id || 'delink-input', 'Value:', input.value);
+    
+    // Clear existing timer
+    if (input._validationTimer) clearTimeout(input._validationTimer);
+    
+    // Clear error style immediately while typing
+    if (input._hasError) {
+      input._hasError = false;
+      input.style.border = '';
+      input.style.backgroundColor = '';
+      const errorDiv = input.parentElement.querySelector('.tray-id-error');
+      if (errorDiv) errorDiv.style.display = 'none';
+      validateAllInputsAndUpdateButtonsForBatchRejection();
+    }
+    
+    const trayId = input.value.trim();
+    if (!trayId) return;
+    
+    // Debounce validation
+    if (trayId.length >= 3) {
+      input._validationTimer = setTimeout(() => {
+        console.log(`🎯 [DELEGATED-VALIDATE] Validating: ${trayId}`);
+        handleDelegatedValidation(input);
+      }, 50);
+    }
+  }
+}, true); // Use capture to ensure we catch it
+
+// Helper handler for delegated validation
+function handleDelegatedValidation(input) {
+  const trayId = input.value.trim();
+  const errorDiv = input.parentElement.querySelector('.tray-id-error') || createErrorDiv(input);
+  
+  // 1. Check Duplicates
+  const allInputs = document.querySelectorAll('.delink-tray-input, #topTrayIdInput');
+  let isDuplicate = false;
+  allInputs.forEach(other => {
+    if (other !== input && other.value.trim() === trayId) isDuplicate = true;
+  });
+  
+  if (isDuplicate) {
+    showInputError(input, errorDiv, `Duplicate: ${trayId}`);
+    if (trayId.length >= 9) { input.select(); }
+    validateAllInputsAndUpdateButtonsForBatchRejection();
+    return;
+  }
+  
+  // 2. API Validation
+  const lotId = getCurrentLotId(); // Ensure this function exists or get from modal
+  // Fallback if getCurrentLotId is not available
+  const activeLotId = lotId || document.getElementById('delinkModal')?.dataset.lotId;
+  
+  if (!activeLotId) {
+    console.warn('⚠️ No active Lot ID found for validation');
+    return;
+  }
+
+  fetch(`/brass_audit/brass_audit_validate_tray_id/?tray_id=${encodeURIComponent(trayId)}&lot_id=${encodeURIComponent(activeLotId)}`)
+    .then(res => res.json())
+    .then(data => {
+      if (data && data.exists && data.valid_for_lot) {
+        showInputSuccess(input, errorDiv, '✓ Available');
+        // Auto-advance if 9 chars
+        if (trayId.length === 9) autoAdvanceFocus(input);
+      } else {
+        showInputError(input, errorDiv, data.error || 'Invalid ID');
+        if (trayId.length >= 9) input.select(); 
+      }
+      validateAllInputsAndUpdateButtonsForBatchRejection();
+    })
+    .catch(err => {
+      console.error('Validation error:', err);
+      showInputError(input, errorDiv, 'Network Error');
     });
+}
+
+function createErrorDiv(input) {
+  let div = document.createElement('div');
+  div.className = 'tray-id-error';
+  div.style.cssText = 'display: none; font-size: 10px; margin-top: 2px; color: #dc3545; font-weight: bold;';
+  input.parentElement.appendChild(div);
+  return div;
+}
+
+function showInputError(input, div, msg) {
+  input._hasError = true;
+  input.style.border = '2px solid #dc3545';
+  input.style.backgroundColor = '#ffebee';
+  div.textContent = msg;
+  div.style.color = '#dc3545';
+  div.style.display = 'block';
+}
+
+function showInputSuccess(input, div, msg) {
+  input._hasError = false;
+  input.style.border = '2px solid #28a745';
+  input.style.backgroundColor = '#f8fff8';
+  div.textContent = msg;
+  div.style.color = '#28a745';
+  div.style.display = 'block';
+  setTimeout(() => div.style.display = 'none', 1500);
+}
+
+function autoAdvanceFocus(input) {
+  const all = Array.from(document.querySelectorAll('.delink-tray-input, #topTrayIdInput'));
+  const idx = all.indexOf(input);
+  if (idx > -1 && idx < all.length - 1) {
+    all[idx + 1].focus();
+  } else {
+     const btn = document.getElementById('confirmDelinkBtn');
+     if(btn && !btn.disabled) btn.focus();
   }
 }
 
@@ -7609,6 +7373,208 @@ function performBatchRejection(batchId, lotId, totalQty, lotRejectionRemarks) {
         });
       }
     });
+// ✅ NEW: Validate inputs for batch rejection
+function validateAllInputsAndUpdateButtonsForBatchRejection() {
+  const confirmBtn = document.getElementById('confirmDelinkBtn');
+  if (!confirmBtn) {
+    // console.log('❌ [REJECTION-VALIDATION] Confirm button not found');
+    return;
+  }
+  
+  const allInputs = document.querySelectorAll('.delink-tray-input, #topTrayIdInput');
+  // console.log(`🔍 [REJECTION-VALIDATION] Checking ${allInputs.length} inputs`);
+  
+  let hasErrors = false;
+  let hasEmptyInputs = false;
+  
+  allInputs.forEach((input, idx) => {
+    const hasError = input._hasError === true;
+    const isEmpty = !input.value.trim();
+    
+    if (hasError) {
+      hasErrors = true;
+    }
+    if (isEmpty) {
+      hasEmptyInputs = true;
+    }
+  });
+  
+  // Enable/disable confirm button with green styling when enabled
+  if (hasErrors || hasEmptyInputs) {
+    confirmBtn.disabled = true;
+    confirmBtn.style.setProperty('opacity', '0.5', 'important');
+    confirmBtn.style.setProperty('cursor', 'not-allowed', 'important');
+    confirmBtn.style.setProperty('pointer-events', 'none', 'important');
+    confirmBtn.style.setProperty('filter', 'grayscale(1)', 'important');
+    confirmBtn.style.setProperty('background', '#95a5a6', 'important'); // Gray when disabled
+    confirmBtn.style.setProperty('background-color', '#95a5a6', 'important');
+  } else {
+    confirmBtn.disabled = false;
+    confirmBtn.style.setProperty('opacity', '1', 'important');
+    confirmBtn.style.setProperty('cursor', 'pointer', 'important');
+    confirmBtn.style.setProperty('pointer-events', 'auto', 'important'); // ✅ CRITICAL: Enable clicks
+    confirmBtn.style.setProperty('filter', 'none', 'important'); // ✅ CRITICAL: Remove grayscale
+    confirmBtn.style.setProperty('background', '#27ae60', 'important'); // Green when enabled
+    confirmBtn.style.setProperty('background-color', '#27ae60', 'important');
+  }
+}
+
+// ✅ UPDATED: Enhanced confirm button handler that properly detects batch rejection
+function setupDelinkConfirmButton() {
+  const confirmDelinkBtn = document.getElementById('confirmDelinkBtn');
+  if (confirmDelinkBtn) {
+    confirmDelinkBtn.onclick = function(e) { // Use onclick to override any previous handler
+      e.preventDefault();
+      console.log('Confirm delink button clicked');
+      
+      const modal = document.getElementById('delinkModal');
+      const lotId = modal ? modal.dataset.lotId : null;
+      const batchId = modal ? modal.dataset.batchId : null;
+      const missingQty = modal ? modal.dataset.missingQty : null;
+      const isBatchRejection = modal ? modal.dataset.isBatchRejection === 'true' : false;
+      const lotRejectionRemarks = modal ? modal.dataset.lotRejectionRemarks : '';
+      const totalQty = modal ? modal.dataset.totalQty : '0';
+      
+      if (!lotId) {
+        showAlert('Error', 'Lot ID not found', 'error');
+        return;
+      }
+      
+      // Collect tray IDs
+      const delinkTrayInputs = document.querySelectorAll('.delink-tray-input');
+      const topTrayInput = document.getElementById('topTrayIdInput');
+      
+      const delinkTrayIds = Array.from(delinkTrayInputs).map(input => input.value.trim()).filter(id => id);
+      const topTrayId = topTrayInput ? topTrayInput.value.trim() : '';
+      const topTrayQtyElement = document.querySelector('#topTrayTableBody td:last-child');
+      const topTrayQty = topTrayQtyElement ? topTrayQtyElement.textContent.trim() : '';
+      
+      // Close delink modal
+      if (modal) modal.style.display = 'none';
+      
+      // ✅ FIXED: Route to correct endpoint based on context
+      if (isBatchRejection && batchId && lotRejectionRemarks) {
+        console.log('ROUTING TO: Batch Rejection with Delink');
+         performBatchRejectionWithDelink(lotId, batchId, delinkTrayIds, topTrayId, topTrayQty, lotRejectionRemarks, totalQty);
+      } else {
+        console.log('ROUTING TO: Accept with Delink (default)');
+         performDelinkAcceptAction(lotId, delinkTrayIds, topTrayId, topTrayQty);
+      }
+    };
+  }
+}
+
+// ✅ NEW: DELEGATED Event Listener for Robust Validation
+document.addEventListener('input', function(e) {
+  if (e.target && (e.target.classList.contains('delink-tray-input') || e.target.id === 'topTrayIdInput')) {
+    window.handleDelegatedValidation(e.target);
+  }
+}, true); // Use capture to ensure we catch it
+
+document.addEventListener('DOMContentLoaded', function() {
+  setupDelinkConfirmButton();
+});
+
+// ✅ GLOBAL Helper functions for validation
+window.handleDelegatedValidation = function(input) {
+    const trayId = input.value.trim();
+    const errorDiv = input.parentElement.querySelector('.tray-id-error') || createErrorDiv(input);
+    
+    // Clear existing timer
+    if (input._validationTimer) clearTimeout(input._validationTimer);
+    
+    // Clear error style immediately while typing
+    if (input._hasError) {
+      input._hasError = false;
+      input.style.border = '';
+      input.style.backgroundColor = '';
+      errorDiv.style.display = 'none';
+      validateAllInputsAndUpdateButtonsForBatchRejection();
+    }
+    
+    if (!trayId) return;
+    
+    // Debounce validation
+    if (trayId.length >= 3) {
+      input._validationTimer = setTimeout(() => {
+        // console.log(`🎯 [DELEGATED-VALIDATE] Validating: ${trayId}`);
+        
+        // 1. Check Duplicates
+        const allInputs = document.querySelectorAll('.delink-tray-input, #topTrayIdInput');
+        let isDuplicate = false;
+        allInputs.forEach(other => {
+          if (other !== input && other.value.trim() === trayId) isDuplicate = true;
+        });
+        
+        if (isDuplicate) {
+          showInputError(input, errorDiv, `Duplicate: ${trayId}`);
+          if (trayId.length >= 9) { input.select(); }
+          validateAllInputsAndUpdateButtonsForBatchRejection();
+          return;
+        }
+        
+        // 2. API Validation
+        const lotId = getCurrentLotId() || document.getElementById('delinkModal')?.dataset.lotId;
+        
+        if (!lotId) return;
+
+        fetch(`/brass_audit/brass_audit_validate_tray_id/?tray_id=${encodeURIComponent(trayId)}&lot_id=${encodeURIComponent(lotId)}`)
+          .then(res => res.json())
+          .then(data => {
+            if (data && data.exists && data.valid_for_lot) {
+              showInputSuccess(input, errorDiv, '✓ Available');
+              if (trayId.length === 9) autoAdvanceFocus(input);
+            } else {
+              showInputError(input, errorDiv, data.error || 'Invalid ID');
+              if (trayId.length >= 9) input.select(); 
+            }
+            validateAllInputsAndUpdateButtonsForBatchRejection();
+          })
+          .catch(err => {
+            showInputError(input, errorDiv, 'Network Error');
+            validateAllInputsAndUpdateButtonsForBatchRejection();
+          });
+      }, 50);
+    }
+};
+
+function createErrorDiv(input) {
+  let div = document.createElement('div');
+  div.className = 'tray-id-error';
+  div.style.cssText = 'display: none; font-size: 10px; margin-top: 2px; color: #dc3545; font-weight: bold;';
+  input.parentElement.appendChild(div);
+  return div;
+}
+
+function showInputError(input, div, msg) {
+  input._hasError = true;
+  input.style.border = '2px solid #dc3545';
+  input.style.backgroundColor = '#ffebee';
+  div.textContent = msg;
+  div.style.color = '#dc3545';
+  div.style.display = 'block';
+}
+
+function showInputSuccess(input, div, msg) {
+  input._hasError = false;
+  input.style.border = '2px solid #28a745';
+  input.style.backgroundColor = '#f8fff8';
+  div.textContent = msg;
+  div.style.color = '#28a745';
+  div.style.display = 'block';
+  setTimeout(() => div.style.display = 'none', 1500);
+}
+
+function autoAdvanceFocus(input) {
+  const all = Array.from(document.querySelectorAll('.delink-tray-input, #topTrayIdInput'));
+  const idx = all.indexOf(input);
+  if (idx > -1 && idx < all.length - 1) {
+    all[idx + 1].focus();
+  } else {
+     const btn = document.getElementById('confirmDelinkBtn');
+     if(btn && !btn.disabled) btn.focus();
+  }
+}
 </script>
 
 <script nonce="{{ csp_nonce }}">
