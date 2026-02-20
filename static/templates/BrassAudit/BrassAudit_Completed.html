@@ -1848,7 +1848,7 @@ document.addEventListener("DOMContentLoaded", function () {
             let endpoint;
             if (brassQcRejection && !brassQcFewCasesAccptance) {
               // Pure rejection - use RejectTable endpoint
-              endpoint = `/brass_audit/RejectTable_tray_id_list/?lot_id=${stockLotId}`;
+              endpoint = `/brass_audit/RejectTable_tray_id_list/?stock_lot_id=${stockLotId}`;
               console.log('🔴 Fetching REJECTED trays for lot:', stockLotId);
             } else {
               // Accepted or partial rejection - use AfterCheck endpoint

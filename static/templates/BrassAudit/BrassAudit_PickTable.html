@@ -2098,11 +2098,11 @@ document.addEventListener("DOMContentLoaded", function () {
             return !(tray.brass_top_tray || tray.ip_top_tray || tray.top_tray);
           });
           
-          regularTrays.sort((a, b) => {
-            const trayIdA = a.tray_id || '';
-            const trayIdB = b.tray_id || '';
-            return trayIdA.localeCompare(trayIdB);
-          });
+          regularTrays.sort((a, b) =>
+            Number(a.tray_id.replace(/\D/g,'')) -
+            Number(b.tray_id.replace(/\D/g,''))
+          );
+          regularTrays.sort((a, b) => b.tray_quantity - a.tray_quantity);
           
           regularTrays.forEach((tray) => {
             let displayQuantity = tray.tray_quantity;

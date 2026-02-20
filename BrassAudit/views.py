@@ -5183,7 +5183,80 @@ class AfterCheckPickTrayIdList_Complete_APIView(APIView):
         # For accepted/few_cases, delegate to PickTrayIdList_Complete_APIView
         try:
             pick_view = PickTrayIdList_Complete_APIView()
-            return pick_view.get(request)
+            response = pick_view.get(request)
+            
+            # ✅ NEW: Append rejected/delinked trays to the response for Completed View
+            if response.status_code == 200:
+                import json
+                resp_data = json.loads(response.content.decode('utf-8'))
+                
+                if resp_data.get('success'):
+                    accepted_trays = resp_data.get('trays', [])
+                    row_counter = len(accepted_trays) + 1
+                    
+                    # 1. Fetch rejected trays
+                    rejected_scans = Brass_Audit_Rejected_TrayScan.objects.filter(lot_id=lot_id).order_by('id')
+                    if rejected_scans.exists():
+                        print(f"🔴 [AfterCheck REJECTION-APPEND] Adding {rejected_scans.count()} rejected tray scans to accepted response")
+                        
+                        from collections import defaultdict
+                        tray_reject_data = defaultdict(lambda: {'qty': 0, 'reasons': []})
+                        
+                        for scan in rejected_scans:
+                            tray_id = scan.rejected_tray_id
+                            qty = int(scan.rejected_tray_quantity) if scan.rejected_tray_quantity and str(scan.rejected_tray_quantity).isdigit() else 0
+                            tray_reject_data[tray_id]['qty'] += qty
+                            tray_reject_data[tray_id]['reasons'].append({
+                                'rejection_reason': scan.rejection_reason.rejection_reason if scan.rejection_reason else 'Unknown',
+                                'rejection_quantity': scan.rejected_tray_quantity,
+                                'user': scan.user.username if scan.user else 'Unknown'
+                            })
+                        
+                        for tray_id, info in sorted(tray_reject_data.items()):
+                            accepted_trays.append({
+                                's_no': row_counter,
+                                'tray_id': tray_id,
+                                'tray_quantity': info['qty'],
+                                'position': row_counter - 1,
+                                'is_top_tray': False,
+                                'rejected_tray': True,
+                                'brass_rejected_tray': True,
+                                'delink_tray': False,
+                                'rejection_details': info['reasons'],
+                                'top_tray': False
+                            })
+                            row_counter += 1
+                            
+                    # 2. Fetch delinked trays
+                    try:
+                        delinked_trays = BrassAuditTrayId.objects.filter(lot_id=lot_id, delink_tray=True)
+                        if delinked_trays.exists():
+                            print(f"🔗 [AfterCheck DELINK-APPEND] Adding {delinked_trays.count()} delinked trays to accepted response")
+                            for tray in delinked_trays:
+                                qty_str = str(tray.tray_quantity) if tray.tray_quantity else "0"
+                                accepted_trays.append({
+                                    's_no': row_counter,
+                                    'tray_id': tray.tray_id,
+                                    'tray_quantity': int(qty_str) if qty_str.isdigit() else 0,
+                                    'position': row_counter - 1,
+                                    'is_top_tray': False,
+                                    'rejected_tray': False,
+                                    'brass_rejected_tray': False,
+                                    'delink_tray': True,
+                                    'rejection_details': [],
+                                    'top_tray': False
+                                })
+                                row_counter += 1
+                    except Exception as e:
+                        print(f"⚠️ Error fetching delinked trays: {e}")
+                        pass
+                            
+                    # Update response if we added trays
+                    if rejected_scans.exists() or (delinked_trays.exists() if 'delinked_trays' in locals() else False):
+                        resp_data['trays'] = accepted_trays
+                        response.content = json.dumps(resp_data).encode('utf-8')
+                        
+            return response
         except Exception as e:
             print(f"❌ [AfterCheckPickTrayIdList_Complete_APIView] Error delegating to Pick view: {e}")
             import traceback; traceback.print_exc()
@@ -5284,6 +5357,8 @@ class AfterCheckPickTrayIdList_Complete_APIView(APIView):
             'filter_applied': f'brass_qc_accepted_only_with_status_{"enabled" if has_brass_qc_status else "disabled"}',
             'data_source': 'TrayId_MainTable'  # ✅ Updated: Indicate proper data source
         }
+
+        print("[SUMMARY]", rejection_summary)
 
         return JsonResponse({
             'success': True,
