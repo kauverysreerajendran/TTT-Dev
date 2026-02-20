@@ -6020,18 +6020,45 @@ def brass_audit_reduce_quantities_optimally(available_quantities, qty_to_reduce,
 
 def is_new_tray_by_id(tray_id):
     """
-    Check if a tray ID is considered 'new' (not part of the original lot)
+    Tray is NEW only if it was introduced purely for rejection
+    and never existed in any accepted / reused / draft flow.
     """
     try:
-        if not tray_id: return True
+        if not tray_id:
+            return True
+
         tray_obj = TrayId.objects.filter(tray_id=tray_id).first()
-        if not tray_obj: return True
-        
-        # If it has a lot_id, it is NOT new (it belongs to THAT lot)
-        if tray_obj.lot_id and str(tray_obj.lot_id).strip():
+        if not tray_obj or not tray_obj.lot_id:
+            return True
+
+        lot_id = tray_obj.lot_id
+
+        # 1️⃣ Accepted trays
+        if Brass_Audit_Accepted_TrayID_Store.objects.filter(
+            lot_id=lot_id, tray_id=tray_id
+        ).exists():
             return False
-            
-        # No lot_id -> New tray or empty tray
+
+        # 2️⃣ Reused trays (CRITICAL FIX)
+        if Brass_Audit_Reused_TrayID_Store.objects.filter(
+            lot_id=lot_id, tray_id=tray_id
+        ).exists():
+            return False
+
+        # 3️⃣ Top tray draft / scan
+        if Brass_Audit_Top_TrayID_Store.objects.filter(
+            lot_id=lot_id, tray_id=tray_id
+        ).exists():
+            return False
+
+        # 4️⃣ Transferred QC trays (if applicable)
+        if BrassAuditTrayId.objects.filter(
+            lot_id=lot_id, tray_id=tray_id
+        ).exists():
+            return False
+
+        # If none matched → truly new tray
         return True
-    except:
+
+    except Exception:
         return True
