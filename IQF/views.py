@@ -3461,13 +3461,13 @@ def iqf_reject_check_tray_id_simple(request):
             # 4. Remaining Qty = Total Qty (Physical) - Total IQF Rejected (Committed + Draft)
             remaining_qty = max(0, total_qty - total_iqf_rejected_qty)
 
-            # 5. Trays Needed = ceil(Remaining Qty / Tray Capacity)
-            trays_needed = 0
-            if tray_capacity > 0:
-                 trays_needed = math.ceil(remaining_qty / tray_capacity)
+            # 5. Trays needed for rejected qty (reserved for rejection, cannot be reused for acceptance)
+            trays_for_rejection = 0
+            if tray_capacity > 0 and total_iqf_rejected_qty > 0:
+                trays_for_rejection = math.ceil(total_iqf_rejected_qty / tray_capacity)
 
-            # 6. Max Reusable Trays
-            max_reusable_trays = max(0, total_tray_count - trays_needed)
+            # 6. Max Reusable Trays = Total original trays - Trays reserved for rejection
+            max_reusable_trays = max(0, total_tray_count - trays_for_rejection)
 
             # Count ALREADY used reusable trays in session
             # ✅ IMPORTANT: Exclude the CURRENT tray being validated to avoid self-blocking
@@ -3507,13 +3507,14 @@ def iqf_reject_check_tray_id_simple(request):
             
             remaining_reuse_slots = max(0, max_reusable_trays - used_reusable_count)
             
-            print(f"  [IQF Reject Validation] REUSE CALCULATION (Physical Formula):")
+            print(f"  [IQF Reject Validation] REUSE CALCULATION (Rejection-Based Formula):")
             print(f"  - Total Tray Count: {total_tray_count}")
             print(f"  - Total Quantity (Sum): {total_qty}")
-            print(f"  - Remaining Qty: {remaining_qty}")
+            print(f"  - Total IQF Rejected Qty: {total_iqf_rejected_qty}")
+            print(f"  - Remaining Qty (Accepted): {remaining_qty}")
             print(f"  - Tray Capacity: {tray_capacity}")
-            print(f"  - Trays Needed: {trays_needed} (ceil({remaining_qty}/{tray_capacity}))")
-            print(f"  = Max Reusable Trays: {max_reusable_trays} ({total_tray_count} - {trays_needed})")
+            print(f"  - Trays For Rejection: {trays_for_rejection} (ceil({total_iqf_rejected_qty}/{tray_capacity}))")
+            print(f"  = Max Reusable Trays: {max_reusable_trays} ({total_tray_count} - {trays_for_rejection})")
             print(f"  - Used Reusable Count: {used_reusable_count}")
             print(f"  = Remaining Slots: {remaining_reuse_slots}")
 
@@ -4448,16 +4449,37 @@ def iqf_process_all_tray_data(request):
 @permission_classes([IsAuthenticated])
 def get_tray_capacity(request):
     lot_id = request.GET.get('lot_id')
-    print(f"Received tray capacity request for lot_id: {lot_id}")
+    rejection_qty = int(request.GET.get('rejection_qty', 0))
+    print(f"Received tray capacity request for lot_id: {lot_id}, rejection_qty: {rejection_qty}")
 
     if not lot_id:
         return Response({'success': False, 'error': 'Missing lot_id'}, status=400)
     try:
         stock = TotalStockModel.objects.filter(lot_id=lot_id).first()
+        tray_capacity = 0
         if stock and stock.batch_id and hasattr(stock.batch_id, 'tray_capacity'):
             tray_capacity = stock.batch_id.tray_capacity
-        print(f"Tray capacity for lot_id {lot_id}: {tray_capacity}")  # <-- Add this line
-        return Response({'success': True, 'tray_capacity': tray_capacity})
+        print(f"Tray capacity for lot_id {lot_id}: {tray_capacity}")
+
+        response_data = {'success': True, 'tray_capacity': tray_capacity}
+
+        # Calculate max reusable trays when rejection_qty is provided
+        if tray_capacity and tray_capacity > 0:
+            total_tray_count = IQFTrayId.objects.filter(lot_id=lot_id).count()
+
+            # Fallback: estimate tray count from physical qty if no IQFTrayId records
+            if total_tray_count == 0 and stock:
+                physical_qty = getattr(stock, 'iqf_physical_qty', 0) or 0
+                if physical_qty > 0:
+                    total_tray_count = math.ceil(physical_qty / tray_capacity)
+
+            trays_for_rejection = math.ceil(rejection_qty / tray_capacity) if rejection_qty > 0 else 0
+            max_reusable_trays = max(0, total_tray_count - trays_for_rejection)
+            response_data['max_reusable_trays'] = max_reusable_trays
+            response_data['total_tray_count'] = total_tray_count
+            print(f"  Reuse calc: total_trays={total_tray_count}, trays_for_rej={trays_for_rejection}, max_reusable={max_reusable_trays}")
+
+        return Response(response_data)
     except Exception as e:
         return Response({'success': False, 'error': str(e)}, status=500)
     
