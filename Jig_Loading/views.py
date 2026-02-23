@@ -133,6 +133,11 @@ class JigView(TemplateView):
                 'last_process_module': stock.last_process_module,
                 'lot_status': lot_status,
                 'lot_status_class': lot_status_class,
+                # ✅ ISSUE #7 FIX: Add hold/release fields
+                'jig_hold_lot': getattr(stock, 'jig_hold_lot', False),
+                'jig_holding_reason': getattr(stock, 'jig_holding_reason', ''),
+                'jig_release_lot': getattr(stock, 'jig_release_lot', False),
+                'jig_release_reason': getattr(stock, 'jig_release_reason', ''),
             })
         
         # Sort by Last Updated descending (newest first)
@@ -1432,6 +1437,11 @@ class JigLoadingManualDraftAPIView(APIView):
             jig_obj.save()
             logger.info(f"💾 Jig {jig_id} marked as drafted for batch {batch_id} by {user.username}")
 
+        # --- Update TotalStockModel with jig_draft status ---
+        stock.jig_draft = True
+        stock.save()
+        logger.info(f"💾 TotalStockModel.jig_draft set to True for lot_id={lot_id}, batch_id={batch_id}")
+
         # --- Draft should NOT split lots - only save form data ---
         logger.info(f"💾 Draft saved without lot splitting - form data saved for later submission")
 
@@ -2227,3 +2237,59 @@ class JigCompletedDataAPIView(APIView):
             
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ✅ ISSUE #7 FIX: Hold/Unhold API for Jig Loading Pick Table
+class JigSaveHoldUnholdReasonAPIView(APIView):
+    """
+    Save hold/unhold reason for a lot in Jig Loading pick table
+    
+    POST with:
+    {
+        "lot_id": "LOT001",
+        "remark": "Reason text",
+        "action": "hold"  # or "unhold"
+    }
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        try:
+            data = request.data if hasattr(request, 'data') else json.loads(request.body.decode('utf-8'))
+            lot_id = data.get('lot_id')
+            remark = data.get('remark', '').strip()
+            action = data.get('action', '').strip().lower()
+
+            logger.info(f"🔒 Hold/Unhold request: lot_id={lot_id}, action={action}, remark={remark[:50] if remark else 'None'}")
+
+            if not lot_id or not remark or action not in ['hold', 'unhold']:
+                logger.error(f"❌ Missing or invalid parameters: lot_id={lot_id}, remark={bool(remark)}, action={action}")
+                return JsonResponse({'success': False, 'error': 'Missing or invalid parameters.'}, status=400)
+
+            # Get TotalStockModel
+            obj = TotalStockModel.objects.filter(lot_id=lot_id).first()
+            if not obj:
+                logger.error(f"❌ Lot not found: {lot_id}")
+                return JsonResponse({'success': False, 'error': 'LOT not found.'}, status=404)
+
+            if action == 'hold':
+                obj.jig_holding_reason = remark
+                obj.jig_hold_lot = True
+                obj.jig_release_reason = ''
+                obj.jig_release_lot = False
+                logger.info(f"✅ Lot {lot_id} HELD with reason: {remark[:50]}")
+            elif action == 'unhold':
+                obj.jig_release_reason = remark
+                obj.jig_hold_lot = False
+                obj.jig_release_lot = True
+                logger.info(f"✅ Lot {lot_id} RELEASED with reason: {remark[:50]}")
+
+            obj.save(update_fields=['jig_holding_reason', 'jig_release_reason', 'jig_hold_lot', 'jig_release_lot'])
+            return JsonResponse({'success': True, 'message': f'Lot {action}ed successfully.'})
+
+        except Exception as e:
+            logger.error(f"❌ Error in hold/unhold: {str(e)}")
+            return JsonResponse({'success': False, 'error': str(e)}, status=500)
