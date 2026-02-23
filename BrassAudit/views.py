@@ -30,6 +30,8 @@ from Brass_QC.models import *
 from Jig_Loading.models import *
 from django.utils import timezone
 from django.contrib.auth.decorators import login_required
+from django.db.models import IntegerField
+from django.db.models.functions import Cast
 
 # Import the reverse transfer function from Brass QC
 from Brass_QC.views import send_brass_audit_back_to_brass_qc
@@ -115,13 +117,13 @@ class BrassAuditPickTableView(APIView):
             Q(brass_audit_few_cases_accptance=True, brass_audit_onhold_picking=True)
         ).exclude(
             # Exclude completed Brass Audit lots
-            brass_audit_accptance=True
+            Q(brass_audit_few_cases_accptance=True, brass_audit_onhold_picking=False)
         ).exclude(
             # Exclude rejected Brass Audit lots  
             brass_audit_rejection=True
         ).exclude(
             # Exclude completed few cases lots that are not on hold
-            Q(brass_audit_few_cases_accptance=True, brass_audit_onhold_picking=False)
+            brass_audit_accptance=True
         ).distinct()  # ✅ FIX: Prevent duplicate rows when lot matches multiple OR conditions
         
         # Apply sorting if requested
@@ -3680,11 +3682,11 @@ class BrassAuditCompletedView(APIView):
         ).annotate(
             brass_rejection_qty=brass_rejection_qty_subquery,
         ).filter(
-            # ✅ Direct filtering on TotalStockModel fields
-            Q(brass_audit_accptance=True) |
-            Q(brass_audit_rejection=True) |
-            Q(brass_audit_few_cases_accptance=True, brass_audit_onhold_picking=False) |
-            Q(send_brass_audit_to_iqf=True, brass_audit_onhold_picking=False)
+            # # ✅ Direct filtering on TotalStockModel fields
+            # Q(brass_audit_accptance=True) |
+            # Q(brass_audit_rejection=True) |
+            Q(brass_audit_onhold_picking=False)
+            # Q(send_brass_audit_to_iqf=True, brass_audit_onhold_picking=False)
         )
         
         # Apply sorting if requested
@@ -3830,12 +3832,9 @@ class BrassTrayIdList_Complete_APIView(APIView):
         if not lot_id:
             return JsonResponse({'success': False, 'error': 'Missing lot_id or stock_lot_id'}, status=400)
         
-        # ✅ UPDATED: Base queryset - exclude trays rejected in Input Screening
         base_queryset = BrassTrayId.objects.filter(
             tray_quantity__gt=0,
             lot_id=lot_id
-        ).exclude(
-            rejected_tray=True  # ✅ EXCLUDE trays rejected in Input Screening
         )
         
         # Get rejected and accepted trays directly from BrassTrayId table
@@ -4072,12 +4071,16 @@ class BrassAuditBatchRejectionDraftAPIView(APIView):
             lot_id = data.get('lot_id')
             total_qty = data.get('total_qty', 0)
             lot_rejected_comment = data.get('lot_rejected_comment', '').strip()
-            is_draft = data.get('is_draft', True)
+            raw_is_draft = data.get('is_draft', True)
+
+            if isinstance(raw_is_draft, str):
+                is_draft = raw_is_draft.lower() == 'true'
+            else:
+                is_draft = bool(raw_is_draft)
 
             if not batch_id or not lot_id or not lot_rejected_comment:
                 return Response({'success': False, 'error': 'Missing required fields'}, status=400)
 
-            # Save as draft
             draft_data = {
                 'total_qty': total_qty,
                 'lot_rejected_comment': lot_rejected_comment,
@@ -4085,7 +4088,6 @@ class BrassAuditBatchRejectionDraftAPIView(APIView):
                 'is_draft': is_draft
             }
 
-            # Update or create draft record
             draft_obj, created = Brass_Audit_Draft_Store.objects.update_or_create(
                 lot_id=lot_id,
                 draft_type='batch_rejection',
@@ -4096,9 +4098,31 @@ class BrassAuditBatchRejectionDraftAPIView(APIView):
                 }
             )
 
+            # ✅ FINAL LOT REJECTION ONLY
+            if not is_draft:
+                # 1️⃣ Update lot status
+                TotalStockModel.objects.filter(lot_id=lot_id).update(
+                    brass_audit_rejection=True,
+                    brass_audit_accptance=False,
+                    brass_audit_few_cases_accptance=False,
+                    brass_audit_draft=False
+                )
+
+                # 2️⃣ Mark ALL trays rejected (MATCH VIEW SOURCE)
+                IPTrayId.objects.filter(
+                    lot_id=lot_id,
+                    tray_quantity__gt=0
+                ).update(rejected_tray=True)
+
+                # (Optional but safe)
+                BrassTrayId.objects.filter(
+                    lot_id=lot_id,
+                    tray_quantity__gt=0
+                ).update(rejected_tray=True)
+
             return Response({
-                'success': True, 
-                'message': 'Batch rejection draft saved successfully',
+                'success': True,
+                'message': 'Batch rejection saved successfully' if not is_draft else 'Batch rejection draft saved successfully',
                 'draft_id': draft_obj.id
             })
 
@@ -4619,9 +4643,18 @@ class PickTrayIdList_Complete_APIView(APIView):
             # ✅ CORRECTED: Use Brass QC rejection data to determine accepted/rejected/delinked trays
             from Brass_QC.models import Brass_QC_Rejected_TrayScan, Brass_QC_Rejection_ReasonStore
 
-            reason_store = Brass_QC_Rejection_ReasonStore.objects.filter(lot_id=lot_id).first()
-            is_lot_rejection = reason_store.batch_rejection if reason_store else False
-            total_rejection_qty = reason_store.total_rejection_quantity if reason_store else 0
+            stock = TotalStockModel.objects.filter(lot_id=lot_id).first()
+
+            is_lot_rejection = bool(stock and stock.brass_audit_rejection)
+
+            total_rejection_qty = Brass_Audit_Rejected_TrayScan.objects.filter(
+                lot_id=lot_id
+            ).aggregate(
+                total=models.Sum(
+                    Cast('rejected_tray_quantity', IntegerField())
+                )
+            )['total'] or 0
+
 
             print(f"🔍 [PickTrayIdList_Complete_APIView] Lot rejection check: is_lot_rejection={is_lot_rejection}, total_rejection_qty={total_rejection_qty}")
 
@@ -5407,8 +5440,7 @@ class BrassAuditRejectTableView(APIView):
         ).annotate(
             brass_audit_rejection_total_qty=brass_audit_rejection_total_qty_subquery,
         ).filter(
-            Q(brass_audit_rejection=True) | Q(brass_audit_few_cases_accptance=True)
-        
+            Q(brass_audit_rejection=False) | Q(brass_audit_few_cases_accptance=True)
         )
         
         # Apply sorting if requested
