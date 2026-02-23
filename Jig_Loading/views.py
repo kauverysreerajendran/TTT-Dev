@@ -169,7 +169,9 @@ class TrayInfoView(APIView):
                     })
         else:
             # For incomplete lots, show allocated trays from JigLoadTrayId
-            trays = JigLoadTrayId.objects.filter(lot_id=lot_id, batch_id__batch_id=batch_id).values('tray_id', 'tray_quantity').order_by('tray_quantity')
+            # FIX 2: Order by 'id' (insertion order) to preserve physical tray sequence.
+            # ordering by 'tray_quantity' was re-sorting trays by size and shuffling the display.
+            trays = JigLoadTrayId.objects.filter(lot_id=lot_id, batch_id__batch_id=batch_id).values('tray_id', 'tray_quantity').order_by('id')
             tray_list = [{'tray_id': t['tray_id'], 'tray_quantity': t['tray_quantity']} for t in trays]
         
         return Response({'trays': tray_list})
@@ -837,47 +839,61 @@ class JigAddModalDataView(TemplateView):
     
     
     
-    def _distribute_cases_to_trays(self, total_cases, tray_capacity):
+    def _distribute_cases_to_trays(self, total_cases, tray_capacity, partial_lot=False):
         """
         Distribute cases into trays based on tray capacity.
         Returns distribution with full trays and partial tray details.
-        For leftover lots, put partial tray first for scanning.
+
+        FIX 2: Natural order — full trays first, partial tray LAST (physical stack order).
+        The partial tray is always the TOP tray because it sits on top of the stack.
+        partial_lot=True is only used for explicit leftover/partial lots where the
+        partial tray must be scanned first.
         """
         if total_cases <= 0 or not tray_capacity or tray_capacity <= 0:
             return None
-            
+
         full_trays = total_cases // tray_capacity
         partial_cases = total_cases % tray_capacity
-        
+
         trays = []
-        
-        # For leftover lots (when there are partial cases), put partial tray first
-        if partial_cases > 0:
+
+        if partial_cases > 0 and partial_lot:
+            # Only for explicit leftover lots: partial tray goes FIRST (scan first)
             trays.append({
                 'tray_number': 1,
                 'cases': partial_cases,
                 'is_full': False,
-                'is_top_tray': True,  # Mark as top tray for scanning
+                'is_top_tray': True,
                 'scan_required': True
             })
-            # Then add full trays
             for i in range(full_trays):
                 trays.append({
-                    'tray_number': i + 2,  # Start from 2 since partial is 1
+                    'tray_number': i + 2,
                     'cases': tray_capacity,
                     'is_full': True,
+                    'is_top_tray': False,
                     'scan_required': False
                 })
         else:
-            # For full trays only, add them in order
+            # FIX: Natural physical order — full trays first, partial tray LAST
             for i in range(full_trays):
                 trays.append({
                     'tray_number': i + 1,
                     'cases': tray_capacity,
                     'is_full': True,
+                    'is_top_tray': False,
                     'scan_required': False
                 })
-        
+            if partial_cases > 0:
+                # Partial tray is physically on TOP of the stack — goes last in list
+                trays.append({
+                    'tray_number': full_trays + 1,
+                    'cases': partial_cases,
+                    'is_full': False,
+                    'is_top_tray': True,   # ✅ Correct: partial tray is the top tray
+                    'scan_required': True
+                })
+
         return {
             'total_cases': total_cases,
             'full_trays_count': full_trays,
@@ -1456,47 +1472,61 @@ class JigLoadingManualDraftFetchAPIView(APIView):
 class JigSubmitAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def _distribute_cases_to_trays(self, total_cases, tray_capacity):
+    def _distribute_cases_to_trays(self, total_cases, tray_capacity, partial_lot=False):
         """
         Distribute cases into trays based on tray capacity.
         Returns distribution with full trays and partial tray details.
-        For leftover lots, put partial tray first for scanning.
+
+        FIX 2: Natural order — full trays first, partial tray LAST (physical stack order).
+        The partial tray is always the TOP tray because it sits on top of the stack.
+        partial_lot=True is only used for explicit leftover/partial lots where the
+        partial tray must be scanned first.
         """
         if total_cases <= 0 or not tray_capacity or tray_capacity <= 0:
             return None
-            
+
         full_trays = total_cases // tray_capacity
         partial_cases = total_cases % tray_capacity
-        
+
         trays = []
-        
-        # For leftover lots (when there are partial cases), put partial tray first
-        if partial_cases > 0:
+
+        if partial_cases > 0 and partial_lot:
+            # Only for explicit leftover lots: partial tray goes FIRST (scan first)
             trays.append({
                 'tray_number': 1,
                 'cases': partial_cases,
                 'is_full': False,
-                'is_top_tray': True,  # Mark as top tray for scanning
+                'is_top_tray': True,
                 'scan_required': True
             })
-            # Then add full trays
             for i in range(full_trays):
                 trays.append({
-                    'tray_number': i + 2,  # Start from 2 since partial is 1
+                    'tray_number': i + 2,
                     'cases': tray_capacity,
                     'is_full': True,
+                    'is_top_tray': False,
                     'scan_required': False
                 })
         else:
-            # For full trays only, add them in order
+            # FIX: Natural physical order — full trays first, partial tray LAST
             for i in range(full_trays):
                 trays.append({
                     'tray_number': i + 1,
                     'cases': tray_capacity,
                     'is_full': True,
+                    'is_top_tray': False,
                     'scan_required': False
                 })
-        
+            if partial_cases > 0:
+                # Partial tray is physically on TOP of the stack — goes last in list
+                trays.append({
+                    'tray_number': full_trays + 1,
+                    'cases': partial_cases,
+                    'is_full': False,
+                    'is_top_tray': True,   # ✅ Correct: partial tray is the top tray
+                    'scan_required': True
+                })
+
         return {
             'total_cases': total_cases,
             'full_trays_count': full_trays,
@@ -1769,10 +1799,17 @@ class JigSubmitAPIView(APIView):
                 # Initialize tray info variables  
                 complete_delink_tray_info = delink_tray_info
                 complete_half_filled_tray_info = half_filled_tray_info
-                
+
+                # FIX 1: Calculate effective_lot_qty BEFORE the split block so it is
+                # never None when used inside the if original_lot_qty > jig_capacity block
+                if original_lot_qty == jig_capacity:
+                    effective_lot_qty = original_lot_qty - broken_hooks
+                else:
+                    effective_lot_qty = jig_capacity - broken_hooks
+
                 # Handle partial lot splitting with new lot ID for remaining quantity
                 if original_lot_qty > jig_capacity:
-                    loaded_cases_qty = effective_lot_qty
+                    loaded_cases_qty = effective_lot_qty  # ✅ Now always a valid integer
                     remaining_qty = original_lot_qty - jig_capacity
                     
                     # Generate new lot ID for remaining cases
@@ -1818,14 +1855,8 @@ class JigSubmitAPIView(APIView):
                     'jig_capacity': jig_capacity,
                 }
                 
-                # For equal capacity scenario (original_qty == jig_capacity), use existing tray info
-                if original_lot_qty == jig_capacity:
-                    effective_lot_qty = original_lot_qty - broken_hooks
-                    # complete_delink_tray_info and complete_half_filled_tray_info already initialized above
-                else:
-                    # For splitting scenario, use the complete table portion
-                    effective_lot_qty = jig_capacity - broken_hooks 
-                    # complete_delink_tray_info and complete_half_filled_tray_info already initialized above
+                # effective_lot_qty already calculated above before the split block
+                # complete_delink_tray_info and complete_half_filled_tray_info already initialized above
 
                 # Get plating stock number
                 plating_stock_num = batch.plating_stk_no if batch.plating_stk_no else (batch.model_stock_no.plating_stk_no if batch.model_stock_no else '')
