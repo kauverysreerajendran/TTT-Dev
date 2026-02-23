@@ -466,9 +466,7 @@ class DPBulkUploadView(APIView):
                 
                 preview_data.append(row_data)
                 
-                # Limit preview to first 100 rows
-                if len(preview_data) >= 100:
-                    break
+
 
             if not preview_data and row_errors:
                 return JsonResponse({
@@ -1110,12 +1108,18 @@ class DPBulkUploadPreviewView(APIView):
             # ========== END ENHANCED COLUMN VALIDATION ==========
             
             data = []
+            total_rows_processed = 0
+            skipped_rows = 0
+            
             for idx, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=1):
+                total_rows_processed += 1
                 if not any(row):
+                    skipped_rows += 1
                     continue
                 
                 # Check for minimum required columns
                 if len(row) < 7:
+                    skipped_rows += 1
                     continue  # Skip incomplete rows in preview
                 
                 data.append({
@@ -1127,11 +1131,13 @@ class DPBulkUploadPreviewView(APIView):
                     'Input Qty': row[5] or '',
                     'Source': row[6] or '',
                 })
-                
-                # Limit preview to first 100 rows
-                if len(data) >= 100:
-                    break
             
+            print(f"📊 Excel Processing Summary:")
+            print(f"   Total rows processed: {total_rows_processed}")
+            print(f"   Valid data rows: {len(data)}")
+            print(f"   Skipped rows: {skipped_rows}")
+            print(f"   Final data length: {len(data)}")
+                
             return Response({'success': True, 'data': data})
             
         except Exception as e:

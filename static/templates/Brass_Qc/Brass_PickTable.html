@@ -622,7 +622,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
               </div>
             
             <!-- Hidden input for scanner -->
-            <input type="text" id="scanHiddenInput" style="position: absolute; left: -9999px; opacity: 0;" />
+            <input type="text" id="scanHiddenInput" style="position: absolute; left: -9999px; opacity: 0;" autocomplete="off" />
             
             <!-- Status message -->
             <div id="scanMessage" style="display: none; margin-top: 8px; padding: 6px 12px; border-radius: 4px; font-size: 14px; font-weight: 600;"></div>
@@ -1144,6 +1144,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                                   placeholder="Type your remark..."
                                   style="width: 85%; height: 40px; resize: vertical; border: 1px solid #ccc; padding: 5px; border-radius: 4px; font-family: Arial, sans-serif; font-size: 14px;"
                                   {% if data.Bq_pick_remarks %}readonly{% endif %}
+                                  autocomplete="off"
                                 >{{ data.Bq_pick_remarks|default_if_none:"" }}</textarea>
                                 <div style="text-align: right; margin-top: -35px">
                                   {% if not data.Bq_pick_remarks %}
@@ -1205,7 +1206,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                       
                       Tray Validate
                     </button>
-                    <input id="trayValidateInput" type="text" placeholder="Enter validation info..." style="position: absolute; left: -9999px; opacity: 0; pointer-events: none;" />
+                    <input id="trayValidateInput" type="text" placeholder="Enter validation info..." style="position: absolute; left: -9999px; opacity: 0; pointer-events: none;" autocomplete="off" />
                     <img src="{% static 'assets/icons/redo2.png' %}" alt="Redo" id="trayScanRedoBtn" style="width: 24px; height: 24px; cursor: pointer; margin-left: 8px;" title="Clear Tray IDs" />
                   </div>
                   <div id="trayErrorMessage" style="display: none; background-color: #ffebee; border: 1px solid #f44336; color: #c62828; padding: 8px 12px; border-radius: 4px; margin-bottom: 10px; font-size: 12px; text-align: center;">
@@ -1390,7 +1391,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
       <div style="background:#fff; border-radius:10px; padding:28px 32px 18px 32px; min-width:320px; max-width:90vw; box-shadow:0 4px 24px rgba(0,0,0,0.18); position:relative;">
         <span id="closeHoldRemarkModal" style="position:absolute; top:8px; right:16px; font-size:22px; font-weight:bold; color:#d9534f; cursor:pointer;">&times;</span>
         <h5 style="margin-bottom:16px; color:#028084;">Row Hold Remark</h5>
-        <textarea id="holdRemarkInput" maxlength="50" style="width:100%; height:60px; border:1px solid #ccc; border-radius:6px; padding:8px; font-size:15px; resize:none;" placeholder="Enter remark (max 50 chars)"></textarea>
+        <textarea id="holdRemarkInput" maxlength="50" style="width:100%; height:60px; border:1px solid #ccc; border-radius:6px; padding:8px; font-size:15px; resize:none;" placeholder="Enter remark (max 50 chars)" autocomplete="off"></textarea>
         <div style="text-align:right; margin-top:10px;">
           <button id="saveHoldRemarkBtn" style="background:#007bff; color:#fff; border:none; border-radius:20px; padding:6px 18px; font-size:15px; cursor:pointer;">Save</button>
         </div>
@@ -1401,377 +1402,75 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
        
 {% block script %}
 
-<!-- Auto Save Functionality Script -->
+<!-- Auto Save Functionality Script - DISABLED -->
 <script nonce="{{ csp_nonce }}">
-// ===== AUTO SAVE FUNCTIONALITY =====
+// ===== AUTO SAVE FUNCTIONALITY - DISABLED TO PREVENT TRAY VALIDATION INTERFERENCE =====
 window.autoSaveManager = {
-  isEnabled: false,
+  isEnabled: false,  // Permanently disabled
   currentLotId: null,
   currentBatchId: null,
   currentModalData: null,
   hasUnsavedData: false,
   autoSaveTimer: null,
   
-  // Enable auto-save and show notification
+  // Disabled functions - keeping interface for compatibility
   enable: function(lotId, batchId, modalData = null) {
-    console.log('🔄 [AutoSave] Enabling auto-save for lot:', lotId);
-    this.isEnabled = true;
-    this.currentLotId = lotId;
-    this.currentBatchId = batchId;
-    this.currentModalData = modalData;
-    this.hasUnsavedData = false;
-    this.isPaused = false; // Reset pause flag
-    
-    // Show auto-save notification
-    const notification = document.getElementById('autoSaveNotification');
-    if (notification) {
-      notification.style.display = 'block';
-    }
-    
-    // Add beforeunload event listener
-    this.addBeforeUnloadHandler();
-    
-    // Start monitoring for changes
-    this.startChangeMonitoring();
+    console.log('🚫 [AutoSave] Auto-save is disabled to prevent tray validation interference');
+    this.isEnabled = false;  // Force disabled
   },
   
-  // Disable auto-save and hide notification
   disable: function() {
-    console.log('🛑 [AutoSave] Disabling auto-save');
-    this.isEnabled = false;
-    this.currentLotId = null;
-    this.currentBatchId = null;
-    this.currentModalData = null;
-    this.hasUnsavedData = false;
-    
-    // Hide auto-save notification
-    const notification = document.getElementById('autoSaveNotification');
-    if (notification) {
-      notification.style.display = 'none';
-    }
-    
-    // Remove beforeunload event listener
-    this.removeBeforeUnloadHandler();
-    
-    // Stop change monitoring
-    this.stopChangeMonitoring();
+    console.log('🚫 [AutoSave] Auto-save already disabled');
   },
   
-  // Mark that there are unsaved changes
   markAsChanged: function() {
-    if (this.isEnabled) {
-      this.hasUnsavedData = true;
-      console.log('📝 [AutoSave] ✅ Data changed - marked as UNSAVED! hasUnsavedData =', this.hasUnsavedData);
-      
-      // Update notification to show unsaved state
-      const notification = document.getElementById('autoSaveNotification');
-      if (notification) {
-        notification.innerHTML = '<i class="fa fa-exclamation-triangle" style="margin-right: 6px;"></i>Auto-Save (Unsaved)';
-        notification.style.background = 'linear-gradient(135deg, #ffc107, #fd7e14)';
-      }
-      
-      // Debounced auto-save after 2 seconds of inactivity
-      this.scheduleAutoSave();
-    } else {
-      console.log('⚠️ [AutoSave] markAsChanged called but auto-save is DISABLED');
-    }
+    // No-op - disabled
   },
   
-  // Schedule auto-save with debouncing
   scheduleAutoSave: function() {
-    if (this.autoSaveTimer) {
-      clearTimeout(this.autoSaveTimer);
-    }
-    
-    this.autoSaveTimer = setTimeout(() => {
-      if (this.hasUnsavedData && this.isEnabled) {
-        console.log('⏰ [AutoSave] Auto-saving due to inactivity...');
-        this.performAutoSave('Auto-save (inactivity)');
-      }
-    }, 2000); // 2 second delay
+    // No-op - disabled
   },
   
-  // Perform the actual auto-save
   performAutoSave: function(reason = 'Auto-save') {
-    if (!this.isEnabled || !this.currentLotId) {
-      console.log('⚠️ [AutoSave] Cannot auto-save - disabled or no lot ID');
-      return;
-    }
-    
-    console.log(`💾 [AutoSave] Performing auto-save: ${reason}`);
-    
-    // Check which type of modal is open
-    const rejectionModal = document.getElementById('trayScanModal');
-    const acceptedTrayModal = document.getElementById('newPopupModal');
-    
-    if (rejectionModal && rejectionModal.classList.contains('open')) {
-      this.autoSaveRejectionData();
-    } else if (acceptedTrayModal && acceptedTrayModal.classList.contains('open')) {
-      this.autoSaveAcceptedTrayData();
-    } else {
-      console.log('📝 [AutoSave] No open modal found for auto-save');
-    }
+    console.log('🚫 [AutoSave] Auto-save disabled - no auto-save performed');
   },
   
-  // Auto-save rejection modal data
   autoSaveRejectionData: function() {
-    console.log('💾 [AutoSave] Saving rejection data...');
-    
-    const rejectionReasons = [];
-    const tray_rejections = [];
-    const trayIdMappings = [];
-    
-    // ✅ FIXED: Use correct selectors matching the manual draft system
-    const rows = document.querySelectorAll("#rejection-table-body tr");
-    const trayRows = document.querySelectorAll("#rejection-tray-table-body tr");
-    
-    console.log('💾 [AutoSave] Found', rows.length, 'reason rows');
-    console.log('💾 [AutoSave] Found', trayRows.length, 'tray rows');
-    
-    // ✅ FIXED: Collect rejection reasons exactly like manual draft system
-    rows.forEach(row => {
-      const qtyInput = row.querySelector('input.rejection-qty-input');
-      if (qtyInput) {
-        const reason_id = row.querySelectorAll("td")[1].textContent.trim();
-        const qty = parseInt(qtyInput.value.trim()) || 0;
-        
-        console.log('💾 [AutoSave] Reason row - reason_id:', reason_id, 'qty:', qty);
-        
-        if (qty > 0) {
-          rejectionReasons.push({
-            reason_id: reason_id,
-            quantity: qty
-          });
-        }
-      }
-    });
-    
-    // ✅ FIXED: Collect tray data exactly like manual draft system
-    const trayToQuantityMap = [];
-    trayRows.forEach((row, index) => {
-      const trayInput = row.querySelector('input.tray-id-input') || row.querySelector('input.rejection-tray-id-input');
-      const trayQtyCell = row.cells[2];
-      const expectedQty = parseInt(trayQtyCell?.textContent) || 0;
-      
-      console.log('💾 [AutoSave] Tray row', index, '- tray:', trayInput?.value, 'expectedQty:', expectedQty);
-      
-      if (expectedQty > 0) {
-        const trayId = trayInput ? trayInput.value.trim() : '';
-        trayToQuantityMap.push({
-          tray_id: trayId, // Can be empty for auto-save draft
-          quantity: expectedQty,
-          row_index: index + 1
-        });
-      }
-    });
-    
-    // ✅ FIXED: Create tray_rejections format exactly matching manual draft system
-    for (const rejection of rejectionReasons) {
-      // Create one entry per rejection reason with associated tray IDs
-      const associatedTrays = trayToQuantityMap.map(tray => ({
-        tray_id: tray.tray_id,  // Include actual tray ID (can be empty for draft)
-        quantity: tray.quantity,
-        row_index: tray.row_index
-      }));
-      
-      tray_rejections.push({
-        reason_id: rejection.reason_id,
-        qty: rejection.quantity,
-        tray_id: '', // This will be filled with first available tray ID if present
-        associated_trays: associatedTrays // Store all tray information for draft restoration
-      });
-    }
-    
-    // ✅ Create tray ID mappings for draft restoration
-    trayIdMappings.push(...trayToQuantityMap);
-    
-    console.log('💾 [AutoSave] Final collection - reasons:', rejectionReasons.length, 'tray_rejections:', tray_rejections.length);
-    console.log('💾 [AutoSave] Rejection reasons data:', rejectionReasons);
-    console.log('💾 [AutoSave] Tray rejections data:', tray_rejections);
-    console.log('💾 [AutoSave] Tray ID mappings:', trayIdMappings);
-    
-    // ✅ FIXED: Use the same endpoint as manual draft system
-    if (rejectionReasons.length > 0) {
-      console.log('💾 [AutoSave] 🚀 Sending data to tray rejection draft endpoint...');
-      
-      fetch('/brass_qc/brass_tray_rejection_draft/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': this.getCookie('csrftoken')
-        },
-        body: JSON.stringify({
-          lot_id: this.currentLotId,
-          batch_id: this.currentBatchId,
-          tray_rejections: tray_rejections,
-          tray_id_mappings: trayIdMappings,
-          is_draft: true,
-          auto_save: true
-        })
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          console.log('✅ [AutoSave] Rejection data saved successfully');
-          this.hasUnsavedData = false;
-          this.showAutoSaveMessage('Auto-saved rejection data');
-        } else {
-          console.error('❌ [AutoSave] Failed to save rejection data:', data.error);
-        }
-      })
-      .catch(error => {
-        console.error('❌ [AutoSave] Network error saving rejection data:', error);
-      });
-    } else {
-      console.log('💾 [AutoSave] ⚠️ No rejection data found to save');
-      
-      // ✅ Check if there are any inputs with values in the modal
-      const modalInputs = document.querySelectorAll('#trayScanModal input[type="text"], #trayScanModal input[type="number"], #trayScanModal select');
-      const hasAnyInput = Array.from(modalInputs).some(input => input.value && input.value.trim());
-      console.log('💾 [AutoSave] Modal inputs check - found', modalInputs.length, 'inputs, hasAnyInput:', hasAnyInput);
-    }
+    // No-op - disabled
   },
   
-  // Auto-save accepted tray data
   autoSaveAcceptedTrayData: function() {
-    console.log('💾 [AutoSave] Saving accepted tray data...');
-    
-    // ✅ FIXED: Use correct selectors matching manual draft system
-    const topTrayInput = document.getElementById('topTrayIdInput');
-    const trayId = topTrayInput ? topTrayInput.value.trim() : '';
-    
-    // ✅ FIXED: Collect delink tray data exactly like manual draft system
-    const delinkInputs = document.querySelectorAll('.delink-tray-input');
-    const delinkTrays = [];
-    
-    delinkInputs.forEach((input, index) => {
-      const delinkTrayId = input.value.trim();
-      const originalCapacity = parseInt(input.getAttribute('data-original-capacity')) || 0;
-      delinkTrays.push({
-        tray_id: delinkTrayId,
-        original_capacity: originalCapacity,
-        position: index
-      });
-    });
-    
-    console.log('💾 [AutoSave] Top tray ID:', trayId);
-    console.log('💾 [AutoSave] Delink trays:', delinkTrays);
-    
-    // Validation: at least one tray ID (top tray or any delink tray) must be entered for auto-save
-    const hasDelinkTrays = delinkTrays.some(tray => tray.tray_id);
-    
-    if (!trayId && !hasDelinkTrays) {
-      console.log('💾 [AutoSave] ⚠️ No tray data found to save');
-      return;
-    }
-    
-    // ✅ FIXED: Use the same endpoint and data format as working manual draft system
-    const payload = {
-      lot_id: this.currentLotId,
-      tray_id: trayId,
-      tray_qty: this.currentModalData?.rescanData?.top_tray_qty || 0,
-      draft_save: true, // This is the key - marks it as draft
-      delink_trays: delinkTrays,
-      auto_save: true // Additional flag to indicate this is auto-save
-    };
-    
-    console.log('💾 [AutoSave] 🚀 Sending accepted tray data to manual draft endpoint...');
-    console.log('💾 [AutoSave] Payload:', payload);
-    
-    fetch('/brass_qc/brass_save_single_top_tray_scan/', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRFToken': this.getCookie('csrftoken')
-      },
-      body: JSON.stringify(payload)
-    })
-    .then(res => res.json())
-    .then(data => {
-      if (data.success) {
-        console.log('✅ [AutoSave] Accepted tray data saved successfully');
-        this.hasUnsavedData = false;
-        this.showAutoSaveMessage('Auto-saved accepted tray data');
-      } else {
-        console.error('❌ [AutoSave] Failed to save accepted tray data:', data.error);
-      }
-    })
-    .catch(error => {
-      console.error('❌ [AutoSave] Network error saving accepted tray data:', error);
-    });
+    // No-op - disabled
   },
   
-  // Show auto-save message
   showAutoSaveMessage: function(message) {
-    console.log(`📢 [AutoSave] ${message}`);
-    
-    // You can add a toast notification here if needed
-    // For now, we'll just update the notification badge
-    const notification = document.getElementById('autoSaveNotification');
-    if (notification) {
-      const originalText = notification.innerHTML;
-      notification.innerHTML = '<i class="fa fa-check" style="margin-right: 6px;"></i>Auto-Saved';
-      notification.style.background = 'linear-gradient(135deg, #20c997, #17a2b8)';
-      
-      setTimeout(() => {
-        notification.innerHTML = originalText;
-        notification.style.background = 'linear-gradient(135deg, #28a745, #20c997)';
-      }, 2000);
-    }
+    // No-op - disabled
   },
   
-  // Add beforeunload handler
   addBeforeUnloadHandler: function() {
-    window.addEventListener('beforeunload', this.beforeUnloadHandler.bind(this));
+    // No-op - disabled
   },
   
-  // Remove beforeunload handler
   removeBeforeUnloadHandler: function() {
-    window.removeEventListener('beforeunload', this.beforeUnloadHandler.bind(this));
+    // No-op - disabled
   },
   
-  // Handle beforeunload event
   beforeUnloadHandler: function(event) {
-    if (this.hasUnsavedData && this.isEnabled) {
-      console.log('🚪 [AutoSave] Page unload detected - performing final auto-save');
-      
-      // Perform silent save without confirmation dialog
-      this.performAutoSave('Window close');
-    }
+    // No-op - disabled
   },
   
-  // Start monitoring for changes in form inputs
   startChangeMonitoring: function() {
-    // Monitor rejection form inputs
-    document.addEventListener('input', this.inputChangeHandler.bind(this));
-    document.addEventListener('change', this.inputChangeHandler.bind(this));
+    // No-op - disabled
   },
   
-  // Stop monitoring for changes
   stopChangeMonitoring: function() {
-    document.removeEventListener('input', this.inputChangeHandler.bind(this));
-    document.removeEventListener('change', this.inputChangeHandler.bind(this));
+    // No-op - disabled
   },
   
-  // Handle input changes
   inputChangeHandler: function(event) {
-    if (this.isEnabled) {
-      const target = event.target;
-      
-      // Check if the input is in a modal that we care about
-      const rejectionModal = target.closest('#trayScanModal');
-      const acceptedTrayModal = target.closest('#newPopupModal');
-      
-      if (rejectionModal || acceptedTrayModal) {
-        // Check if it's a relevant input
-        if (target.matches('.rejection-reason-select, .rejection-qty-input, .tray-id-input, .rejection-tray-id-input, .accepted-tray-id-input, .delink-tray-input, input[type="text"], input[type="number"]')) {
-          this.markAsChanged();
-        }
-      }
-    }
+    // No-op - disabled
   },
   
-  // Helper function to get CSRF token
   getCookie: function(name) {
     let cookieValue = null;
     if (document.cookie && document.cookie !== '') {
@@ -1788,48 +1487,19 @@ window.autoSaveManager = {
   }
 };
 
-// Initialize auto-save when page loads
+// Initialize auto-save when page loads - DISABLED
 document.addEventListener('DOMContentLoaded', function() {
-  console.log('🚀 [AutoSave] Auto-save manager initialized');
+  console.log('🚫 [AutoSave] Auto-save manager disabled - no interference with tray validation');
 });
 
-// ✅ ENHANCED: Global trigger auto-save function (like IS_PickTable.html)
+// ✅ DISABLED: Global trigger auto-save function
 window.triggerAutoSave = function() {
-  console.log('🔄 [triggerAutoSave] Manual trigger called');
-  if (window.autoSaveManager && window.autoSaveManager.isEnabled) {
-    window.autoSaveManager.performAutoSave('Manual trigger');
-  } else {
-    console.log('⚠️ [triggerAutoSave] AutoSaveManager not enabled');
-  }
+  console.log('🚫 [triggerAutoSave] Auto-save disabled');
 };
 
-// ✅ ENHANCED: Global input monitoring for better auto-save detection
+// ✅ DISABLED: Global input monitoring
 document.addEventListener('DOMContentLoaded', function() {
-  // Monitor ALL input changes in rejection modal
-  document.addEventListener('input', function(event) {
-    if (event.target.closest('#trayScanModal')) {
-      console.log('🔄 [globalInputMonitor] Input detected in rejection modal');
-      if (window.autoSaveManager) {
-        window.autoSaveManager.markAsChanged();
-      }
-    }
-    if (event.target.closest('#newPopupModal')) {
-      console.log('🔄 [globalInputMonitor] Input detected in accepted tray modal');
-      if (window.autoSaveManager) {
-        window.autoSaveManager.markAsChanged();
-      }
-    }
-  });
-  
-  // Monitor ALL change events
-  document.addEventListener('change', function(event) {
-    if (event.target.closest('#trayScanModal') || event.target.closest('#newPopupModal')) {
-      console.log('🔄 [globalChangeMonitor] Change detected in modal');
-      if (window.autoSaveManager) {
-        window.autoSaveManager.markAsChanged();
-      }
-    }
-  });
+  console.log('🚫 [AutoSave] Global input monitoring disabled - no auto-save interference');
 });
 </script>
 
@@ -2820,25 +2490,16 @@ if (modalLotQty) {
     });
   });
 
-  // ✅ UPDATED: Close handler with auto-save functionality
+  // ✅ UPDATED: Close handler - AUTO-SAVE DISABLED
   const closeBtn = document.getElementById("closeTrayScanModal");
   if (closeBtn) {
     closeBtn.addEventListener("click", function () {
-      console.log('🚪 [AutoSave] Rejection modal close button clicked');
+      console.log('🚪 Modal close button clicked - auto-save disabled');
       
-          // Perform auto-save if enabled (force save on close regardless of hasUnsavedData)
-          if (window.autoSaveManager && window.autoSaveManager.isEnabled) {
-            console.log('💾 [AutoSave] Performing FORCE auto-save on modal close (hasUnsavedData:', window.autoSaveManager.hasUnsavedData, ')');
-            window.autoSaveManager.performAutoSave('Modal close - FORCED');
-            
-            // Silent auto-save - no alert, just reload after brief delay
-            setTimeout(() => {
-              window.location.reload();
-            }, 800);
-          } else {
-            console.log('⚠️ [AutoSave] Auto-save not enabled on modal close');
-            window.location.reload(); 
-          }      // Disable auto-save
+      // Auto-save functionality disabled - just reload directly
+      window.location.reload(); 
+      
+      // Disable auto-save (no-op since already disabled)
       if (window.autoSaveManager) {
         window.autoSaveManager.disable();
       }
@@ -3237,16 +2898,10 @@ if (isBatchRejection) {
             showEditableRejectionForm(stockLotId, batchId, detailsDiv, row);
             trayModal.classList.add("open");
             
-            // ✅ Enable auto-save for rejection form
+            // ✅ Auto-save DISABLED for rejection form
             if (window.autoSaveManager) {
-              window.autoSaveManager.enable(stockLotId, batchId, { 
-                type: 'rejection',
-                modelNo: modelNo,
-                lotQty: lotQty,
-                physicalQty: physicalQty,
-                missingQty: missingQty
-              });
-              console.log('✅ [AutoSave] Auto-save enabled for rejection form');
+              // Auto-save permanently disabled to prevent tray validation interference
+              console.log('🚫 [AutoSave] Auto-save disabled for rejection form');
             }
           }
         });
@@ -3323,7 +2978,8 @@ function loadDelinkTrayData(lotId) {
                         maxlength="9"
                         style="width: 100%; padding: 4px 6px; font-size: 11px; border: 1px solid #ddd; border-radius: 3px; background: #fff; height: 24px;" 
                         data-row="${tray.sno || (index + 1)}"
-                        data-expected-qty="${tray.tray_quantity || 0}" />
+                        data-expected-qty="${tray.tray_quantity || 0}"
+                        autocomplete="off" />
                   <span class="delink-tray-error" style="color: #d32f2f; font-size: 10px; margin-left: 2px; display: none;"></span>
                 </td>
               `;
@@ -3980,7 +3636,8 @@ function showAcceptedTrayModal(rescanData, lotId, isDraft, delinkOnlyMode = fals
                      placeholder="Scan Tray ID..." 
                      value="${draftTrayId}"
                      style="width: 100%; max-width: 280px; padding: 8px 12px; border: 2px solid #ddd; border-radius: 6px; font-size: 14px; transition: all 0.3s ease; background: #fff; ${draftTrayId ? 'background-color: #d4edda; border-color: #28a745;' : ''}" 
-                     class="top-tray-id-input" />
+                     class="top-tray-id-input"
+                     autocomplete="off" />
               <div id="topTrayError" style="color: #dc3545; font-size: 11px; margin-top: 4px; display: none; font-weight: 500;"></div>
             </div>
             
@@ -4031,15 +3688,10 @@ function showAcceptedTrayModal(rescanData, lotId, isDraft, delinkOnlyMode = fals
       modalContent.innerHTML = html;
       newPopupModal.classList.add("open");
       
-      // ✅ Enable auto-save for accepted tray form
+      // ✅ Auto-save DISABLED for accepted tray form  
       if (window.autoSaveManager) {
-        window.autoSaveManager.enable(lotId, rescanData.batch_id || 'unknown', {
-          type: 'accepted_tray',
-          isDraft: isDraftMode,
-          isDelinkOnly: delinkOnlyMode,
-          rescanData: rescanData
-        });
-        console.log('✅ [AutoSave] Auto-save enabled for accepted tray form');
+        // Auto-save permanently disabled to prevent tray validation interference
+        console.log('🚫 [AutoSave] Auto-save disabled for accepted tray form');
       }
     }
 
@@ -4051,23 +3703,12 @@ function showAcceptedTrayModal(rescanData, lotId, isDraft, delinkOnlyMode = fals
       const closeBtn = document.getElementById("closeAcceptedTrayModal");
       if (closeBtn) {
         closeBtn.addEventListener("click", function () {
-          console.log('🚪 [AutoSave] Accepted tray modal close button clicked');
+          console.log('🚪 Accepted tray modal close button clicked - auto-save disabled');
           
-          // Perform auto-save if enabled (force save on close regardless of hasUnsavedData)
-          if (window.autoSaveManager && window.autoSaveManager.isEnabled) {
-            console.log('💾 [AutoSave] Performing FORCE auto-save on accepted tray modal close (hasUnsavedData:', window.autoSaveManager.hasUnsavedData, ')');
-            window.autoSaveManager.performAutoSave('Accepted tray modal close - FORCED');
-            
-            // Silent auto-save - no alert, just reload after brief delay
-            setTimeout(() => {
-              window.location.reload();
-            }, 800);
-          } else {
-            console.log('⚠️ [AutoSave] Auto-save not enabled on accepted tray modal close');
-            window.location.reload(); 
-          }
+          // Auto-save functionality disabled - just reload directly
+          window.location.reload(); 
           
-          // Disable auto-save
+          // Disable auto-save (no-op since already disabled)
           if (window.autoSaveManager) {
             window.autoSaveManager.disable();
           }
@@ -5531,7 +5172,8 @@ function showEditableRejectionForm(stockLotId, batchId, detailsDiv, row) {
           id="lotRejectionRemarksInput"
           placeholder="Please provide detailed reason for lot rejection..."
           style="width: 100%; height: 70px; padding: 12px 16px; border: 2px solid #28a745; border-radius: 8px; font-size: 13px; resize: vertical; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #fff; transition: all 0.3s ease;"
-          maxlength="500"></textarea>
+          maxlength="500"
+          autocomplete="off"></textarea>
         <div style="text-align: right; margin-top: 5px; font-size: 12px; color: #6c757d;">
           <span id="remarksCharCount">0</span>/500 characters
         </div>
@@ -5918,7 +5560,8 @@ function updateRejectionTrayTable(totalQty) {
                  data-tray-index="${index + 1}"
                  data-tray-qty="${trayQty}"
                  data-tray-capacity="${trayCapacity}"
-                 data-rejection-qty="${totalQty}" />
+                 data-rejection-qty="${totalQty}"
+                 autocomplete="off" />
           <div class="tray-id-error rejection-tray-error"
                style="color: #d32f2f; font-size: 11px; display: none; margin-top: 2px; padding: 2px 4px; background: #ffebee; border-radius: 3px;"></div>
         </td>

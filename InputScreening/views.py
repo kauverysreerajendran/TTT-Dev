@@ -315,9 +315,11 @@ class IPSaveTrayDraftAPIView(APIView):
 
             # Save the corrected values
             total_stock.tray_verify = True
+            total_stock.draft_tray_verify = True  # ✅ FIXED: Set draft status for "Save as Draft"
 
             total_stock.save(update_fields=[
                 'tray_verify', 
+                'draft_tray_verify',  # ✅ FIXED: Include draft_tray_verify in save
             ])
 
             
@@ -1189,11 +1191,12 @@ def reject_check_tray_id_simple(request):
     tray_id = request.GET.get('tray_id', '')
     current_lot_id = request.GET.get('lot_id', '')
     rejection_qty = int(request.GET.get('rejection_qty', 0))
+    current_reason_id = request.GET.get('rejection_reason_id', '')
     
     # ✅ NEW: Get current session allocations from frontend
     current_session_allocations_str = request.GET.get('current_session_allocations', '[]')
     
-    print(f"[Simple Validation] tray_id: {tray_id}, lot_id: {current_lot_id}, qty: {rejection_qty}")
+    print(f"[Simple Validation] tray_id: {tray_id}, lot_id: {current_lot_id}, qty: {rejection_qty}, reason_id: {current_reason_id}")
     print(f"[Simple Validation] Current session allocations: {current_session_allocations_str}")
 
     try:
@@ -1324,9 +1327,12 @@ def reject_check_tray_id_simple(request):
             })
 
         # Continue with existing validation logic...
-        # ✅ ENHANCED: Apply current session allocations to get updated available quantities
+        # Apply current session allocations to get updated available quantities
+        # Filter out allocations for the current reason being validated to avoid double-counting
+        filtered_session_allocations = [alloc for alloc in current_session_allocations if alloc.get('reason_id') != current_reason_id]
+        
         available_tray_quantities, actual_free_space = get_available_quantities_with_session_allocations(
-            current_lot_id, current_session_allocations
+            current_lot_id, filtered_session_allocations
         )
 
         original_capacities = get_tray_capacities_for_lot(current_lot_id)
