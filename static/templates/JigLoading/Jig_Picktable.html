@@ -2150,6 +2150,7 @@ tr.row-inactive td:first-child {
                   href="#"
                   title="Add Audio Remark"
                   class="remark-tooltip-trigger"
+                  data-remark-kind="audio"
                   style="
                     display: inline-flex;
                     align-items: center;
@@ -2207,6 +2208,8 @@ tr.row-inactive td:first-child {
                       <div style="text-align: right; margin-top: 10px">
                         <button
                           type="button"
+                          class="remark-send-btn"
+                          data-remark-type="audio"
                           style="
                             background-color: #007bff;
                             color: #fff;
@@ -2227,6 +2230,7 @@ tr.row-inactive td:first-child {
                   href="#"
                   title="Add Remark"
                   class="remark-tooltip-trigger"
+                  data-remark-kind="text"
                   style="
                     display: inline-flex;
                     align-items: center;
@@ -2261,7 +2265,9 @@ tr.row-inactive td:first-child {
                     "
                   >
                     <textarea
+                      class="remark-textarea"
                       placeholder="Type your remark..."
+                      maxlength="255"
                       style="
                         width: 75%;
                         height: 40px;
@@ -2272,10 +2278,12 @@ tr.row-inactive td:first-child {
                         font-family: Arial, sans-serif;
                         font-size: 14px;
                       "
-                    ></textarea>
+                    >{{ data.inprocess_remarks|default_if_none:"" }}</textarea>
                     <div style="text-align: right; margin-top: -35px">
                       <button
                         type="button"
+                        class="remark-send-btn"
+                        data-remark-type="text"
                         style="
                           background-color: #007bff;
                           color: #fff;
@@ -6332,6 +6340,190 @@ console.log('✅ Add Model functionality initialized for Jig Loading');
 
 // ==================== END ADD MODEL FUNCTIONALITY ====================
 
+</script>
+
+<script nonce="{{ csp_nonce }}">
+document.addEventListener("DOMContentLoaded", function () {
+  let openRemarkTooltip = null;
+
+  function closeRemarkTooltip(tooltip) {
+    if (!tooltip) return;
+    tooltip.style.opacity = "0";
+    tooltip.style.visibility = "hidden";
+    tooltip.style.pointerEvents = "none";
+    tooltip.classList.remove("pinned");
+    openRemarkTooltip = null;
+  }
+
+  function openTooltipForTrigger(trigger) {
+    const tooltip = trigger.querySelector(".remark-tooltip");
+    if (!tooltip) return;
+
+    if (openRemarkTooltip && openRemarkTooltip !== tooltip) {
+      closeRemarkTooltip(openRemarkTooltip);
+    }
+
+    const isOpen = tooltip.classList.contains("pinned");
+    if (isOpen) {
+      closeRemarkTooltip(tooltip);
+      return;
+    }
+
+    tooltip.classList.add("pinned");
+    tooltip.style.opacity = "1";
+    tooltip.style.visibility = "visible";
+    tooltip.style.pointerEvents = "auto";
+    openRemarkTooltip = tooltip;
+
+    const textarea = tooltip.querySelector(".remark-textarea");
+    if (textarea) textarea.focus();
+  }
+
+  function getCsrfTokenSafe() {
+    if (typeof getCookie === "function") return getCookie("csrftoken");
+    return "";
+  }
+
+  function colorizeRemarkIcons(row, trigger) {
+    const inprocessIcon = row.querySelector(".mobile-cross-icon img");
+    if (inprocessIcon) {
+      inprocessIcon.style.filter = "none";
+      inprocessIcon.style.opacity = "1";
+      inprocessIcon.title = "View Remarks";
+    }
+
+    const icon = trigger.querySelector("img");
+    if (icon) {
+      icon.style.filter = "grayscale(0) brightness(1.1) sepia(1) hue-rotate(80deg) saturate(3) contrast(1.2)";
+      icon.style.opacity = "1";
+    }
+  }
+
+  function saveRemark(payload, onDone) {
+    fetch("/jig_loading/save-jig-pick-remark/", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": getCsrfTokenSafe(),
+      },
+      credentials: "same-origin",
+      body: JSON.stringify(payload),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.success) {
+          throw new Error(data.error || "Failed to save remark");
+        }
+        if (typeof Swal !== "undefined") {
+          Swal.fire({
+            icon: "success",
+            title: "Remark saved",
+            timer: 1000,
+            showConfirmButton: false,
+          });
+        }
+        if (onDone) onDone(data);
+      })
+      .catch((err) => {
+        if (typeof Swal !== "undefined") {
+          Swal.fire("Error", err.message || "Failed to save remark", "error");
+        } else {
+          alert(err.message || "Failed to save remark");
+        }
+      });
+  }
+
+  document.querySelectorAll(".remark-tooltip-trigger").forEach(function (trigger) {
+    trigger.addEventListener("click", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      openTooltipForTrigger(trigger);
+    });
+
+    const tooltip = trigger.querySelector(".remark-tooltip");
+    if (tooltip) {
+      tooltip.addEventListener("click", function (e) {
+        e.stopPropagation();
+      });
+    }
+
+    trigger.querySelectorAll(".remark-send-btn").forEach(function (sendBtn) {
+      sendBtn.addEventListener("click", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const row = trigger.closest("tr");
+        if (!row) return;
+        const lotId = row.getAttribute("data-stock-lot-id") || "";
+        const batchId = row.getAttribute("data-batch-id") || "";
+        const remarkType = sendBtn.getAttribute("data-remark-type") || "text";
+
+        if (!lotId || !batchId) {
+          if (typeof Swal !== "undefined") Swal.fire("Error", "Batch/Lot not found", "error");
+          return;
+        }
+
+        const submitRemark = function (remarkValue) {
+          const remark = (remarkValue || "").trim();
+          if (!remark) {
+            if (typeof Swal !== "undefined") Swal.fire("Error", "Please enter a remark before sending.", "error");
+            return;
+          }
+
+          saveRemark(
+            {
+              lot_id: lotId,
+              batch_id: batchId,
+              remark: remark,
+              remark_type: remarkType,
+            },
+            function (data) {
+              const textArea = trigger.querySelector(".remark-textarea");
+              if (textArea && remarkType === "text") {
+                textArea.value = data.remark || remark;
+              }
+              colorizeRemarkIcons(row, trigger);
+              closeRemarkTooltip(trigger.querySelector(".remark-tooltip"));
+            }
+          );
+        };
+
+        if (remarkType === "audio") {
+          if (typeof Swal !== "undefined") {
+            Swal.fire({
+              title: "Audio Remark Note",
+              input: "textarea",
+              inputPlaceholder: "Enter audio remark notes...",
+              showCancelButton: true,
+              confirmButtonText: "Send",
+            }).then(function (result) {
+              if (result.isConfirmed) submitRemark(result.value || "");
+            });
+          } else {
+            const note = prompt("Enter audio remark note:");
+            if (note !== null) submitRemark(note);
+          }
+          return;
+        }
+
+        const textArea = trigger.querySelector(".remark-textarea");
+        submitRemark(textArea ? textArea.value : "");
+      });
+    });
+  });
+
+  document.addEventListener("click", function (e) {
+    if (openRemarkTooltip && !e.target.closest(".remark-tooltip") && !e.target.closest(".remark-tooltip-trigger")) {
+      closeRemarkTooltip(openRemarkTooltip);
+    }
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && openRemarkTooltip) {
+      closeRemarkTooltip(openRemarkTooltip);
+    }
+  });
+});
 </script>
 
 

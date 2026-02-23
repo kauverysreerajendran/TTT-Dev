@@ -16,4 +16,5 @@ urlpatterns = [
     path('jig_tray_id_list/', views.jig_tray_id_list, name='jig_tray_id_list'),
     path('jig-completed-data/', JigCompletedDataAPIView.as_view(), name='jig_completed_data'),
     path('jig-save-hold-unhold-reason/', JigSaveHoldUnholdReasonAPIView.as_view(), name='jig_save_hold_unhold_reason'),
+    path('save-jig-pick-remark/', JigSavePickRemarkAPIView.as_view(), name='save_jig_pick_remark'),
 ]

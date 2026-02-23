@@ -138,6 +138,7 @@ class JigView(TemplateView):
                 'jig_holding_reason': getattr(stock, 'jig_holding_reason', ''),
                 'jig_release_lot': getattr(stock, 'jig_release_lot', False),
                 'jig_release_reason': getattr(stock, 'jig_release_reason', ''),
+                'inprocess_remarks': getattr(stock, 'jig_pick_remarks', ''),
             })
         
         # Sort by Last Updated descending (newest first)
@@ -2292,4 +2293,42 @@ class JigSaveHoldUnholdReasonAPIView(APIView):
 
         except Exception as e:
             logger.error(f"❌ Error in hold/unhold: {str(e)}")
+            return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+class JigSavePickRemarkAPIView(APIView):
+    """
+    Save text/audio remark for Jig Loading pick table row.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            data = request.data if hasattr(request, 'data') else json.loads(request.body.decode('utf-8'))
+            lot_id = (data.get('lot_id') or '').strip()
+            batch_id = (data.get('batch_id') or '').strip()
+            remark = (data.get('remark') or '').strip()
+            remark_type = (data.get('remark_type') or 'text').strip().lower()
+
+            if not lot_id or not batch_id:
+                return JsonResponse({'success': False, 'error': 'lot_id and batch_id are required.'}, status=400)
+            if not remark:
+                return JsonResponse({'success': False, 'error': 'Remark is required.'}, status=400)
+            if len(remark) > 255:
+                return JsonResponse({'success': False, 'error': 'Remark must be 255 characters or less.'}, status=400)
+            if remark_type not in ['text', 'audio']:
+                remark_type = 'text'
+
+            obj = TotalStockModel.objects.filter(lot_id=lot_id, batch_id__batch_id=batch_id).first()
+            if not obj:
+                return JsonResponse({'success': False, 'error': 'Lot not found for this batch.'}, status=404)
+
+            obj.jig_pick_remarks = f"[{remark_type}] {remark}"
+            obj.save(update_fields=['jig_pick_remarks'])
+
+            return JsonResponse({
+                'success': True,
+                'message': 'Remark saved successfully.',
+                'remark': obj.jig_pick_remarks,
+            })
+        except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)}, status=500)
