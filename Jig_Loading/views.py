@@ -379,7 +379,9 @@ class JigAddModalDataView(TemplateView):
         # Get jig details if exists
         jig_details = None
         if jig_qr_id:
-            jig_details = JigDetails.objects.filter(jig_qr_id=jig_qr_id, lot_id=lot_id).first()
+            jig_details_model = globals().get('JigDetails')
+            if jig_details_model is not None:
+                jig_details = jig_details_model.objects.filter(jig_qr_id=jig_qr_id, lot_id=lot_id).first()
         
         # Set initial loaded_cases_qty to 0 (no trays scanned yet)
         modal_data['loaded_cases_qty'] = 0
@@ -2332,3 +2334,95 @@ class JigSavePickRemarkAPIView(APIView):
             })
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@method_decorator(login_required, name='dispatch')
+class JigCompositionView(TemplateView):
+    template_name = "JigLoading/Jig_Composition.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        lot_ids_param = self.request.GET.get('lot_ids', '')
+        lot_ids = [x.strip() for x in lot_ids_param.split(',') if x.strip()] if lot_ids_param else []
+        context['selected_lot_ids'] = lot_ids
+
+        color_palette = [
+            "#009688", "#0378bd", "#ffc107", "#28a745", "#dc3545",
+            "#8e44ad", "#e67e22", "#16a085", "#2c3e50", "#f39c12",
+            "#1abc9c", "#e84393", "#6c5ce7", "#fdcb6e", "#00b894"
+        ]
+        model_color_map = {}
+        color_index = 0
+
+        model_list = []
+        for lot_id in lot_ids:
+            tsm = TotalStockModel.objects.filter(lot_id=lot_id).first()
+            if not tsm:
+                continue
+
+            model_no = (
+                tsm.batch_id.model_stock_no.model_no
+                if tsm.batch_id and tsm.batch_id.model_stock_no
+                else "Unknown"
+            )
+
+            if model_no not in model_color_map:
+                model_color_map[model_no] = color_palette[color_index % len(color_palette)]
+                color_index += 1
+            color = model_color_map[model_no]
+
+            original_qty = tsm.jig_physical_qty if (tsm.jig_physical_qty_edited and tsm.jig_physical_qty) else (tsm.brass_audit_accepted_qty or 0)
+
+            # Keep composition focused on remaining non-draft jig details for this lot.
+            # Some branches do not have JigDetails model; guard to avoid runtime NameError.
+            total_used_qty = 0
+            jig_details_model = globals().get('JigDetails')
+            if jig_details_model is not None:
+                jig_details = jig_details_model.objects.filter(lot_id=lot_id, draft_save=False)
+                for jig_detail in jig_details:
+                    if isinstance(jig_detail.no_of_model_cases, int):
+                        total_used_qty += jig_detail.no_of_model_cases
+                    elif isinstance(jig_detail.no_of_model_cases, str) and jig_detail.no_of_model_cases.isdigit():
+                        total_used_qty += int(jig_detail.no_of_model_cases)
+
+            remaining_qty = max(0, original_qty - total_used_qty)
+            case_qty = remaining_qty if remaining_qty > 0 else original_qty
+
+            model_list.append({
+                "model_no": model_no,
+                "case_qty": case_qty,
+                "case_numbers": list(range(1, case_qty + 1)),
+                "color": color,
+            })
+
+        all_cases = []
+        for model in model_list:
+            for case in model["case_numbers"]:
+                all_cases.append({
+                    "model_no": model["model_no"],
+                    "case_qty": model["case_qty"],
+                    "case_number": case,
+                    "color": model["color"],
+                })
+
+        cards = []
+        for i in range(0, len(all_cases), 12):
+            chunk = all_cases[i:i + 12]
+            models_in_card = []
+            seen = set()
+            for item in chunk:
+                if item["model_no"] not in seen:
+                    models_in_card.append({
+                        "model_no": item["model_no"],
+                        "case_qty": item["case_qty"],
+                        "color": item["color"],
+                    })
+                    seen.add(item["model_no"])
+            cards.append({
+                "models": models_in_card,
+                "cases": chunk,
+                "color": chunk[0]["color"] if chunk else "#01524a",
+            })
+
+        context["cards"] = cards
+        return context

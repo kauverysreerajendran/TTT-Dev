@@ -3,6 +3,7 @@ from . import views
 from .views import *
 urlpatterns = [
     path('JigView/', JigView.as_view(), name='JigView'),
+    path('jig_composition/', JigCompositionView.as_view(), name='jig_composition'),
     path('JigCompletedTable/', JigCompletedTable.as_view(), name='JigCompletedTable'),
     path('tray-info/', TrayInfoView.as_view(), name='tray_info'),
     path('tray-validate/', TrayValidateAPIView.as_view(), name='tray_validate'),

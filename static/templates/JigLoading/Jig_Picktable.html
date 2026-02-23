@@ -6526,6 +6526,51 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 </script>
 
+<script nonce="{{ csp_nonce }}">
+document.addEventListener("DOMContentLoaded", function () {
+  const jigCompositionBtn = document.getElementById("jigCompositionBtn");
+  if (!jigCompositionBtn) return;
+
+  jigCompositionBtn.addEventListener("click", function (e) {
+    e.preventDefault();
+
+    const modal = document.getElementById("jigAddModal");
+    const lotIds = [];
+
+    if (window.currentModalContext && window.currentModalContext.lotId) {
+      lotIds.push(String(window.currentModalContext.lotId));
+    }
+
+    if (modal) {
+      const combinedLotIdsRaw = modal.getAttribute("data-combined-lot-ids");
+      if (combinedLotIdsRaw) {
+        try {
+          const parsed = JSON.parse(combinedLotIdsRaw);
+          if (Array.isArray(parsed)) {
+            parsed.forEach(function (id) {
+              if (id != null) lotIds.push(String(id));
+            });
+          }
+        } catch (err) {
+          console.warn("Invalid combined lot ids:", err);
+        }
+      }
+    }
+
+    const uniqueLotIds = Array.from(new Set(lotIds.filter(Boolean)));
+    const baseUrl = "{% url 'jig_composition' %}";
+
+    if (uniqueLotIds.length > 0) {
+      const lotIdsParam = encodeURIComponent(uniqueLotIds.join(","));
+      window.location.href = `${baseUrl}?lot_ids=${lotIdsParam}`;
+      return;
+    }
+
+    window.location.href = baseUrl;
+  });
+});
+</script>
+
 
 
 
