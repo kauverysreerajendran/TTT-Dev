@@ -2715,8 +2715,8 @@ document.addEventListener("DOMContentLoaded", function () {
                 <tbody>
             `;
           
-            // ✅ Sort traysData by tray_quantity ascending
-            const sortedTrays = traysData.slice().sort((a, b) => (a.tray_quantity || 0) - (b.tray_quantity || 0));
+            // ✅ Sort traysData by tray_id alphabetically (ASC) to match the backend
+            const sortedTrays = traysData.slice().sort((a, b) => (a.tray_id || '').localeCompare(b.tray_id || ''));
           
             sortedTrays.forEach((tray, idx) => {
               html += `
@@ -3009,13 +3009,17 @@ function populateRejectionVerificationFromDraft(verificationsData, selectAllStat
 
   // Render only trays from draft, using your requested style
   verificationsData.forEach((tray, i) => {
-    const isTopTray = i === 0 ? ' (Top Tray)' : '';
+    // ✅ FIXED: Strictly respect the saved flag from backend
+    const isTopTrayFlag = tray.is_top_tray === true; 
+    const topTrayLabel = isTopTrayFlag ? ' (Top Tray)' : '';
+    
     const row = document.createElement('tr');
     row.innerHTML = `
-      <td style="padding: 6px;">${i + 1}${isTopTray}</td>
+      <td style="padding: 6px;">${i + 1}${topTrayLabel}</td>
       <td style="padding: 6px;">
         <input type="text" class="rejection-tray-id-input" 
                value="${tray.tray_id}" 
+               data-is-top-tray="${isTopTrayFlag}"
                style="width: 100%; padding: 4px; font-size: 13px; background-color: #e8f5e9; border: 2px solid #28a745;" 
                readonly />
       </td>
@@ -3373,10 +3377,11 @@ async function calculateOptimalRejectionDistribution(allRemainingTrays, lotId) {
   
   // 2. ✅ Get ALL available tray IDs (excluding ONLY valid delink candidates)
   const availableTrayIds = allRemainingTrays
+    .filter(tray => tray.rejected_tray) // ✅ ONLY use trays marked for rejection
     .filter(tray => !validScannedDelinkTrays.includes(tray.tray_id))  
-      .map(tray => tray.tray_id)
-    .sort(); // Sort for consistent ordering
-  console.log('🎯 Available tray IDs for rejection:', availableTrayIds);
+    .map(tray => tray.tray_id)
+    .sort((a, b) => a.localeCompare(b)); // ✅ Sort alphabetically to match backend sequence
+  console.log('🎯 Available tray IDs for rejection (preserved order):', availableTrayIds);
 
   if (availableTrayIds.length === 0) {
     return {
@@ -3406,7 +3411,7 @@ async function calculateOptimalRejectionDistribution(allRemainingTrays, lotId) {
     console.error('❌ Error fetching IQF rejection data:', error);
     return {
       success: false,
-      error: 'Failed to fetch IQF rejection quantity'
+      error: 'Failed to fetch IQF rejection data'
     };
   }
   
@@ -3435,29 +3440,36 @@ async function calculateOptimalRejectionDistribution(allRemainingTrays, lotId) {
     };
   }
   
-  // 5. ✅ FIXED DISTRIBUTION ALGORITHM - FIXED QUANTITIES, SHUFFLE TRAY IDs
+  // 5. ✅ FIXED DISTRIBUTION ALGORITHM - REMAINDER FIRST, THEN FULL TRAYS
   const distributedTrays = [];
   
-  // Calculate fixed distribution pattern (4, 12, 12, 12 for qty=40, capacity=12)
+  // Calculate fixed distribution pattern (11, 12, 12 for qty=35, capacity=12)
   const remainder = iqfRejectionQty % trayCapacity;
   const fullTraysNeeded = Math.floor(iqfRejectionQty / trayCapacity);
   
   const fixedQuantities = [];
+  // ✅ Put remainder at the START (requested as Top Tray)
   if (remainder > 0) {
-    fixedQuantities.push(remainder); // First: 4 (Top Tray)
-  }
-  for (let i = 0; i < fullTraysNeeded; i++) {
-    fixedQuantities.push(trayCapacity); // Then: 12, 12, 12
+    fixedQuantities.push(remainder); // First: 11
   }
   
-  console.log('📊 Fixed quantities pattern:', fixedQuantities);
+  // ✅ Then fill full trays
+  for (let i = 0; i < fullTraysNeeded; i++) {
+    fixedQuantities.push(trayCapacity); // Pattern: 11, 12, 12...
+  }
+  
+  console.log('📊 Fixed quantities pattern (Remainder at START):', fixedQuantities);
   
   // 6. ✅ Assign fixed quantities to available tray IDs
   for (let i = 0; i < fixedQuantities.length && i < availableTrayIds.length; i++) {
+    const currentQty = fixedQuantities[i];
+    // Mark as top tray if it's the one with the partial quantity (the remainder) at index 0
+    const isTopTray = (remainder > 0 && i === 0);
+    
     distributedTrays.push({
       tray_id: availableTrayIds[i],
-      distributed_qty: fixedQuantities[i],
-      is_top_tray: i === 0 && remainder > 0
+      distributed_qty: currentQty,
+      is_top_tray: isTopTray
     });
   }
   
@@ -3509,13 +3521,14 @@ async function renderOptimalRejectionTable(allRemainingTrays, lotId) {
   // ✅ Build table rows with FIXED quantities and shuffled tray IDs
   let tableRows = '';
   distributedTrays.forEach((tray, i) => {
-    const isTopTray = tray.is_top_tray ? ' (Top Tray)' : '';
+    const isTopTrayLabel = tray.is_top_tray ? ' (Top Tray)' : '';
     tableRows += `
       <tr>
-        <td style="padding: 6px;">${i + 1}${isTopTray}</td>
+        <td style="padding: 6px;">${i + 1}${isTopTrayLabel}</td>
         <td style="padding: 6px;">
           <input type="text" class="rejection-tray-id-input" 
                  value="${tray.tray_id}" 
+                 data-is-top-tray="${tray.is_top_tray}"
                  style="width: 100%; padding: 4px; font-size: 13px; background-color: #e8f5e9; border: 2px solid #28a745;" 
                  readonly />
         </td>
@@ -3720,6 +3733,7 @@ function showReadOnlyRejectionData(lotId, detailsDiv) {
       // ✅ NEW: Rejected Tray ID Table (similar to Brass QC)
       let rejectedTrayIdRows = '';
       const rejectedTrayIds = data.rejected_tray_ids || [];
+      console.log('📋 [DEBUG] Received Rejected Tray IDs:', rejectedTrayIds);
       
       if (rejectedTrayIds.length > 0) {
         // Sort: top_tray first, then by ID
@@ -3730,6 +3744,7 @@ function showReadOnlyRejectionData(lotId, detailsDiv) {
         });
 
         rejectedTrayIds.forEach((trayObj, index) => {
+          console.log(`🔍 [DEBUG] Tray ${index+1}: ID=${trayObj.tray_id}, top_tray=${trayObj.top_tray}, is_top_tray=${trayObj.is_top_tray}`);
           const displaySno = trayObj.top_tray ? '1 (Top Tray)' : (index + 1);
           rejectedTrayIdRows += `
             <tr>
@@ -4993,6 +5008,7 @@ function processAllTrayData(lotId, isDraft, successMessage) {
           tray_id: trayId,
           verified: checkbox ? checkbox.checked : false,
           qty: qty,
+          is_top_tray: input.dataset.isTopTray === 'true', // ✅ Send top_tray flag
           is_draft_entry: true // Custom flag for draft handling
         });
       } else {
@@ -5001,7 +5017,8 @@ function processAllTrayData(lotId, isDraft, successMessage) {
           verifications.push({
             tray_id: trayId,
             verified: true,
-            qty: qty
+            qty: qty,
+            is_top_tray: input.dataset.isTopTray === 'true' // ✅ Send top_tray flag
           });
         }
       }
@@ -5064,8 +5081,20 @@ function processAllTrayData(lotId, isDraft, successMessage) {
             msgP.textContent = "Draft saved successfully!";
           }
         } else {
-          // For final submit, reload page
-          window.location.reload();
+          // For final submit, close the modal and stay on pick table
+          // ✅ FIXED: Don't reload/navigate - just close the modal
+          const modal = document.querySelector('#newPopupModal');
+          if (modal) {
+            modal.classList.remove('open');
+          }
+          
+          // Refresh the table data to reflect changes
+          loadPickTableData();
+          
+          // Show success message
+          if (msgP) {
+            msgP.textContent = "Verification completed successfully!";
+          }
         }
       }, 1200);
       
