@@ -2310,22 +2310,28 @@ def brass_reject_check_tray_id_simple(request):
     # NOT the sum of BrassTrayId quantities which may include missing items.
     # -----------------------------------------------------------------
 
-    # 5a. Get tray capacity
-    tray_capacity = get_brass_tray_capacity_for_lot(current_lot_id)
-    if not tray_capacity or tray_capacity <= 0:
-        tray_capacity = 12  # safe fallback
+    # 5a. Get original distribution first (more reliable than master capacity)
+    original_tray_quantities = get_brass_original_tray_distribution(current_lot_id)
 
-    # 5b. Get brass_physical_qty from TotalStockModel
+    # 5b. Get brass_physical_qty from TotalStockModel (also used for capacity)
     total_stock = TotalStockModel.objects.filter(lot_id=current_lot_id).first()
     physical_qty = 0
     if total_stock and hasattr(total_stock, 'brass_physical_qty') and total_stock.brass_physical_qty:
         physical_qty = int(total_stock.brass_physical_qty)
 
-    # 5c. Get original distribution from BrassTrayId (may include missing items)
-    original_tray_quantities = get_brass_original_tray_distribution(current_lot_id)
+    # 5c. Derive tray capacity (prefer batch master, then actual tray quantities)
+    tray_capacity = None
+    if total_stock and getattr(total_stock, 'batch_id', None):
+        tray_capacity = getattr(total_stock.batch_id, 'tray_capacity', None)
+    if not tray_capacity or tray_capacity <= 0:
+        tray_capacity = max(original_tray_quantities) if original_tray_quantities else get_brass_tray_capacity_for_lot(current_lot_id)
+    if not tray_capacity or tray_capacity <= 0:
+        tray_capacity = 12  # safe fallback
+
+    # 5d. Get original distribution from BrassTrayId (may include missing items)
     original_total = sum(original_tray_quantities)
 
-    # 5d. Calculate missing qty and reduce from original distribution (smallest first)
+    # 5e. Calculate missing qty and reduce from original distribution (smallest first)
     missing_qty = max(0, original_total - physical_qty) if physical_qty > 0 else 0
 
     # Build the physical distribution by subtracting missing from smallest trays first
@@ -2345,7 +2351,7 @@ def brass_reject_check_tray_id_simple(request):
     physical_trays = len(active_tray_quantities)
     delink_count = len(original_tray_quantities) - physical_trays
 
-    # 5e. Get total rejection qty from all sources
+    # 5f. Get total rejection qty from all sources
     saved_rejections = Brass_QC_Rejected_TrayScan.objects.filter(lot_id=current_lot_id)
     total_saved_rejection = sum(int(r.rejected_tray_quantity or 0) for r in saved_rejections)
 
@@ -2359,11 +2365,19 @@ def brass_reject_check_tray_id_simple(request):
     if total_rejection_qty == 0:
         total_rejection_qty = rejection_qty
 
-    # 5f. Calculate max_reusable_trays from PHYSICAL qty
+    # 5g. Calculate max_reusable_trays from PHYSICAL qty
     import math
     accepted_qty = max(0, physical_qty - total_rejection_qty)
     trays_needed_for_accepted = math.ceil(accepted_qty / tray_capacity) if accepted_qty > 0 else 0
-    max_reusable_trays = max(0, physical_trays - trays_needed_for_accepted)
+
+    # Clamp tray count to master no_of_trays if available to avoid over-allocating reuse
+    total_trays_for_calc = physical_trays
+    if total_stock and getattr(total_stock, 'batch_id', None):
+        master_trays = getattr(total_stock.batch_id, 'no_of_trays', None)
+        if master_trays and int(master_trays) > 0:
+            total_trays_for_calc = min(physical_trays, int(master_trays))
+
+    max_reusable_trays = max(0, total_trays_for_calc - trays_needed_for_accepted)
     sufficient_capacity = total_rejection_qty <= physical_qty
 
     print(f"[BRASS_REUSE] physical_qty={physical_qty}, original_total={original_total}, "
