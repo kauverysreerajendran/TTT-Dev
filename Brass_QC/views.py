@@ -6292,6 +6292,7 @@ class AfterCheckPickTrayIdList_Complete_APIView(APIView):
         def create_tray_data(tray_obj, category, is_top=False, rejection_qty=None):
             nonlocal row_counter
             rejection_details = []
+            display_quantity = 0
             
             # Calculate display quantity based on category and context
             if category == 'rejected':
@@ -6314,6 +6315,37 @@ class AfterCheckPickTrayIdList_Complete_APIView(APIView):
                             'rejection_reason_id': scan.rejection_reason.rejection_reason_id if scan.rejection_reason else None,
                             'user': scan.user.username if scan.user else None
                         })
+                    
+                    # ✅ FIXED: Handle partial rejection without missing qty - If no scan records found, check BrassTrayId
+                    if display_quantity == 0:
+                        print(f"⚠️ [create_tray_data] WARNING - {tray_obj.tray_id}: No Brass_QC_Rejected_TrayScan records found (partial reject without missing qty?)")
+                        
+                        # Fallback: Check if this tray is marked as rejected in BrassTrayId
+                        brass_tray = BrassTrayId.objects.filter(
+                            tray_id=tray_obj.tray_id,
+                            lot_id=lot_id,
+                            rejected_tray=True
+                        ).first()
+                        
+                        if brass_tray:
+                            # Use the BrassTrayId quantity as the rejected quantity
+                            display_quantity = brass_tray.tray_quantity or tray_obj.tray_quantity or 0
+                            print(f"✅ [create_tray_data] FALLBACK - {tray_obj.tray_id}: Using BrassTrayId quantity={display_quantity}")
+                            
+                            # Try to get rejection reason from Brass_QC_Rejection_ReasonStore
+                            reason_store = Brass_QC_Rejection_ReasonStore.objects.filter(lot_id=lot_id).first()
+                            if reason_store and reason_store.batch_rejection_reason:
+                                rejection_details.append({
+                                    'rejected_quantity': display_quantity,
+                                    'rejection_reason': reason_store.batch_rejection_reason,
+                                    'rejection_reason_id': None,
+                                    'user': reason_store.user.username if reason_store.user else 'System'
+                                })
+                        else:
+                            # Last resort: Use the tray's current quantity
+                            display_quantity = tray_obj.tray_quantity or 0
+                            print(f"⚠️ [create_tray_data] LAST RESORT - {tray_obj.tray_id}: Using tray_obj quantity={display_quantity}")
+                    
                     print(f"🔍 [create_tray_data] TRAY REJECTION - {tray_obj.tray_id}: REJECTED with quantity={display_quantity}")
             else:
                 display_quantity = tray_obj.tray_quantity or 0
