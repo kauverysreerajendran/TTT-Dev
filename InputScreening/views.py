@@ -136,6 +136,7 @@ class IS_PickTable(APIView):
             (Q(rejected_ip_stock=False) | Q(rejected_ip_stock__isnull=True)) &
             (Q(accepted_tray_scan_status=False) | Q(accepted_tray_scan_status__isnull=True)),
             tray_scan_exists=True,
+            Moved_to_D_Picker=True,  # Only show lots fully submitted from Day Planning (excludes drafts)
 
         ).exclude(
             totalstockmodel__remove_lot=True    
