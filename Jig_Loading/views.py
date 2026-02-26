@@ -133,6 +133,12 @@ class JigView(TemplateView):
                 'last_process_module': stock.last_process_module,
                 'lot_status': lot_status,
                 'lot_status_class': lot_status_class,
+                # ✅ ISSUE #7 FIX: Add hold/release fields
+                'jig_hold_lot': getattr(stock, 'jig_hold_lot', False),
+                'jig_holding_reason': getattr(stock, 'jig_holding_reason', ''),
+                'jig_release_lot': getattr(stock, 'jig_release_lot', False),
+                'jig_release_reason': getattr(stock, 'jig_release_reason', ''),
+                'inprocess_remarks': getattr(stock, 'jig_pick_remarks', ''),
             })
         
         # Sort by Last Updated descending (newest first)
@@ -375,7 +381,9 @@ class JigAddModalDataView(TemplateView):
         # Get jig details if exists
         jig_details = None
         if jig_qr_id:
-            jig_details = JigDetails.objects.filter(jig_qr_id=jig_qr_id, lot_id=lot_id).first()
+            jig_details_model = globals().get('JigDetails')
+            if jig_details_model is not None:
+                jig_details = jig_details_model.objects.filter(jig_qr_id=jig_qr_id, lot_id=lot_id).first()
         
         # Set initial loaded_cases_qty to 0 (no trays scanned yet)
         modal_data['loaded_cases_qty'] = 0
@@ -1448,6 +1456,11 @@ class JigLoadingManualDraftAPIView(APIView):
             jig_obj.save()
             logger.info(f"💾 Jig {jig_id} marked as drafted for batch {batch_id} by {user.username}")
 
+        # --- Update TotalStockModel with jig_draft status ---
+        stock.jig_draft = True
+        stock.save()
+        logger.info(f"💾 TotalStockModel.jig_draft set to True for lot_id={lot_id}, batch_id={batch_id}")
+
         # --- Draft should NOT split lots - only save form data ---
         logger.info(f"💾 Draft saved without lot splitting - form data saved for later submission")
 
@@ -2258,3 +2271,189 @@ class JigCompletedDataAPIView(APIView):
             
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ✅ ISSUE #7 FIX: Hold/Unhold API for Jig Loading Pick Table
+class JigSaveHoldUnholdReasonAPIView(APIView):
+    """
+    Save hold/unhold reason for a lot in Jig Loading pick table
+    
+    POST with:
+    {
+        "lot_id": "LOT001",
+        "remark": "Reason text",
+        "action": "hold"  # or "unhold"
+    }
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        try:
+            data = request.data if hasattr(request, 'data') else json.loads(request.body.decode('utf-8'))
+            lot_id = data.get('lot_id')
+            remark = data.get('remark', '').strip()
+            action = data.get('action', '').strip().lower()
+
+            logger.info(f"🔒 Hold/Unhold request: lot_id={lot_id}, action={action}, remark={remark[:50] if remark else 'None'}")
+
+            if not lot_id or not remark or action not in ['hold', 'unhold']:
+                logger.error(f"❌ Missing or invalid parameters: lot_id={lot_id}, remark={bool(remark)}, action={action}")
+                return JsonResponse({'success': False, 'error': 'Missing or invalid parameters.'}, status=400)
+
+            # Get TotalStockModel
+            obj = TotalStockModel.objects.filter(lot_id=lot_id).first()
+            if not obj:
+                logger.error(f"❌ Lot not found: {lot_id}")
+                return JsonResponse({'success': False, 'error': 'LOT not found.'}, status=404)
+
+            if action == 'hold':
+                obj.jig_holding_reason = remark
+                obj.jig_hold_lot = True
+                obj.jig_release_reason = ''
+                obj.jig_release_lot = False
+                logger.info(f"✅ Lot {lot_id} HELD with reason: {remark[:50]}")
+            elif action == 'unhold':
+                obj.jig_release_reason = remark
+                obj.jig_hold_lot = False
+                obj.jig_release_lot = True
+                logger.info(f"✅ Lot {lot_id} RELEASED with reason: {remark[:50]}")
+
+            obj.save(update_fields=['jig_holding_reason', 'jig_release_reason', 'jig_hold_lot', 'jig_release_lot'])
+            return JsonResponse({'success': True, 'message': f'Lot {action}ed successfully.'})
+
+        except Exception as e:
+            logger.error(f"❌ Error in hold/unhold: {str(e)}")
+            return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+class JigSavePickRemarkAPIView(APIView):
+    """
+    Save text/audio remark for Jig Loading pick table row.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            data = request.data if hasattr(request, 'data') else json.loads(request.body.decode('utf-8'))
+            lot_id = (data.get('lot_id') or '').strip()
+            batch_id = (data.get('batch_id') or '').strip()
+            remark = (data.get('remark') or '').strip()
+            remark_type = (data.get('remark_type') or 'text').strip().lower()
+
+            if not lot_id or not batch_id:
+                return JsonResponse({'success': False, 'error': 'lot_id and batch_id are required.'}, status=400)
+            if not remark:
+                return JsonResponse({'success': False, 'error': 'Remark is required.'}, status=400)
+            if len(remark) > 255:
+                return JsonResponse({'success': False, 'error': 'Remark must be 255 characters or less.'}, status=400)
+            if remark_type not in ['text', 'audio']:
+                remark_type = 'text'
+
+            obj = TotalStockModel.objects.filter(lot_id=lot_id, batch_id__batch_id=batch_id).first()
+            if not obj:
+                return JsonResponse({'success': False, 'error': 'Lot not found for this batch.'}, status=404)
+
+            obj.jig_pick_remarks = f"[{remark_type}] {remark}"
+            obj.save(update_fields=['jig_pick_remarks'])
+
+            return JsonResponse({
+                'success': True,
+                'message': 'Remark saved successfully.',
+                'remark': obj.jig_pick_remarks,
+            })
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@method_decorator(login_required, name='dispatch')
+class JigCompositionView(TemplateView):
+    template_name = "JigLoading/Jig_Composition.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        lot_ids_param = self.request.GET.get('lot_ids', '')
+        lot_ids = [x.strip() for x in lot_ids_param.split(',') if x.strip()] if lot_ids_param else []
+        context['selected_lot_ids'] = lot_ids
+
+        color_palette = [
+            "#009688", "#0378bd", "#ffc107", "#28a745", "#dc3545",
+            "#8e44ad", "#e67e22", "#16a085", "#2c3e50", "#f39c12",
+            "#1abc9c", "#e84393", "#6c5ce7", "#fdcb6e", "#00b894"
+        ]
+        model_color_map = {}
+        color_index = 0
+
+        model_list = []
+        for lot_id in lot_ids:
+            tsm = TotalStockModel.objects.filter(lot_id=lot_id).first()
+            if not tsm:
+                continue
+
+            model_no = (
+                tsm.batch_id.model_stock_no.model_no
+                if tsm.batch_id and tsm.batch_id.model_stock_no
+                else "Unknown"
+            )
+
+            if model_no not in model_color_map:
+                model_color_map[model_no] = color_palette[color_index % len(color_palette)]
+                color_index += 1
+            color = model_color_map[model_no]
+
+            original_qty = tsm.jig_physical_qty if (tsm.jig_physical_qty_edited and tsm.jig_physical_qty) else (tsm.brass_audit_accepted_qty or 0)
+
+            # Keep composition focused on remaining non-draft jig details for this lot.
+            # Some branches do not have JigDetails model; guard to avoid runtime NameError.
+            total_used_qty = 0
+            jig_details_model = globals().get('JigDetails')
+            if jig_details_model is not None:
+                jig_details = jig_details_model.objects.filter(lot_id=lot_id, draft_save=False)
+                for jig_detail in jig_details:
+                    if isinstance(jig_detail.no_of_model_cases, int):
+                        total_used_qty += jig_detail.no_of_model_cases
+                    elif isinstance(jig_detail.no_of_model_cases, str) and jig_detail.no_of_model_cases.isdigit():
+                        total_used_qty += int(jig_detail.no_of_model_cases)
+
+            remaining_qty = max(0, original_qty - total_used_qty)
+            case_qty = remaining_qty if remaining_qty > 0 else original_qty
+
+            model_list.append({
+                "model_no": model_no,
+                "case_qty": case_qty,
+                "case_numbers": list(range(1, case_qty + 1)),
+                "color": color,
+            })
+
+        all_cases = []
+        for model in model_list:
+            for case in model["case_numbers"]:
+                all_cases.append({
+                    "model_no": model["model_no"],
+                    "case_qty": model["case_qty"],
+                    "case_number": case,
+                    "color": model["color"],
+                })
+
+        cards = []
+        for i in range(0, len(all_cases), 12):
+            chunk = all_cases[i:i + 12]
+            models_in_card = []
+            seen = set()
+            for item in chunk:
+                if item["model_no"] not in seen:
+                    models_in_card.append({
+                        "model_no": item["model_no"],
+                        "case_qty": item["case_qty"],
+                        "color": item["color"],
+                    })
+                    seen.add(item["model_no"])
+            cards.append({
+                "models": models_in_card,
+                "cases": chunk,
+                "color": chunk[0]["color"] if chunk else "#01524a",
+            })
+
+        context["cards"] = cards
+        return context

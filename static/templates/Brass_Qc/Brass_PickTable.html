@@ -4938,6 +4938,8 @@ function addTrayIdValidation(lotId) {
                 errorMessage = `Tray ID "${trayId}" is not in the same lot (Row ${input.dataset.row}).`;
               } else if (data.error === 'Already rejected in Brass QC') {
                 errorMessage = `Tray ID "${trayId}" is already rejected (Row ${input.dataset.row}).`;
+              } else if (data.error === 'Already rejected in Input Screening') {
+                errorMessage = `Tray ID "${trayId}" is already rejected in Input Screening (Row ${input.dataset.row}).`;
               }
             }
             errorSpan.innerHTML = errorMessage;
@@ -5743,7 +5745,12 @@ function handleTrayWiseRejection() {
           // Method 1: Check error flag
           if (trayInput._hasError === true) {
             hasBlockingError = true;
-            errorReason = 'Input has _hasError = true';
+            // ✅ FIXED: Get actual error message from error div instead of showing "_hasError"
+            let actualErrorMessage = 'Invalid tray ID';
+            if (errorDiv && errorDiv.textContent) {
+              actualErrorMessage = errorDiv.textContent.trim();
+            }
+            errorReason = actualErrorMessage;
           }
           
           // Method 2: Check error div
@@ -5753,9 +5760,11 @@ function handleTrayWiseRejection() {
                 errorText.includes('invalid') || 
                 errorText.includes('not found') ||
                 errorText.includes('different lot') ||
-                errorText.includes('duplicate')) {
+                errorText.includes('duplicate') ||
+                errorText.includes('already rejected')) {
               hasBlockingError = true;
-              errorReason = `Error div shows: "${errorDiv.textContent}"`;
+              // ✅ FIXED: Show actual error message instead of technical description
+              errorReason = errorDiv.textContent.trim();
             }
           }
           
@@ -5778,7 +5787,13 @@ function handleTrayWiseRejection() {
           
           if (hasBlockingError) {
             shouldAddTray = false;
-            validationErrorMessage = `Invalid Tray ID "${trayId}" in row ${index + 1}: ${errorReason}`;
+            // ✅ FIXED: Check for "already rejected" errors and prevent proceeding
+            const isAlreadyRejected = errorReason.toLowerCase().includes('already rejected');
+            if (isAlreadyRejected) {
+              validationErrorMessage = `${errorReason}. Please scan with valid tray to proceed.`;
+            } else {
+              validationErrorMessage = `Invalid Tray ID "${trayId}" in row ${index + 1}: ${errorReason}`;
+            }
             console.log(`REJECTED: ${errorReason}`);
           } else {
             console.log(`Tray ${trayId} passed all validation checks`);
@@ -5847,7 +5862,10 @@ function handleTrayWiseRejection() {
       msgDiv.style.color = "#d32f2f";
       msgDiv.textContent = invalidTrayIdMessage;
     }
-    document.getElementById("proceedButton").disabled = false;
+    // ✅ FIXED: Keep proceed button disabled for "already rejected" errors
+    const isAlreadyRejectedError = invalidTrayIdMessage && 
+        invalidTrayIdMessage.toLowerCase().includes('already rejected');
+    document.getElementById("proceedButton").disabled = isAlreadyRejectedError;
     return;
   }
 
@@ -6140,8 +6158,19 @@ function addSimpleTableTrayValidation() {
 
         // ADD THIS: On-the-fly validation as user types
         input.addEventListener('input', function() {
+          // Clear error immediately when user starts typing
+          if (this._hasError) {
+            this._hasError = false;
+            const errorDiv = this.parentElement.querySelector('.tray-id-error') || this.parentElement.querySelector('.rejection-tray-error');
+            if (errorDiv) {
+              errorDiv.textContent = '';
+              errorDiv.style.display = 'none';
+            }
+            this.style.border = '';
+            this.style.backgroundColor = '';
+          }
           // Only show error, do NOT clear or block input
-          validateTrayInput(this, /* no focus/select, just show error */);
+          validateTrayInput(this);
         });
 
 function validateTrayInput(input) {
