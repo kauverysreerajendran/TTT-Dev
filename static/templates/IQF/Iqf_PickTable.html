@@ -4671,15 +4671,22 @@ function loadTrayRejectionDraft(draftData) {
       console.log('❌ [DRAFT-LOAD] No tray_rejections array found or invalid format');
     }
     
-    // ✅ FIXED: Restore accepted trays AFTER table updates have completed
+    // ✅ FIXED: Restore accepted trays AFTER table updates have completed with RETRY logic
     if (draftData.accepted_trays && Array.isArray(draftData.accepted_trays)) {
       console.log('🔄 [DRAFT-LOAD] Restoring accepted trays data:', draftData.accepted_trays);
       
-      // Add delay to ensure table is fully rendered after quantity changes
-      setTimeout(() => {
+      let retryCount = 0;
+      const loadAcceptedTrays = () => {
         const rows = document.querySelectorAll('#accepted-tray-table-body tr');
-        console.log(`🔍 [DRAFT-LOAD] Found ${rows.length} accepted tray rows for restoration`);
+        console.log(`🔍 [DRAFT-LOAD] Found ${rows.length} accepted tray rows for restoration (Attempt ${retryCount + 1})`);
         
+        // Wait because updateAcceptedTrayTable rebuilds this async
+        if (rows.length === 0 && retryCount < 20) {
+          retryCount++;
+          setTimeout(loadAcceptedTrays, 200);
+          return;
+        }
+
         draftData.accepted_trays.forEach((tray, index) => {
           if (rows[index] && tray.tray_id) {
             const trayInput = rows[index].querySelector('.accepted-tray-id-input');
@@ -4696,7 +4703,11 @@ function loadTrayRejectionDraft(draftData) {
             console.log(`⚠️ [DRAFT-LOAD] Row ${index + 1} not found or no tray_id in data`);
           }
         });
-      }, 200); // Small delay to ensure table updates are complete
+      };
+
+      // Start the retry logic
+      setTimeout(loadAcceptedTrays, 300);
+      
     } else {
       console.log('ℹ️ [DRAFT-LOAD] No accepted_trays data to restore');
     }

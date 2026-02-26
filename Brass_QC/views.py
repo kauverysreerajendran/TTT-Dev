@@ -284,74 +284,164 @@ def send_brass_audit_back_to_brass_qc(lot_id, user):
             print(f"❌ [REVERSE TRANSFER] Lot {lot_id} not found in TotalStockModel")
             return False
         
-        # ✅ STEP 1: Clear Brass Audit data (to prevent duplication)
-        # Delete Brass Audit tray records for this lot
-        from BrassAudit.models import BrassAuditTrayId, Brass_Audit_Accepted_TrayID_Store, Brass_Audit_Rejected_TrayScan
-        deleted_audit_trays = BrassAuditTrayId.objects.filter(lot_id=lot_id).delete()
-        deleted_accepted_store = Brass_Audit_Accepted_TrayID_Store.objects.filter(lot_id=lot_id).delete()
-        deleted_rejected_scans = Brass_Audit_Rejected_TrayScan.objects.filter(lot_id=lot_id).delete()
-        print(f"🗑️ [REVERSE TRANSFER] Cleared Brass Audit data for lot {lot_id}: {deleted_audit_trays[0]} trays, {deleted_accepted_store[0]} accepted, {deleted_rejected_scans[0]} rejected scans")
+        # ✅ STEP 1: Copy tray data from Brass Audit into Brass QC BEFORE clearing
+        from BrassAudit.models import (
+            BrassAuditTrayId, Brass_Audit_Accepted_TrayID_Store, Brass_Audit_Rejected_TrayScan,
+            Brass_Audit_Accepted_TrayScan, Brass_Audit_Draft_Store, Brass_Audit_TopTray_Draft_Store,
+            Brass_Audit_Rejection_ReasonStore
+        )
         
-        # ✅ STEP 2: Update flags to enable in Brass QC (reuse existing state)
-        stock.send_brass_audit_to_qc = True   # ✅ FIX BUG 1: Set this to True so lot appears in Brass QC pick table
-        stock.brass_audit_rejection = False   # Reset rejection flag so lot can appear in Brass QC
-        stock.brass_audit_accptance = False   # Reset acceptance (prevents appearance in Brass Audit)
-        stock.brass_qc_accptance = False      # ✅ FIX BUG 1: Reset this to prevent Brass Audit inclusion
+        # Read Brass Audit tray data BEFORE deleting it
+        # ✅ FIX: Only copy NON-REJECTED audit trays. For batch rejections, all trays are
+        # marked rejected_tray=True BEFORE this function is called, so we correctly fall
+        # through to the recalculation path.
+        audit_trays = list(BrassAuditTrayId.objects.filter(lot_id=lot_id, rejected_tray=False))
+        print(f"📦 [REVERSE TRANSFER] Found {len(audit_trays)} non-rejected BrassAuditTrayId records for lot {lot_id}")
+        
+        if audit_trays:
+            # Delete old BrassTrayId records — they have stale data from the first pass
+            old_count = BrassTrayId.objects.filter(lot_id=lot_id).delete()[0]
+            print(f"🗑️ [REVERSE TRANSFER] Deleted {old_count} old BrassTrayId records for lot {lot_id}")
+            
+            # Create new BrassTrayId records from Brass Audit data
+            batch_id = stock.batch_id
+            for audit_tray in audit_trays:
+                BrassTrayId.objects.create(
+                    tray_id=audit_tray.tray_id,
+                    lot_id=lot_id,
+                    batch_id=batch_id,
+                    date=timezone.now(),
+                    user=user,
+                    tray_quantity=audit_tray.tray_quantity,
+                    top_tray=audit_tray.top_tray,
+                    IP_tray_verified=True,
+                    tray_type=audit_tray.tray_type,
+                    tray_capacity=audit_tray.tray_capacity,
+                    new_tray=False,
+                    delink_tray=False,
+                    rejected_tray=False,  # Reset for fresh processing in Brass QC
+                )
+                print(f"   📦 Copied tray: {audit_tray.tray_id} (qty={audit_tray.tray_quantity}, top_tray={audit_tray.top_tray})")
+            print(f"✅ [REVERSE TRANSFER] Created {len(audit_trays)} new BrassTrayId records from Brass Audit data")
+        else:
+            # No audit trays — just reset existing BrassTrayId records, BUT recalculate their 
+            # distributions based on the potentially reduced physical quantity!
+            # We ONLY recalculate active (non-delinked) trays.
+            brass_trays = BrassTrayId.objects.filter(lot_id=lot_id, delink_tray=False).order_by('tray_id')
+            if brass_trays.exists():
+                # Re-calculate trays. If it was rejected in Audit, physical qty dropped.
+                available_qty = stock.brass_audit_physical_qty if getattr(stock, 'brass_audit_physical_qty', 0) > 0 else stock.brass_physical_qty
+                
+                remaining_qty = available_qty
+                for tray in brass_trays:
+                    capacity = tray.tray_capacity or 16  # fallback to 16
+                    if remaining_qty <= 0:
+                        # Tray has no accepted items. Since physical items dropped due to REJECTIONS,
+                        # this tray now holds the rejected items. So it is NOT delinked, it is rejected!
+                        tray.tray_quantity = 0
+                        tray.top_tray = False
+                        tray.delink_tray = False
+                        tray.rejected_tray = True
+                        tray.save(update_fields=['tray_quantity', 'top_tray', 'delink_tray', 'rejected_tray'])
+                    elif remaining_qty >= capacity:
+                        tray.tray_quantity = capacity
+                        tray.top_tray = False
+                        tray.delink_tray = False
+                        tray.rejected_tray = False
+                        tray.save(update_fields=['tray_quantity', 'top_tray', 'delink_tray', 'rejected_tray'])
+                        remaining_qty -= capacity
+                    else:
+                        tray.tray_quantity = remaining_qty
+                        tray.top_tray = True
+                        tray.delink_tray = False
+                        tray.rejected_tray = False
+                        tray.save(update_fields=['tray_quantity', 'top_tray', 'delink_tray', 'rejected_tray'])
+                        remaining_qty = 0
+                
+                print(f"🔄 [REVERSE TRANSFER] Recalculated {brass_trays.count()} BrassTrayId records to match new physical qty: {available_qty}")
+            else:
+                print(f"⚠️ [REVERSE TRANSFER] No tray records found for lot {lot_id}")
+        
+        # ✅ STEP 2: Clear ALL Brass Audit data (now safe — tray data has been copied)
+        BrassAuditTrayId.objects.filter(lot_id=lot_id).delete()
+        Brass_Audit_Accepted_TrayID_Store.objects.filter(lot_id=lot_id).delete()
+        Brass_Audit_Rejected_TrayScan.objects.filter(lot_id=lot_id).delete()
+        Brass_Audit_Accepted_TrayScan.objects.filter(lot_id=lot_id).delete()
+        Brass_Audit_Draft_Store.objects.filter(lot_id=lot_id).delete()
+        Brass_Audit_TopTray_Draft_Store.objects.filter(lot_id=lot_id).delete()
+        Brass_Audit_Rejection_ReasonStore.objects.filter(lot_id=lot_id).delete()
+        print(f"🗑️ [REVERSE TRANSFER] Cleared ALL Brass Audit data for lot {lot_id}")
+        
+        # ✅ STEP 3: Update flags AND quantities to enable in Brass QC
+        stock.send_brass_audit_to_qc = True   # So lot appears in Brass QC pick table
+        # NOTE: brass_audit_rejection stays True so lot disappears from Brass Audit pick table
+        stock.brass_audit_accptance = False   # Reset acceptance
+        stock.brass_qc_accptance = False      # Reset to prevent Brass Audit inclusion
+        stock.brass_qc_rejection = False      # Reset Brass QC rejection
+        stock.brass_qc_few_cases_accptance = False  # Reset few cases
         stock.brass_audit_few_cases_accptance = False
         stock.brass_audit_rejection_tray_scan_status = False
         stock.brass_audit_accepted_tray_scan_status = False
         stock.brass_audit_onhold_picking = False
         stock.brass_audit_draft = False
-        stock.brass_qc_accepted_qty_verified = False  # ✅ Reset verification so user must manually check
+        stock.brass_qc_accepted_qty_verified = False  # Reset so user must re-verify
+        stock.brass_draft = False             # Reset Brass QC draft status
+        stock.brass_onhold_picking = False    # Reset hold status
+        stock.brass_accepted_tray_scan_status = False  # Reset tray scan status
+        stock.accepted_tray_scan_status = False  # Reset IP tray scan status
+        
+        # ✅ FIX: Update quantities from Brass Audit data (not stale Brass QC values)
+        audit_qty = stock.brass_audit_physical_qty or stock.total_IP_accpeted_quantity or 0
+        print(f"🔢 [REVERSE TRANSFER] Setting total_IP_accpeted_quantity = {audit_qty} (from brass_audit_physical_qty={stock.brass_audit_physical_qty})")
+        stock.total_IP_accpeted_quantity = audit_qty
+        
+        # ✅ FIX: Reset Brass QC quantity fields so user can re-enter them fresh
+        stock.brass_physical_qty = 0
+        stock.brass_missing_qty = 0
+        stock.brass_qc_accepted_qty = 0
+        stock.brass_qc_after_rejection_qty = 0
+        stock.brass_physical_qty_edited = False
+        
         stock.save(update_fields=[
-            'send_brass_audit_to_qc', 'brass_audit_rejection', 'brass_audit_accptance', 'brass_qc_accptance',
+            'send_brass_audit_to_qc', 'brass_audit_accptance', 'brass_qc_accptance',
+            'brass_qc_rejection', 'brass_qc_few_cases_accptance',
             'brass_audit_few_cases_accptance', 'brass_audit_rejection_tray_scan_status',
             'brass_audit_accepted_tray_scan_status', 'brass_audit_onhold_picking', 'brass_audit_draft',
-            'brass_qc_accepted_qty_verified'
+            'brass_qc_accepted_qty_verified', 'brass_draft', 'brass_onhold_picking',
+            'brass_accepted_tray_scan_status', 'accepted_tray_scan_status',
+            'total_IP_accpeted_quantity', 'brass_physical_qty', 'brass_missing_qty',
+            'brass_qc_accepted_qty', 'brass_qc_after_rejection_qty', 'brass_physical_qty_edited'
         ])
-        print(f"✅ [REVERSE TRANSFER] Updated flags for lot {lot_id} to enable in Brass QC")
-        
-        # ✅ STEP 3: Ensure existing BrassTrayId records are available (no new creation)
-        # Reset any flags on existing trays to make them available for Brass QC
-        brass_trays = BrassTrayId.objects.filter(lot_id=lot_id)
-        if brass_trays.exists():
-            # Reset flags to make trays available for processing again
-            brass_trays.update(
-                rejected_tray=False,  # Reset rejection flag
-                delink_tray=False     # Ensure not marked as delinked
-            )
-            print(f"🔄 [REVERSE TRANSFER] Reused {brass_trays.count()} existing BrassTrayId records for lot {lot_id}")
-            
-            # Debug: Show tray details
-            for tray in brass_trays:
-                print(f"   📦 Reused tray: {tray.tray_id} (qty={tray.tray_quantity}, top_tray={tray.top_tray})")
-        else:
-            print(f"⚠️ [REVERSE TRANSFER] No existing BrassTrayId records found for lot {lot_id} (this might be an issue)")
+        print(f"✅ [REVERSE TRANSFER] Updated flags AND quantities for lot {lot_id}")
         
         # ✅ STEP 4: Reset TrayId table flags to enable processing
         from modelmasterapp.models import TrayId
+        brass_trays = BrassTrayId.objects.filter(lot_id=lot_id)
         tray_ids_in_lot = brass_trays.values_list('tray_id', flat=True)
         if tray_ids_in_lot:
             updated_tray_count = TrayId.objects.filter(
                 lot_id=lot_id,
                 tray_id__in=tray_ids_in_lot
             ).update(
-                brass_rejected_tray=False,  # Reset rejection flag
-                rejected_tray=False         # Ensure not marked as rejected
+                brass_rejected_tray=False,
+                rejected_tray=False
             )
             print(f"✅ [REVERSE TRANSFER] Reset {updated_tray_count} TrayId records for Brass QC processing")
         
-        # ✅ STEP 5: Clear any Brass QC accepted data that might interfere
-        # Clear any lingering accepted data to start fresh
+        # ✅ STEP 5: Clear any Brass QC processed/draft data that might interfere
         Brass_Qc_Accepted_TrayID_Store.objects.filter(lot_id=lot_id).delete()
         Brass_Qc_Accepted_TrayScan.objects.filter(lot_id=lot_id).delete()
-        print(f"🗑️ [REVERSE TRANSFER] Cleared any lingering Brass QC accepted data for lot {lot_id}")
+        Brass_QC_Draft_Store.objects.filter(lot_id=lot_id).delete()
+        Brass_TopTray_Draft_Store.objects.filter(lot_id=lot_id).delete()
+        Brass_QC_Rejection_ReasonStore.objects.filter(lot_id=lot_id).delete()
+        Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id).delete()
+        print(f"🗑️ [REVERSE TRANSFER] Cleared ALL Brass QC stale data for lot {lot_id}")
         
         # ✅ STEP 6: Automatically recalculate top tray for Brass QC
         auto_calculate_top_tray(lot_id)
-        print(f"✅ [REVERSE TRANSFER] Automatically recalculated top tray for Brass QC lot {lot_id}")
+        print(f"✅ [REVERSE TRANSFER] Recalculated top tray for lot {lot_id}")
         
-        print(f"✅ [REVERSE TRANSFER] Successfully sent lot {lot_id} back to Brass QC (reused existing trays)")
+        print(f"✅ [REVERSE TRANSFER] Successfully sent lot {lot_id} back to Brass QC with fresh Audit tray data")
         return True
         
     except Exception as e:
@@ -454,9 +544,12 @@ class BrassPickTableView(APIView):
             |
             Q(send_brass_audit_to_qc=True)
         ).exclude(
-            Q(brass_audit_rejection=True)  # ✅ Exclude old lots that were rejected at Brass Audit
+            # ✅ FIX: Only exclude rejected Audit lots that are NOT being sent back to Brass QC
+            Q(brass_audit_rejection=True) & ~Q(send_brass_audit_to_qc=True)
         ).exclude(
-            Q(send_brass_audit_to_qc=True, brass_physical_qty=0) # ✅ Exclude "ghost" lots created by bug
+            # ✅ FIX: Only exclude true "ghost" lots (both physical AND accepted qty are 0)
+            # Don't exclude lots returning from Brass Audit where brass_physical_qty was reset to 0
+            Q(send_brass_audit_to_qc=True, brass_physical_qty=0, total_IP_accpeted_quantity=0)
         ).distinct()
 
         # Apply sorting if requested
@@ -1294,6 +1387,18 @@ class BQ_Accepted_form(APIView):
             total_stock_data.last_process_module = "Brass QC"
             total_stock_data.bq_last_process_date_time = timezone.now()  # Set the last process date/time
             total_stock_data.send_brass_audit_to_qc = False
+            
+            # ✅ FIX: Reset ALL Brass Audit flags so the lot can re-enter Brass Audit cleanly
+            # This is critical for lots returning from a previous Brass Audit batch rejection
+            total_stock_data.brass_audit_rejection = False
+            total_stock_data.brass_audit_accptance = False
+            total_stock_data.brass_audit_few_cases_accptance = False
+            total_stock_data.brass_audit_onhold_picking = False
+            total_stock_data.brass_audit_draft = False
+            total_stock_data.brass_audit_rejection_tray_scan_status = False
+            total_stock_data.brass_audit_accepted_tray_scan_status = False
+            total_stock_data.brass_audit_accepted_qty = 0
+            
             total_stock_data.save()
             
             # ✅ NEW: Transfer Brass QC accepted data to Brass Audit tables
@@ -3171,8 +3276,8 @@ def brass_get_delink_tray_data(request):
         if not original_distribution:
             return Response({'success': True, 'delink_trays': [], 'message': 'No tray distribution found'})
 
-        # 1. Fetch all currently associated trays (exclude already-rejected ones)
-        tray_objs = list(BrassTrayId.objects.filter(lot_id=lot_id, rejected_tray=False).order_by('tray_quantity', 'id'))
+        # 1. Fetch all currently associated trays (exclude already-rejected and already-delinked ones)
+        tray_objs = list(BrassTrayId.objects.filter(lot_id=lot_id, rejected_tray=False, delink_tray=False).order_by('tray_quantity', 'id'))
         tray_count = len(tray_objs)
         
         if tray_count == 0:
@@ -3184,7 +3289,7 @@ def brass_get_delink_tray_data(request):
         rejections = list(Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id))
         total_rejected = sum(int(r.rejected_tray_quantity or 0) for r in rejections)
         missing_qty = stock.brass_missing_qty or 0
-        original_physical_qty = stock.brass_physical_qty or 0
+        original_physical_qty = stock.brass_audit_physical_qty if getattr(stock, 'brass_audit_physical_qty', 0) > 0 else (stock.brass_physical_qty or 0)
         # brass_physical_qty is ALREADY (lot_qty - missing_qty), so do NOT subtract missing_qty again
         final_accepted_qty = max(0, original_physical_qty - total_rejected)
         
@@ -3310,9 +3415,11 @@ def get_brass_actual_tray_distribution_for_delink(lot_id, stock):
     try:
         print(f"🔍 [get_brass_actual_tray_distribution_for_delink] Getting distribution for lot_id: {lot_id}")
         
-        # ✅ ALWAYS use brass_physical_qty for delink calculations
+        # ✅ ALWAYS use the most updated physical qty for delink calculations
         total_qty = 0
-        if hasattr(stock, 'brass_missing_qty') and stock.brass_missing_qty:
+        if hasattr(stock, 'brass_audit_physical_qty') and getattr(stock, 'brass_audit_physical_qty', 0) > 0:
+            total_qty = stock.brass_audit_physical_qty
+        elif hasattr(stock, 'brass_missing_qty') and stock.brass_missing_qty:
             # If brass_missing_qty is present, use IP accepted quantity
             total_qty = getattr(stock, 'total_IP_accpeted_quantity', 0)
         elif hasattr(stock, 'brass_physical_qty') and stock.brass_physical_qty:
@@ -3858,7 +3965,6 @@ def brass_top_tray_check_tray_id(request):
         })
         
         
-#=========================================================
 
 # This endpoint retrieves top tray scan data for a given lot_id
 @api_view(['GET'])
@@ -3880,9 +3986,13 @@ def brass_get_accepted_tray_scan_data(request):
         reason_store = Brass_QC_Rejection_ReasonStore.objects.filter(lot_id=lot_id).first()
         total_rejection_qty = reason_store.total_rejection_quantity if reason_store else 0
 
-        # ✅ UPDATED: Only use brass_physical_qty
+        # ✅ FIX: Fall back to total_IP_accpeted_quantity when brass_physical_qty is 0
+        # (e.g., lot just returned from Brass Audit with reset qty)
         if stock.brass_physical_qty and stock.brass_physical_qty > 0:
             brass_physical_qty = stock.brass_physical_qty
+        elif stock.total_IP_accpeted_quantity and stock.total_IP_accpeted_quantity > 0:
+            brass_physical_qty = stock.total_IP_accpeted_quantity
+            print(f"📐 [brass_get_accepted_tray_scan_data] Using total_IP_accpeted_quantity={brass_physical_qty} (brass_physical_qty is 0)")
         else:
             return Response({'success': False, 'error': 'No brass physical quantity available'}, status=400)
 
@@ -3893,39 +4003,45 @@ def brass_get_accepted_tray_scan_data(request):
         print(f"📐 [brass_get_accepted_tray_scan_data] total_rejection_qty = {total_rejection_qty}")
         print(f"📐 [brass_get_accepted_tray_scan_data] available_qty = {available_qty}")
 
-        # ✅ NEW: Check if this is for delink-only mode (when available_qty = 0 but have rejections with NEW trays)
+        # ✅ Check if this is for delink-only mode
         is_delink_only_case = (available_qty <= 0 and total_rejection_qty > 0)
         
         if is_delink_only_case:
             print(f"🚨 [brass_get_accepted_tray_scan_data] Delink-only case detected: all pieces rejected")
-            # ✅ NEW: For delink-only case, set minimal values but still allow the process to continue
             return Response({
                 'success': True,
                 'model_no': model_no,
                 'tray_capacity': tray_capacity,
                 'brass_physical_qty': brass_physical_qty,
                 'total_rejection_qty': total_rejection_qty,
-                'available_qty': 0,  # ✅ No available quantity
-                'top_tray_qty': 0,   # ✅ No top tray quantity
+                'available_qty': 0,
+                'top_tray_qty': 0,
                 'has_draft': False,
                 'draft_tray_id': "",
-                'is_delink_only': True,  # ✅ NEW: Flag to indicate delink-only mode
+                'is_delink_only': True,
                 'delink_only_reason': 'All pieces rejected - only delink scanning needed'
             })
 
-        # ✅ EXISTING: Normal case when there's available quantity
         if available_qty <= 0:
             return Response({'success': False, 'error': 'No available quantity for acceptance after rejections'}, status=400)
 
-        # ✅ CORRECTED: Calculate top tray quantity using available_qty after rejections
-        full_trays = available_qty // tray_capacity
-        top_tray_qty = available_qty % tray_capacity
+        # ✅ FIX: Use actual BrassTrayId data for top tray qty instead of recalculating
+        brass_trays = BrassTrayId.objects.filter(lot_id=lot_id, delink_tray=False, rejected_tray=False).order_by('tray_id')
+        top_tray_record = brass_trays.filter(top_tray=True).first()
+        
+        if top_tray_record:
+            # Use the actual top tray qty from the BrassTrayId record
+            top_tray_qty = top_tray_record.tray_quantity or 0
+            print(f"📊 [brass_get_accepted_tray_scan_data] Using actual top tray qty from BrassTrayId: {top_tray_qty}")
+        else:
+            # Fallback: calculate from available_qty
+            full_trays = available_qty // tray_capacity
+            top_tray_qty = available_qty % tray_capacity
+            if top_tray_qty == 0 and available_qty > 0:
+                top_tray_qty = tray_capacity
+            print(f"📊 [brass_get_accepted_tray_scan_data] Calculated top tray qty: {top_tray_qty}")
 
-        # ✅ CORRECTED: If remainder is 0 and we have quantity, the last tray should be full capacity
-        if top_tray_qty == 0 and available_qty > 0:
-            top_tray_qty = tray_capacity
-
-        print(f"📊 [brass_get_accepted_tray_scan_data] Tray calculation: {available_qty} qty = {full_trays} full trays + {top_tray_qty} top tray")
+        print(f"📊 [brass_get_accepted_tray_scan_data] available_qty={available_qty}, top_tray_qty={top_tray_qty}")
 
         # Check for existing draft data
         has_draft = Brass_Qc_Accepted_TrayID_Store.objects.filter(lot_id=lot_id, is_draft=True).exists()
@@ -3946,7 +4062,7 @@ def brass_get_accepted_tray_scan_data(request):
             'top_tray_qty': top_tray_qty,
             'has_draft': has_draft,
             'draft_tray_id': draft_tray_id,
-            'is_delink_only': False  # ✅ Normal mode
+            'is_delink_only': False
         })
     except Exception as e:
         traceback.print_exc()
@@ -5936,44 +6052,16 @@ class PickTrayIdList_Complete_APIView(APIView):
 
         # Determine which tray model to use based on flags
         if send_brass_audit_to_qc:
-            # Use BrassAuditTrayId for audit trays
-            print(f"🔍 [DEBUG] Checking BrassAuditTrayId records for:")
-            print(f"   batch_id: {batch_id}")
-            print(f"   lot_id: {lot_id}")
-            
-            # First check if ANY records exist for this batch/lot
-            all_records = BrassAuditTrayId.objects.filter(
-                batch_id__batch_id=batch_id,
-                lot_id=lot_id
-            )
-            print(f"   Total BrassAuditTrayId records found (no filters): {all_records.count()}")
-            
-            if all_records.exists():
-                # Show details of existing records
-                for record in all_records[:5]:  # Show first 5 records
-                    print(f"     Record: tray_id={record.tray_id}, qty={getattr(record, 'tray_quantity', 'N/A')}, "
-                          f"rejected={getattr(record, 'rejected_tray', 'N/A')}, "
-                          f"delinked={getattr(record, 'delink_tray', 'N/A')}")
-            
-            # Apply full filtering
-            base_queryset = BrassAuditTrayId.objects.filter(
+            # ✅ FIX: Use BrassTrayId directly for lots returning from Brass Audit
+            # (BrassAuditTrayId records were deleted during reverse flow,
+            #  tray data was copied into BrassTrayId)
+            base_queryset = BrassTrayId.objects.filter(
                 batch_id__batch_id=batch_id,
                 tray_quantity__gt=0,
-                lot_id=lot_id,
-                rejected_tray=True,
+                lot_id=lot_id
             )
-            print(f"   After applying filters (qty>0, rejected): {base_queryset.count()}")
-            tray_model_used = 'BrassAuditTrayId'
-            
-            # Fallback: If no trays found, use BrassTrayId
-            if base_queryset.count() == 0:
-                base_queryset = BrassTrayId.objects.filter(
-                    batch_id__batch_id=batch_id,
-                    tray_quantity__gt=0,
-                    lot_id=lot_id
-                )
-                tray_model_used = 'BrassTrayId'
-                print(f"   Fallback: Using BrassTrayId, found {base_queryset.count()} trays")
+            tray_model_used = 'BrassTrayId'
+            print(f"🔍 [PickTrayIdList] send_brass_audit_to_qc=True, using BrassTrayId directly: {base_queryset.count()} trays found")
         
         elif send_brass_qc:
             # Use IQFTrayId for accepted trays
@@ -5997,9 +6085,10 @@ class PickTrayIdList_Complete_APIView(APIView):
                 )
                 tray_model_used = 'BrassTrayId'
         else:
-            # If brass_qc_accepted_qty_verified is True, show BrassTrayId, else show IPTrayId
-            total_stock = TotalStockModel.objects.filter(lot_id=lot_id).first()
-            if total_stock and getattr(total_stock, 'brass_qc_accepted_qty_verified', False):
+            # If lot was previously processed in Brass QC or verified, always show the latest BrassTrayId data.
+            # This handles lots returning from Brass Audit that had their flags reset.
+            has_brass_history = BrassTrayId.objects.filter(lot_id=lot_id).exists()
+            if total_stock and (getattr(total_stock, 'brass_qc_accepted_qty_verified', False) or has_brass_history):
                 base_queryset = BrassTrayId.objects.filter(
                     batch_id__batch_id=batch_id,
                     tray_quantity__gt=0,
@@ -6017,7 +6106,6 @@ class PickTrayIdList_Complete_APIView(APIView):
                     delink_tray=False
                 )
                 tray_model_used = 'IPTrayId'
-            tray_model_used = 'IPTrayId'
 
         # ✅ FIXED: Global exclusion of rejected trays (Robust Filter)
         # Ensure we don't show any trays that are rejected in Brass QC, regardless of the source model
@@ -6202,44 +6290,16 @@ class AfterCheckPickTrayIdList_Complete_APIView(APIView):
 
         # Determine which tray model to use based on flags
         if send_brass_audit_to_qc:
-            # Use BrassAuditTrayId for audit trays
-            print(f"🔍 [DEBUG] Checking BrassAuditTrayId records for:")
-            print(f"   batch_id: {batch_id}")
-            print(f"   lot_id: {lot_id}")
-            
-            # First check if ANY records exist for this batch/lot
-            all_records = BrassAuditTrayId.objects.filter(
-                batch_id__batch_id=batch_id,
-                lot_id=lot_id
-            )
-            print(f"   Total BrassAuditTrayId records found (no filters): {all_records.count()}")
-            
-            if all_records.exists():
-                # Show details of existing records
-                for record in all_records[:5]:  # Show first 5 records
-                    print(f"     Record: tray_id={record.tray_id}, qty={getattr(record, 'tray_quantity', 'N/A')}, "
-                          f"rejected={getattr(record, 'rejected_tray', 'N/A')}, "
-                          f"delinked={getattr(record, 'delink_tray', 'N/A')}")
-            
-            # Apply full filtering - show ALL trays (accepted + rejected)
-            queryset = BrassAuditTrayId.objects.filter(
+            # ✅ FIX: Use BrassTrayId directly for lots returning from Brass Audit
+            # (BrassAuditTrayId records were deleted during reverse flow,
+            #  tray data was copied into BrassTrayId)
+            queryset = BrassTrayId.objects.filter(
                 batch_id__batch_id=batch_id,
                 tray_quantity__gt=0,
-                lot_id=lot_id,
-                # Removed rejected_tray=True to show ALL trays including accepted
+                lot_id=lot_id
             )
-            print(f"   After applying filters (qty>0, all trays): {queryset.count()}")
-            tray_model_used = 'BrassAuditTrayId'
-            
-            # Fallback: If no trays found, use BrassTrayId
-            if queryset.count() == 0:
-                queryset = BrassTrayId.objects.filter(
-                    batch_id__batch_id=batch_id,
-                    tray_quantity__gt=0,
-                    lot_id=lot_id
-                )
-                tray_model_used = 'BrassTrayId'
-                print(f"   Fallback: Using BrassTrayId, found {queryset.count()} trays")
+            tray_model_used = 'BrassTrayId'
+            print(f"🔍 [AfterCheck] send_brass_audit_to_qc=True, using BrassTrayId directly: {queryset.count()} trays found")
         
         elif send_brass_qc:
             # Use IQFTrayId for accepted trays
@@ -6263,14 +6323,21 @@ class AfterCheckPickTrayIdList_Complete_APIView(APIView):
                 )
                 tray_model_used = 'BrassTrayId'
         else:
-            # If brass_qc_accepted_qty_verified is True, show BrassTrayId, else show IPTrayId
+            # If lot was previously processed in Brass QC or verified, always show the latest BrassTrayId data.
+            # This handles lots returning from Brass Audit that had their flags reset.
+            has_brass_history = BrassTrayId.objects.filter(lot_id=lot_id).exists()
             total_stock = TotalStockModel.objects.filter(lot_id=lot_id).first()
+
             if total_stock and getattr(total_stock, 'brass_qc_accepted_qty_verified', False):
                 # ✅ FIXED: Include recently delinked trays (within last 24 hours) to show relevant delinks
                 from django.utils import timezone
                 from datetime import timedelta
                 recent_time = timezone.now() - timedelta(hours=24)
                 
+
+            if total_stock and (getattr(total_stock, 'brass_qc_accepted_qty_verified', False) or has_brass_history):
+                # ✅ FIXED: Show ALL trays (removed rejected_tray=False, delink_tray=False filters)
+
                 queryset = BrassTrayId.objects.filter(
                     tray_quantity__gt=0
                 ).filter(
@@ -6291,7 +6358,6 @@ class AfterCheckPickTrayIdList_Complete_APIView(APIView):
                     Q(batch_id__isnull=True, lot_id__isnull=True, delink_tray=True, date__gte=recent_time)
                 )
                 tray_model_used = 'IPTrayId'
-            # ✅ FIXED: Removed the bug that unconditionally set tray_model_used = 'IPTrayId'
 
         print(f"✅ [AfterCheckPickTrayIdList_Complete_APIView] Using {tray_model_used} model")
         print(f"Flags: send_brass_qc={send_brass_qc}, send_brass_audit_to_qc={send_brass_audit_to_qc}")

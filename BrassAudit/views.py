@@ -1173,14 +1173,10 @@ class BAuditBatchRejectionAPIView(APIView):
             qty = total_stock.brass_audit_physical_qty 
         
 
-            # Set brass_audit_rejection = True
+            # ✅ FIX: Mark as rejected in Brass Audit so it disappears from Audit pick table
             total_stock.brass_audit_rejection = True
-            total_stock.last_process_module = "Brass Audit"
-            total_stock.next_process_module = "Jig loading"
-            total_stock.send_brass_qc=False
-            total_stock.send_brass_audit_to_qc = False
-            total_stock.brass_audit_last_process_date_time = timezone.now()  # Set the last process date/time
-            total_stock.save(update_fields=['brass_audit_rejection', 'last_process_module', 'next_process_module', 'brass_audit_last_process_date_time', 'send_brass_audit_to_qc','send_brass_qc'])
+            total_stock.brass_audit_last_process_date_time = timezone.now()
+            total_stock.save(update_fields=['brass_audit_rejection', 'brass_audit_last_process_date_time'])
 
             updated_trays_count = BrassAuditTrayId.objects.filter(lot_id=lot_id).update(rejected_tray=True)
 

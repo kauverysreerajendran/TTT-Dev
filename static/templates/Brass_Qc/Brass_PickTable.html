@@ -729,7 +729,8 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                       data-few-cases-accepted-ip-stock="{{ data.few_cases_accepted_Ip_stock|yesno:'True,False' }}"
                       data-brass-physical-qty="{{ data.brass_physical_qty|default:0 }}"
                       data-brass-missing-qty="{{ data.brass_missing_qty|default:0 }}"
-                      data-brass-qc-accepted-qty-verified="{{ data.brass_qc_accepted_qty_verified|yesno:'True,False' }}">
+                      data-brass-qc-accepted-qty-verified="{{ data.brass_qc_accepted_qty_verified|yesno:'True,False' }}"
+                      data-send-brass-audit-to-qc="{{ data.send_brass_audit_to_qc|yesno:'True,False' }}">
                     <td {% if data.brass_hold_lot %} class="row-inactive-blur"{% endif %}>
                         <span style="display:flex; align-items:center; gap:3px;">
                           {% if is_admin %}
@@ -1002,6 +1003,23 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                                 data-batch-id="{{ data.batch_id }}"
                                 data-tray-capacity="{{ data.tray_capacity|default:'0' }}">
                           <i class="fa fa-times-circle"></i> Reject
+                        </button>
+
+                      {% elif data.send_brass_audit_to_qc %}
+                        <!-- Lot returned from Brass Audit - fresh start in Brass QC -->
+                        <button type="button" class="btn btn-social-icon-text btn-twitter"
+                                style="background-color: #66bb6a"
+                                data-lot-id="{{ data.stock_lot_id }}"
+                                {% if not data.brass_qc_accepted_qty_verified %}disabled{% endif %}>
+                          <i class="fa fa-check-circle"></i>Accept
+                        </button>
+                        <button type="button" class="btn btn-social-icon-text btn-youtube tray-scan-btn"
+                                style="background-color: #e57373;"
+                                data-stock-lot-id="{{ data.stock_lot_id }}"
+                                data-batch-id="{{ data.batch_id }}"
+                                data-tray-capacity="{{ data.tray_capacity|default:'0' }}"
+                                {% if not data.brass_qc_accepted_qty_verified %}disabled{% endif %}>
+                          <i class="fa fa-times-circle"></i>Reject
                         </button>
 
                       {% elif data.brass_qc_rejection or data.brass_qc_few_cases_accptance %}
@@ -2310,9 +2328,8 @@ if (modalLotQty) {
         };
         
         console.log(`✅ [AFTER CHECK MODE] Using: ${trayListEndpoint}`);
-        console.log(`   Data Source: ${dataSource} (created after checkbox verification)`);
+        console.log(`   Data Source: ${dataSource}`);
         console.log(`   Brass QC Parameters:`, apiParams);
-        console.log(`   Note: If all Brass QC params are False, shows ALL BrassTrayId records`);
       } else {
         // ✅ PICK MODE: Use TrayId data with IP stock parameters  
         trayListEndpoint = '/brass_qc/pick_CompleteTable_tray_id_list/';
