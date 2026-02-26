@@ -11,6 +11,7 @@ from BrassAudit.models import *
 from InputScreening.models import *
 from DayPlanning.models import *
 from .models import *
+from modelmasterapp.flow_utils import clear_downstream_lot_data
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.contrib.auth.decorators import login_required
@@ -2549,7 +2550,6 @@ class IQFTrayValidateAPIView(APIView):
                 print(f"  - Remaining Qty: {remaining_qty}")
                 print(f"  - Trays Needed: {trays_needed} (ceil({remaining_qty}/{tray_capacity}))")
                 print(f"  = Max Reusable Trays: {max_reusable_trays} ({total_tray_count} - {trays_needed})")
-                max_reusable_trays = max(0, total_tray_count - trays_needed)
                 
                 # Count ALREADY used reusable trays in session
                 for alloc in current_session_allocations:
@@ -3458,16 +3458,17 @@ def iqf_reject_check_tray_id_simple(request):
                 total_iqf_rejected_qty = frontend_total_iqf_qty
                 print(f"  [IQF FALLBACK] Using frontend total_iqf_qty={frontend_total_iqf_qty} as rejection qty")
 
-            # 4. Remaining Qty = Total Qty (Physical) - Total IQF Rejected (Committed + Draft)
+            # 4. Remaining Qty (Accepted) = Total Qty (Physical) - Total IQF Rejected (Committed + Draft)
             remaining_qty = max(0, total_qty - total_iqf_rejected_qty)
 
-            # 5. Trays needed for rejected qty (reserved for rejection, cannot be reused for acceptance)
-            trays_for_rejection = 0
-            if tray_capacity > 0 and total_iqf_rejected_qty > 0:
-                trays_for_rejection = math.ceil(total_iqf_rejected_qty / tray_capacity)
+            # 5. Trays needed for accepted qty (these MUST stay)
+            trays_needed_for_accepted = 0
+            if tray_capacity > 0 and remaining_qty > 0:
+                trays_needed_for_accepted = math.ceil(remaining_qty / tray_capacity)
 
-            # 6. Max Reusable Trays = Total original trays - Trays reserved for rejection
-            max_reusable_trays = max(0, total_tray_count - trays_for_rejection)
+            # 6. Max Reusable Trays = Total original trays - Trays needed for accepted items
+            # This represents the "surplus" trays that can be reassigned to rejection categories
+            max_reusable_trays = max(0, total_tray_count - trays_needed_for_accepted)
 
             # Count ALREADY used reusable trays in session
             # ✅ IMPORTANT: Exclude the CURRENT tray being validated to avoid self-blocking
@@ -3507,14 +3508,14 @@ def iqf_reject_check_tray_id_simple(request):
             
             remaining_reuse_slots = max(0, max_reusable_trays - used_reusable_count)
             
-            print(f"  [IQF Reject Validation] REUSE CALCULATION (Rejection-Based Formula):")
+            print(f"  [IQF Reject Validation] REUSE CALCULATION (Physical Capacity Formula):")
             print(f"  - Total Tray Count: {total_tray_count}")
             print(f"  - Total Quantity (Sum): {total_qty}")
             print(f"  - Total IQF Rejected Qty: {total_iqf_rejected_qty}")
             print(f"  - Remaining Qty (Accepted): {remaining_qty}")
             print(f"  - Tray Capacity: {tray_capacity}")
-            print(f"  - Trays For Rejection: {trays_for_rejection} (ceil({total_iqf_rejected_qty}/{tray_capacity}))")
-            print(f"  = Max Reusable Trays: {max_reusable_trays} ({total_tray_count} - {trays_for_rejection})")
+            print(f"  - Trays Needed for Accepted: {trays_needed_for_accepted} (ceil({remaining_qty}/{tray_capacity}))")
+            print(f"  = Max Reusable Trays: {max_reusable_trays} ({total_tray_count} - {trays_needed_for_accepted})")
             print(f"  - Used Reusable Count: {used_reusable_count}")
             print(f"  = Remaining Slots: {remaining_reuse_slots}")
 
@@ -4377,42 +4378,62 @@ def iqf_process_all_tray_data(request):
             stock.iqf_onhold_picking = False
             stock.save(update_fields=['iqf_onhold_picking'])
         
-        # ✅ CREATE NEW LOT FOR ACCEPTED TRAYS (if needed)
+        # ✅ REUSE ORIGINAL LOT FOR ACCEPTED TRAYS (As per user requirement)
         accepted_trays_objs = IQFTrayId.objects.filter(lot_id=lot_id, rejected_tray=False)
         if accepted_trays_objs.exists():
-            total_stock_obj = stock  # Already fetched above
-            new_lot_id = generate_new_lot_id()
-            new_total_stock = TotalStockModel.objects.create(
-                lot_id=new_lot_id,
-                model_stock_no=total_stock_obj.model_stock_no,
-                batch_id=total_stock_obj.batch_id,
-                version=total_stock_obj.version,
-                total_stock=total_stock_obj.total_stock,
-                total_IP_accpeted_quantity=total_stock_obj.iqf_accepted_qty,
-                polish_finish=total_stock_obj.polish_finish,
-                plating_color=total_stock_obj.plating_color,
-                created_at=total_stock_obj.created_at,
-                last_process_date_time=total_stock_obj.last_process_date_time,
-                send_brass_qc=True,
-                tray_scan_status=True,
-                ip_person_qty_verified=True,
-                last_process_module="IQF",
-                remove_lot=True,
-                iqf_last_process_date_time=timezone.now()
+            print(f"🔄 [REVERSE TRANSFER] Reusing original lot {lot_id} to send back to Brass QC")
+            
+            # 1. Clear any stale downstream data (Brass QC/Audit) before sending back
+            clear_downstream_lot_data(lot_id)
+            
+            # 2. Update existing TotalStockModel flags
+            stock.send_brass_qc = True
+            stock.tray_scan_status = True
+            stock.ip_person_qty_verified = True
+            stock.last_process_module = "IQF"
+            stock.remove_lot = True  # Marks as processed in IQF
+            stock.iqf_last_process_date_time = timezone.now()
+            stock.total_IP_accpeted_quantity = stock.iqf_accepted_qty
+            
+            # ✅ RESET BRASS QC & AUDIT FLAGS (to allow reprocessing)
+            stock.brass_qc_accptance = False
+            stock.brass_qc_rejection = False
+            stock.brass_qc_few_cases_accptance = False
+            stock.brass_qc_accepted_qty_verified = False
+            stock.brass_onhold_picking = False
+            stock.brass_draft = False
+            stock.brass_audit_rejection = False
+            stock.brass_audit_accptance = False
+            stock.brass_audit_few_cases_accptance = False
+            stock.send_brass_audit_to_qc = False
+            stock.send_brass_audit_to_iqf = False
+            stock.brass_audit_onhold_picking = False
+            
+            # ✅ FIX: Reset Brass QC quantity fields so user can re-enter them fresh
+            stock.brass_physical_qty = 0
+            stock.brass_missing_qty = 0
+            stock.brass_qc_accepted_qty = 0
+            stock.brass_qc_after_rejection_qty = 0
+            stock.brass_physical_qty_edited = False
+            
+            stock.save(update_fields=[
+                'send_brass_qc', 'tray_scan_status', 'ip_person_qty_verified', 
+                'last_process_module', 'remove_lot', 'iqf_last_process_date_time', 
+                'total_IP_accpeted_quantity', 'brass_qc_accptance', 'brass_qc_rejection',
+                'brass_qc_few_cases_accptance', 'brass_qc_accepted_qty_verified',
+                'brass_onhold_picking', 'brass_draft', 'brass_audit_rejection', 
+                'brass_audit_accptance', 'brass_audit_few_cases_accptance', 
+                'send_brass_audit_to_qc', 'send_brass_audit_to_iqf', 
+                'brass_audit_onhold_picking', 'brass_physical_qty', 'brass_missing_qty',
+                'brass_qc_accepted_qty', 'brass_qc_after_rejection_qty', 'brass_physical_qty_edited'
+            ])
+            
+            # 3. Process accepted trays (Ensure they are verified and not rejected)
+            accepted_trays_objs.update(
+                IP_tray_verified=True,
+                new_tray=False
             )
-            for tray in accepted_trays_objs:
-                IQFTrayId.objects.create(
-                    tray_id=tray.tray_id,
-                    lot_id=new_lot_id,
-                    batch_id=tray.batch_id,
-                    tray_quantity=tray.tray_quantity,
-                    tray_capacity=tray.tray_capacity,
-                    tray_type=tray.tray_type,
-                    rejected_tray=False,
-                    IP_tray_verified=True,
-                    new_tray=False,
-                    top_tray=getattr(tray, 'top_tray', False)  # ✅ FIXED: Preserve top_tray flag
-                )
+            print(f"✅ [REVERSE TRANSFER] Updated {accepted_trays_objs.count()} trays for lot {lot_id}")
 
         # ✅ Summary response
         success = len(results['errors']) == 0
@@ -4473,11 +4494,17 @@ def get_tray_capacity(request):
                 if physical_qty > 0:
                     total_tray_count = math.ceil(physical_qty / tray_capacity)
 
-            trays_for_rejection = math.ceil(rejection_qty / tray_capacity) if rejection_qty > 0 else 0
-            max_reusable_trays = max(0, total_tray_count - trays_for_rejection)
+            # ✅ FIXED: Use Physical Capacity logic (matches reject_check_tray_id_simple)
+            # Calculate how many trays are MUST stay for accepted items
+            physical_qty = getattr(stock, 'iqf_physical_qty', 0) or getattr(stock, 'quantity', 0) or 0
+            accepted_qty = max(0, physical_qty - rejection_qty)
+            trays_needed_for_accepted = math.ceil(accepted_qty / tray_capacity) if accepted_qty > 0 else 0
+            
+            max_reusable_trays = max(0, total_tray_count - trays_needed_for_accepted)
+            
             response_data['max_reusable_trays'] = max_reusable_trays
             response_data['total_tray_count'] = total_tray_count
-            print(f"  Reuse calc: total_trays={total_tray_count}, trays_for_rej={trays_for_rejection}, max_reusable={max_reusable_trays}")
+            print(f"  Reuse calc (Physical Capacity): total_trays={total_tray_count}, accepted_qty={accepted_qty}, trays_needed_acc={trays_needed_for_accepted}, max_reusable={max_reusable_trays}")
 
         return Response(response_data)
     except Exception as e:
