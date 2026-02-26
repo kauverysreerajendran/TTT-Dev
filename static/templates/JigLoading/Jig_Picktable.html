@@ -1990,6 +1990,19 @@
                   />
                 </a>
                 <!-- Add Jig Button - UI -->
+                <!-- <button
+                  type="button"
+                  class="btn btn-social-icon-text btn-twitter open-jig-modal-btn"
+                  style="background-color: #028084a8"
+                  data-batch-id="{{ data.batch_id }}"
+                  data-stock-lot-id="{{ data.stock_lot_id }}"
+                  data-jig-qr-id="{{ data.jig_id|default:'' }}"
+                >
+                  <i class="fa fa-plus"></i>Add Jig
+                </button> -->
+
+
+                <!-- add the two missing data attributes -->
                 <button
                   type="button"
                   class="btn btn-social-icon-text btn-twitter open-jig-modal-btn"
@@ -1997,6 +2010,8 @@
                   data-batch-id="{{ data.batch_id }}"
                   data-stock-lot-id="{{ data.stock_lot_id }}"
                   data-jig-qr-id="{{ data.jig_id|default:'' }}"
+                  data-plating-stk-no="{{ data.plating_stk_no|default:'' }}"
+                  data-model-image="{{ data.model_images.0|default:'/static/assets/images/imagePlaceholder.png' }}"
                 >
                   <i class="fa fa-plus"></i>Add Jig
                 </button>
@@ -2994,6 +3009,10 @@ if (data.valid === true) {
           "modalLotQty_Jig"
         ).textContent = `Lot Qty: ${lotQty}`;
         
+        const row = link.closest("tr");
+        if (row && typeof window.highlightAndMoveRowToTop === "function") {
+          window.highlightAndMoveRowToTop(row, lotId);
+        }
 
         modal.classList.add("open");
 
@@ -4209,6 +4228,7 @@ function showTrayValidationSuccess(input) {
 
     // Attach to Add Jig button
     const buttons = document.querySelectorAll(".open-jig-modal-btn");
+    // AFTER (Fixed)
     buttons.forEach((btn) => {
       btn.addEventListener("click", function (e) {
         e.preventDefault();
@@ -4216,6 +4236,13 @@ function showTrayValidationSuccess(input) {
         const batchId = btn.getAttribute("data-batch-id");
         const lotId = btn.getAttribute("data-stock-lot-id");
         const jigQrId = btn.getAttribute("data-jig-qr-id") || "";
+
+        // ✅ FIX: Highlight and move the row to top (same as DP Pick Table)
+        const row = btn.closest("tr");
+        if (row && typeof window.highlightAndMoveRowToTop === "function") {
+          window.highlightAndMoveRowToTop(row, lotId);
+        }
+
         openJigAddModal(batchId, lotId, jigQrId);
       });
     });
