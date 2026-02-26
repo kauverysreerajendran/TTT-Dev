@@ -506,13 +506,13 @@ class IS_Accepted_form(APIView):
         try:
             total_stock_data = TotalStockModel.objects.get(lot_id=lot_id)
             
-            # ✅ FIXED: Do not reset rejection flags when marking as accepted
-            # If the lot already has rejections (rejected_ip_stock or few_cases_accepted_Ip_stock),
-            # we want to keep those flags so the "Accepted" status reflects the partial nature.
-            
+            if total_stock_data.accepted_Ip_stock:
+                total_stock_data.accepted_Ip_stock = False
+                total_stock_data.few_cases_accepted_Ip_stock =False
+                total_stock_data.rejected_ip_stock =False
+                
             total_stock_data.accepted_Ip_stock = True
             total_stock_data.accepted_tray_scan_status = True
-            total_stock_data.ip_onhold_picking = False
     
             # Use total_stock
             physical_qty = total_stock_data.total_stock
@@ -3964,11 +3964,7 @@ class TrayIdList_Complete_APIView(APIView):
         print(f"Accepted trays: {accepted_trays.count()}")
         
         # Apply filtering based on stock status
-        # ✅ FIXED: If it's accepted but has rejected trays, show everything
-        if (accepted_ip_stock or few_cases_accepted_ip_stock) and rejected_trays.exists():
-            queryset = base_queryset
-            print("Showing both accepted and rejected trays (Inclusivity Fix)")
-        elif accepted_ip_stock and not few_cases_accepted_ip_stock:
+        if accepted_ip_stock and not few_cases_accepted_ip_stock:
             # Show only accepted trays
             queryset = accepted_trays
             print("Filtering for accepted trays only")

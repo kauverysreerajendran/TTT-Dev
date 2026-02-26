@@ -1833,9 +1833,7 @@ class BQTrayRejectionAPIView(APIView):
             
             total_stock_obj.brass_qc_accepted_qty = available_qty - total_qty
             total_stock_obj.bq_last_process_date_time = timezone.now()
-            total_stock_obj.brass_draft = True  # ✅ FIX: Set draft status so lot shows as "DRAFT"
             update_fields.append('brass_qc_accepted_qty')
-            update_fields.append('brass_draft')
             
             total_stock_obj.save(update_fields=update_fields)
             
