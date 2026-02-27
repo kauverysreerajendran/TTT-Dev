@@ -4392,18 +4392,25 @@ def delink_selected_trays(request):
     return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
 
 
-# ✅ ADDED: Stub function to prevent 404 errors from frontend calls
+# ✅ ADDED: Function to look up lot_id for a given tray_id
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_lot_id_for_tray(request):
     """
-    Stub function to prevent 404 errors from frontend calls.
-    This endpoint is called by the frontend but was not implemented.
+    Look up the lot_id associated with a given tray_id.
+    Queries the main TrayId table (modelmasterapp) where trays are registered.
+    Used by the scanner to identify which lot row to highlight/open.
     """
-    tray_id = request.GET.get('tray_id')
-    return JsonResponse({
-        'success': False, 
-        'error': 'Function not implemented',
-        'tray_id': tray_id,
-        'message': 'This endpoint is a placeholder to prevent 404 errors'
-    }, status=501)  # 501 = Not Implemented
+    tray_id = request.GET.get('tray_id', '').strip()
+    if not tray_id:
+        return JsonResponse({'success': False, 'error': 'tray_id parameter is required'}, status=400)
+
+    try:
+        from modelmasterapp.models import TrayId
+        tray = TrayId.objects.filter(tray_id=tray_id).first()
+        if tray and tray.lot_id:
+            return JsonResponse({'success': True, 'lot_id': tray.lot_id, 'tray_id': tray.tray_id})
+        else:
+            return JsonResponse({'success': False, 'error': f'No lot found for tray ID: {tray_id}', 'tray_id': tray_id})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
