@@ -668,6 +668,7 @@ class BrassPickTableView(APIView):
                 actual_tray_count = IQFTrayId.objects.filter(
                     lot_id=lot_id,
                     IP_tray_verified=True,
+                    rejected_tray=False,
                     delink_tray=False
                 ).count()
                 if actual_tray_count > 0:
@@ -843,6 +844,7 @@ class BrassSaveIPCheckboxView(APIView):
                 verified_trays = IQFTrayId.objects.filter(
                     lot_id=lot_id,
                     IP_tray_verified=True,
+                    rejected_tray=False,
                     delink_tray=False
                 )
                 print(f"Using IQFTrayId for tray creation (send_brass_qc=True) - including reused rejected trays, count={verified_trays.count()}")
@@ -6043,6 +6045,7 @@ class PickTrayIdList_Complete_APIView(APIView):
                 batch_id__batch_id=batch_id,
                 tray_quantity__gt=0,
                 lot_id=lot_id,
+                rejected_tray=False,
                 delink_tray=False
             )
             tray_model_used = 'IQFTrayId'
@@ -6053,6 +6056,7 @@ class PickTrayIdList_Complete_APIView(APIView):
                     batch_id__batch_id=batch_id,
                     tray_quantity__gt=0,
                     lot_id=lot_id,
+                    rejected_tray=False,
                     delink_tray=False
                 )
                 tray_model_used = 'BrassTrayId'
@@ -6283,6 +6287,7 @@ class AfterCheckPickTrayIdList_Complete_APIView(APIView):
                 batch_id__batch_id=batch_id,
                 tray_quantity__gt=0,
                 lot_id=lot_id,
+                rejected_tray=False,
                 delink_tray=False
             )
             tray_model_used = 'IQFTrayId'
@@ -6293,6 +6298,7 @@ class AfterCheckPickTrayIdList_Complete_APIView(APIView):
                     batch_id__batch_id=batch_id,
                     tray_quantity__gt=0,
                     lot_id=lot_id,
+                    rejected_tray=False,
                     delink_tray=False
                 )
                 tray_model_used = 'BrassTrayId'
