@@ -661,6 +661,18 @@ class BrassPickTableView(APIView):
                 data['no_of_trays'] = math.ceil(display_qty / tray_capacity)
             else:
                 data['no_of_trays'] = 0
+            
+            # ✅ FIX: For lots returning from IQF, count actual IQFTrayId records
+            #    since rejected trays that were reused should also be counted
+            if data.get('send_brass_qc'):
+                actual_tray_count = IQFTrayId.objects.filter(
+                    lot_id=lot_id,
+                    IP_tray_verified=True,
+                    delink_tray=False
+                ).count()
+                if actual_tray_count > 0:
+                    data['no_of_trays'] = actual_tray_count
+                    print(f"✅ [BrassPickTable] Overrode no_of_trays for IQF lot {lot_id}: {actual_tray_count} (from IQFTrayId count)")
         
             # Get model images
             batch_obj = ModelMasterCreation.objects.filter(batch_id=data['batch_id']).first()
@@ -827,14 +839,13 @@ class BrassSaveIPCheckboxView(APIView):
                 )
                 print(f"Using BrassAuditTrayId for tray creation (send_brass_audit_to_qc=True)")
             elif send_brass_qc:
-                # Use IQFTrayId for accepted trays
+                # ✅ FIX: Use IQFTrayId for ALL non-delinked trays (including reused rejected trays)
                 verified_trays = IQFTrayId.objects.filter(
                     lot_id=lot_id,
-                    IP_tray_verified=True
-                ).exclude(
-                    rejected_tray=True
+                    IP_tray_verified=True,
+                    delink_tray=False
                 )
-                print(f"Using IQFTrayId for tray creation (send_brass_qc=True)")
+                print(f"Using IQFTrayId for tray creation (send_brass_qc=True) - including reused rejected trays, count={verified_trays.count()}")
             else:
                 # Use IPTrayId for accepted trays
                 verified_trays = IPTrayId.objects.filter(
@@ -6069,7 +6080,6 @@ class PickTrayIdList_Complete_APIView(APIView):
                 batch_id__batch_id=batch_id,
                 tray_quantity__gt=0,
                 lot_id=lot_id,
-                rejected_tray=False,
                 delink_tray=False
             )
             tray_model_used = 'IQFTrayId'
@@ -6080,7 +6090,6 @@ class PickTrayIdList_Complete_APIView(APIView):
                     batch_id__batch_id=batch_id,
                     tray_quantity__gt=0,
                     lot_id=lot_id,
-                    rejected_tray=False,
                     delink_tray=False
                 )
                 tray_model_used = 'BrassTrayId'
@@ -6108,13 +6117,17 @@ class PickTrayIdList_Complete_APIView(APIView):
                 tray_model_used = 'IPTrayId'
 
         # ✅ FIXED: Global exclusion of rejected trays (Robust Filter)
-        # Ensure we don't show any trays that are rejected in Brass QC, regardless of the source model
-        rejected_scan_ids = Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id).values_list('rejected_tray_id', flat=True)
-        rejected_flag_ids = TrayId.objects.filter(lot_id=lot_id, brass_rejected_tray=True).values_list('tray_id', flat=True)
-        
+        # Ensure we don't show any trays that are rejected in Brass QC, regardless of the source model.
+        # However, for lots newly returning from IQF or Audit, ignore these stale flags as it is a fresh cycle.
         if base_queryset is not None:
-             base_queryset = base_queryset.exclude(tray_id__in=rejected_scan_ids).exclude(tray_id__in=rejected_flag_ids)
-             print(f"🔧 [PickTrayIdList_Complete_APIView] Applied robust rejection filter. Excluded {len(rejected_scan_ids)} scan rejections and {len(rejected_flag_ids)} flag rejections.")
+            if not (send_brass_qc or send_brass_audit_to_qc):
+                rejected_scan_ids = Brass_QC_Rejected_TrayScan.objects.filter(lot_id=lot_id).values_list('rejected_tray_id', flat=True)
+                rejected_flag_ids = TrayId.objects.filter(lot_id=lot_id, brass_rejected_tray=True).values_list('tray_id', flat=True)
+                
+                base_queryset = base_queryset.exclude(tray_id__in=rejected_scan_ids).exclude(tray_id__in=rejected_flag_ids)
+                print(f"🔧 [PickTrayIdList_Complete_APIView] Applied robust rejection filter. Excluded {len(rejected_scan_ids)} scan rejections and {len(rejected_flag_ids)} flag rejections.")
+            else:
+                print(f"🔧 [PickTrayIdList_Complete_APIView] Skipped robust rejection filter due to returning lot (flags: qc={send_brass_qc}, audit={send_brass_audit_to_qc})")
 
         print(f"✅ [PickTrayIdList_Complete_APIView] Using {tray_model_used} model")
         print(f"Flags: send_brass_qc={send_brass_qc}, send_brass_audit_to_qc={send_brass_audit_to_qc}")
@@ -6307,7 +6320,6 @@ class AfterCheckPickTrayIdList_Complete_APIView(APIView):
                 batch_id__batch_id=batch_id,
                 tray_quantity__gt=0,
                 lot_id=lot_id,
-                rejected_tray=False,
                 delink_tray=False
             )
             tray_model_used = 'IQFTrayId'
@@ -6318,7 +6330,6 @@ class AfterCheckPickTrayIdList_Complete_APIView(APIView):
                     batch_id__batch_id=batch_id,
                     tray_quantity__gt=0,
                     lot_id=lot_id,
-                    rejected_tray=False,
                     delink_tray=False
                 )
                 tray_model_used = 'BrassTrayId'
