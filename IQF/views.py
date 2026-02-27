@@ -2447,34 +2447,42 @@ class IQFTrayValidateAPIView(APIView):
             remaining_reuse_slots = 0
             used_reusable_trays = set()
             try:
+                print(f"\n{'='*60}")
+                print(f"[IQF Reuse - Calculation] === STARTING REUSE CALCULATION ===")
+                print(f"{'='*60}")
+
                 # Parse optional session allocations
                 current_session_allocations = []
                 try:
                     alloc_raw = data.get('current_session_allocations', [])
+                    print(f"[IQF Reuse - Calculation] Raw session allocations from request: {alloc_raw} (type: {type(alloc_raw).__name__})")
                     if isinstance(alloc_raw, str):
                         current_session_allocations = json.loads(alloc_raw)
                     elif isinstance(alloc_raw, list):
                         current_session_allocations = alloc_raw
-                except Exception:
+                    print(f"[IQF Reuse - Calculation] Parsed session allocations: {current_session_allocations} (count: {len(current_session_allocations)})")
+                except Exception as alloc_err:
+                    print(f"[IQF Reuse - Calculation] ERROR parsing session allocations: {alloc_err}")
                     current_session_allocations = []
 
                 # Get Tray Capacity
                 tray_capacity = 0
+                tray_capacity_source = 'none'
                 if ip_tray_obj:
                      tray_capacity = getattr(ip_tray_obj, 'tray_capacity', 0)
+                     if tray_capacity:
+                         tray_capacity_source = 'IQFTrayId'
                 
                 if not tray_capacity:
                     ts = TotalStockModel.objects.filter(lot_id=lot_id_input).first()
                     if ts and ts.batch_id:
                         tray_capacity = getattr(ts.batch_id, 'tray_capacity', 12) or 12
+                        tray_capacity_source = 'TotalStockModel.batch_id'
                     else:
                         tray_capacity = 12
+                        tray_capacity_source = 'default(12)'
+                print(f"[IQF Reuse - Calculation] Tray Capacity: {tray_capacity} (source: {tray_capacity_source})")
 
-                # Get Total Rejected Quantity (Not used in new formula, but kept for reference if needed, commented out)
-                # ts = TotalStockModel.objects.filter(lot_id=lot_id_input).first()
-                # use_audit = getattr(ts, 'send_brass_audit_to_iqf', False) if ts else False
-                # total_rejected_qty = 0
-                
                 # --- NEW PHYSICAL CAPACITY FORMULA ---
 
                 # 1. Total Trays (All physical trays for the lot)
@@ -2485,8 +2493,15 @@ class IQFTrayValidateAPIView(APIView):
                 total_qty_agg = non_rejected_trays_qs.aggregate(total_sum=Sum('tray_quantity'))
                 total_qty = total_qty_agg.get('total_sum', 0) or 0
 
+                # DEBUG: List all individual IQFTrayId records
+                print(f"[IQF Reuse - Calculation] --- IQFTrayId Records for lot '{lot_id_input}' ---")
+                for idx, t_rec in enumerate(non_rejected_trays_qs.values('tray_id', 'tray_quantity', 'tray_capacity', 'rejected_tray', 'top_tray')):
+                    print(f"  [{idx+1}] tray_id={t_rec['tray_id']}, qty={t_rec['tray_quantity']}, cap={t_rec['tray_capacity']}, rejected={t_rec['rejected_tray']}, top={t_rec['top_tray']}")
+                print(f"[IQF Reuse - Calculation] Total IQFTrayId count: {total_tray_count}, Total qty sum: {total_qty}")
+
                 # ✅ FALLBACK: When no IQFTrayId records exist yet (initial rejection entry)
                 frontend_total_iqf_qty = int(request.GET.get('total_iqf_qty', 0))
+                print(f"[IQF Reuse - Calculation] Frontend total_iqf_qty param: {frontend_total_iqf_qty}")
                 
                 if total_tray_count == 0 and frontend_total_iqf_qty > 0:
                     ts_fb = TotalStockModel.objects.filter(lot_id=lot_id_input).first()
@@ -2507,11 +2522,15 @@ class IQFTrayValidateAPIView(APIView):
                 iqf_rejection_record = IQF_Rejection_ReasonStore.objects.filter(lot_id=lot_id_input).order_by('-id').first()
                 if iqf_rejection_record:
                     iqf_rejected_qty += iqf_rejection_record.total_rejection_quantity or 0
+                    print(f"[IQF Reuse - Calculation] Committed rejection record found: id={iqf_rejection_record.id}, qty={iqf_rejection_record.total_rejection_quantity}, batch_rejection={iqf_rejection_record.batch_rejection}")
+                else:
+                    print(f"[IQF Reuse - Calculation] No committed rejection record found for lot '{lot_id_input}'")
 
                 # B. Draft Rejections
                 draft_rejected_qty = 0
                 draft_record = IQF_Draft_Store.objects.filter(lot_id=lot_id_input, draft_type='tray_rejection').first()
                 if draft_record and draft_record.draft_data:
+                    print(f"[IQF Reuse - Calculation] Draft rejection record found: id={draft_record.id}")
                     try:
                         draft_data = draft_record.draft_data
                         if isinstance(draft_data, str):
@@ -2520,16 +2539,23 @@ class IQFTrayValidateAPIView(APIView):
                         
                         # Sum up rejections in draft
                         tray_rejections = draft_data.get('tray_rejections', [])
-                        for rej in tray_rejections:
-                            draft_rejected_qty += int(rej.get('qty', 0) or 0)
+                        print(f"[IQF Reuse - Calculation] Draft tray_rejections entries: {len(tray_rejections)}")
+                        for d_idx, rej in enumerate(tray_rejections):
+                            rej_qty = int(rej.get('qty', 0) or 0)
+                            draft_rejected_qty += rej_qty
+                            print(f"  Draft rejection [{d_idx+1}]: tray_id={rej.get('tray_id','?')}, qty={rej_qty}, reason={rej.get('reason','?')}")
                     except Exception as e:
                         print(f"Error parsing draft rejection data: {e}")
+                else:
+                    print(f"[IQF Reuse - Calculation] No draft rejection record found for lot '{lot_id_input}'")
 
                 total_iqf_rejected_qty = iqf_rejected_qty + draft_rejected_qty
+                print(f"[IQF Reuse - Calculation] Rejection totals: committed={iqf_rejected_qty} + draft={draft_rejected_qty} = total={total_iqf_rejected_qty}")
                 
                 # If no committed/draft rejections but frontend has rejection qty, use it
                 if total_iqf_rejected_qty == 0 and frontend_total_iqf_qty > 0:
                     total_iqf_rejected_qty = frontend_total_iqf_qty
+                    print(f"[IQF Reuse - Calculation] Using frontend qty as fallback: {frontend_total_iqf_qty}")
 
                 # 4. Remaining Qty = Total Qty (Physical) - Total IQF Rejected (Committed + Draft)
                 remaining_qty = max(0, total_qty - total_iqf_rejected_qty)
@@ -2542,44 +2568,48 @@ class IQFTrayValidateAPIView(APIView):
                 # 6. Max Reusable Trays
                 max_reusable_trays = max(0, total_tray_count - trays_needed)
 
-                print(f"  REUSE CALCULATION (Physical Formula - Updated with IQF_Draft_Store):")
-                print(f"  - Total Tray Count: {total_tray_count}")
-                print(f"  - Total Quantity (Physical Sum): {total_qty}")
-                print(f"  - IQF Rejected Qty (Store): {iqf_rejected_qty}")
-                print(f"  - IQF Rejected Qty (Draft): {draft_rejected_qty}")
-                print(f"  - Remaining Qty: {remaining_qty}")
-                print(f"  - Trays Needed: {trays_needed} (ceil({remaining_qty}/{tray_capacity}))")
-                print(f"  = Max Reusable Trays: {max_reusable_trays} ({total_tray_count} - {trays_needed})")
+                print(f"\n[IQF Reuse - Calculation] === FORMULA RESULT ===")
+                print(f"  Step 1: Total Tray Count (IQFTrayId): {total_tray_count}")
+                print(f"  Step 2: Total Quantity (Physical Sum): {total_qty}")
+                print(f"  Step 3a: IQF Rejected Qty (Committed Store): {iqf_rejected_qty}")
+                print(f"  Step 3b: IQF Rejected Qty (Draft): {draft_rejected_qty}")
+                print(f"  Step 3c: Total IQF Rejected Qty: {total_iqf_rejected_qty}")
+                print(f"  Step 4: Remaining Qty = {total_qty} - {total_iqf_rejected_qty} = {remaining_qty}")
+                print(f"  Step 5: Trays Needed = ceil({remaining_qty}/{tray_capacity}) = {trays_needed}")
+                print(f"  Step 6: Max Reusable Trays = {total_tray_count} - {trays_needed} = {max_reusable_trays}")
                 
                 # Count ALREADY used reusable trays in session
-                for alloc in current_session_allocations:
+                print(f"\n[IQF Reuse - Calculation] --- Session Allocation Processing ---")
+                print(f"  Total allocations to process: {len(current_session_allocations)}")
+                for a_idx, alloc in enumerate(current_session_allocations):
                     t_ids = alloc.get('tray_ids', [])
                     if isinstance(t_ids, str): t_ids = [t_ids]
+                    print(f"  Alloc [{a_idx+1}]: tray_ids={t_ids}")
                     
                     for t_id in t_ids:
                         if not t_id: continue
                         # Check if this tray is an EXISTING tray for this lot
                         t_ip_obj = IQFTrayId.objects.filter(tray_id=t_id, lot_id=lot_id_input).first()
                         if t_ip_obj:
-                            # If it's the specific top-most working tray (optional check, but logic says ANY empty tray is reusable)
-                            # Actually, user logic implies we just count reuses.
-                            # We should check if t_id was originally empty? No, session allocation implies we just filled it.
-                            # Let's count it if it's being used as a reuse tray.
                             used_reusable_trays.add(t_id)
+                            print(f"    -> {t_id}: EXISTS in IQFTrayId (qty={t_ip_obj.tray_quantity}) => counted as REUSED")
+                        else:
+                            print(f"    -> {t_id}: NOT in IQFTrayId => NOT counted (new tray)")
 
                 used_reusable_count = len(used_reusable_trays)
                 remaining_reuse_slots = max(0, max_reusable_trays - used_reusable_count)
                     
-                print(f"  REUSE CALCULATION (Physical Formula):")
-                print(f"  - Total Tray Count: {total_tray_count}")
-                print(f"  - Total Quantity (Sum): {total_qty}")
-                print(f"  - Total Rejected Qty: {total_rejected_qty}")
-                print(f"  - Remaining Qty: {remaining_qty}")
-                print(f"  - Tray Capacity: {tray_capacity}")
-                print(f"  - Trays Needed: {trays_needed} (ceil({remaining_qty}/{tray_capacity}))")
-                print(f"  = Max Reusable Trays: {max_reusable_trays} ({total_tray_count} - {trays_needed})")
-                print(f"  - Used Reusable Count: {used_reusable_count}")
-                print(f"  = Remaining Slots: {remaining_reuse_slots}")
+                print(f"\n[IQF Reuse - Calculation] === FINAL SUMMARY ===")
+                print(f"  Total Tray Count: {total_tray_count}")
+                print(f"  Total Qty (Physical): {total_qty}")
+                print(f"  Total Rejected Qty: {total_iqf_rejected_qty}")
+                print(f"  Remaining Qty (Accepted): {remaining_qty}")
+                print(f"  Tray Capacity: {tray_capacity} (source: {tray_capacity_source})")
+                print(f"  Trays Needed: {trays_needed}")
+                print(f"  Max Reusable Trays: {max_reusable_trays}")
+                print(f"  Used Reusable Trays: {used_reusable_count} => {used_reusable_trays}")
+                print(f"  ★ Remaining Reuse Slots: {remaining_reuse_slots}")
+                print(f"{'='*60}")
 
             except Exception as e:
                 print(f"  Error Calculating Reuse Limit: {e}")
@@ -3380,23 +3410,28 @@ def iqf_reject_check_tray_id_simple(request):
         remaining_reuse_slots = 0
         used_reusable_trays = set()
         try:
+            print(f"\n{'='*60}")
+            print(f"[IQF Reject Reuse - Calculation] === STARTING REUSE CALCULATION ===")
+            print(f"{'='*60}")
+
              # Get Tray Capacity
             tray_capacity = 0
+            tray_capacity_source = 'none'
             if ip_tray_obj:
                     tray_capacity = getattr(ip_tray_obj, 'tray_capacity', 0)
+                    if tray_capacity:
+                        tray_capacity_source = 'IQFTrayId'
             
             if not tray_capacity:
                 ts = TotalStockModel.objects.filter(lot_id=lot_id).first()
                 if ts and ts.batch_id:
                     tray_capacity = getattr(ts.batch_id, 'tray_capacity', 12) or 12
+                    tray_capacity_source = 'TotalStockModel.batch_id'
                 else:
                     tray_capacity = 12
+                    tray_capacity_source = 'default(12)'
+            print(f"[IQF Reject Reuse - Calculation] Tray Capacity: {tray_capacity} (source: {tray_capacity_source})")
 
-            # Get Total Rejected Quantity (Not used in new formula)
-            # ts = TotalStockModel.objects.filter(lot_id=lot_id).first()
-            # use_audit = getattr(ts, 'send_brass_audit_to_iqf', False) if ts else False
-            # total_rejected_qty = 0
-            
             # --- NEW PHYSICAL CAPACITY FORMULA ---
             
             # 1. Total Trays (All physical trays associated to this lot)
@@ -3407,9 +3442,16 @@ def iqf_reject_check_tray_id_simple(request):
             total_qty_agg = non_rejected_trays_qs.aggregate(total_sum=Sum('tray_quantity'))
             total_qty = total_qty_agg.get('total_sum', 0) or 0
 
+            # DEBUG: List all individual IQFTrayId records
+            print(f"[IQF Reject Reuse - Calculation] --- IQFTrayId Records for lot '{lot_id}' ---")
+            for idx, t_rec in enumerate(non_rejected_trays_qs.values('tray_id', 'tray_quantity', 'tray_capacity', 'rejected_tray', 'top_tray')):
+                print(f"  [{idx+1}] tray_id={t_rec['tray_id']}, qty={t_rec['tray_quantity']}, cap={t_rec['tray_capacity']}, rejected={t_rec['rejected_tray']}, top={t_rec['top_tray']}")
+            print(f"[IQF Reject Reuse - Calculation] Total IQFTrayId count: {total_tray_count}, Total qty sum: {total_qty}")
+
             # ✅ FALLBACK: When no IQFTrayId records exist yet (initial rejection entry)
             # Use TotalStockModel + Brass data to estimate tray count and remaining qty
             frontend_total_iqf_qty = int(request.GET.get('total_iqf_qty', 0))
+            print(f"[IQF Reject Reuse - Calculation] Frontend total_iqf_qty param: {frontend_total_iqf_qty}")
             
             if total_tray_count == 0 and frontend_total_iqf_qty > 0:
                 ts = TotalStockModel.objects.filter(lot_id=lot_id).first()
@@ -3433,11 +3475,15 @@ def iqf_reject_check_tray_id_simple(request):
             iqf_rejection_record = IQF_Rejection_ReasonStore.objects.filter(lot_id=lot_id).order_by('-id').first()
             if iqf_rejection_record:
                 iqf_rejected_qty += iqf_rejection_record.total_rejection_quantity or 0
+                print(f"[IQF Reject Reuse - Calculation] Committed rejection record found: id={iqf_rejection_record.id}, qty={iqf_rejection_record.total_rejection_quantity}, batch_rejection={iqf_rejection_record.batch_rejection}")
+            else:
+                print(f"[IQF Reject Reuse - Calculation] No committed rejection record found for lot '{lot_id}'")
 
             # B. Draft Rejections (Using IQF_Draft_Store)
             draft_rejected_qty = 0
             draft_record = IQF_Draft_Store.objects.filter(lot_id=lot_id, draft_type='tray_rejection').first()
             if draft_record and draft_record.draft_data:
+                print(f"[IQF Reject Reuse - Calculation] Draft rejection record found: id={draft_record.id}")
                 try:
                     draft_data = draft_record.draft_data
                     if isinstance(draft_data, str):
@@ -3446,12 +3492,18 @@ def iqf_reject_check_tray_id_simple(request):
                     
                     # Sum up rejections in draft
                     tray_rejections = draft_data.get('tray_rejections', [])
-                    for rej in tray_rejections:
-                        draft_rejected_qty += int(rej.get('qty', 0) or 0)
+                    print(f"[IQF Reject Reuse - Calculation] Draft tray_rejections entries: {len(tray_rejections)}")
+                    for d_idx, rej in enumerate(tray_rejections):
+                        rej_qty = int(rej.get('qty', 0) or 0)
+                        draft_rejected_qty += rej_qty
+                        print(f"  Draft rejection [{d_idx+1}]: tray_id={rej.get('tray_id','?')}, qty={rej_qty}, reason={rej.get('reason','?')}")
                 except Exception as e:
                     print(f"Error parsing draft rejection data: {e}")
+            else:
+                print(f"[IQF Reject Reuse - Calculation] No draft rejection record found for lot '{lot_id}'")
 
             total_iqf_rejected_qty = iqf_rejected_qty + draft_rejected_qty
+            print(f"[IQF Reject Reuse - Calculation] Rejection totals: committed={iqf_rejected_qty} + draft={draft_rejected_qty} = total={total_iqf_rejected_qty}")
             
             # If no committed/draft rejections exist but frontend has rejection qty, use it
             if total_iqf_rejected_qty == 0 and frontend_total_iqf_qty > 0:
@@ -3472,7 +3524,10 @@ def iqf_reject_check_tray_id_simple(request):
 
             # Count ALREADY used reusable trays in session
             # ✅ IMPORTANT: Exclude the CURRENT tray being validated to avoid self-blocking
-            for item in current_session_allocations:
+            print(f"\n[IQF Reject Reuse - Calculation] --- Session Allocation Processing ---")
+            print(f"  Total allocations to process: {len(current_session_allocations)}")
+            print(f"  Current tray being validated (will skip): {tray_id}")
+            for a_idx, item in enumerate(current_session_allocations):
                 # Handle both list of strings (new frontend) and list of objects (legacy/other)
                 t_ids = []
                 if isinstance(item, str):
@@ -3481,12 +3536,13 @@ def iqf_reject_check_tray_id_simple(request):
                      val = item.get('tray_ids', [])
                      if isinstance(val, list): t_ids = val
                      elif isinstance(val, str): t_ids = [val]
+                print(f"  Alloc [{a_idx+1}]: raw={item}, parsed tray_ids={t_ids}")
                 
                 for t_id in t_ids:
                     if not t_id: continue
                     # Skip the current tray being validated
                     if t_id == tray_id:
-                        print(f"[IQF DEBUG] Skipping current tray {t_id} from reuse count")
+                        print(f"    -> {t_id}: SKIPPED (current tray being validated)")
                         continue
                     # Check if this tray is an EXISTING tray for this lot
                     t_ip_obj = IQFTrayId.objects.filter(tray_id=t_id, lot_id=lot_id).first()
@@ -3494,6 +3550,9 @@ def iqf_reject_check_tray_id_simple(request):
                     # If it exists in DB, it's a reusable tray
                     if t_ip_obj:
                          used_reusable_trays.add(t_id)
+                         print(f"    -> {t_id}: EXISTS in IQFTrayId (qty={t_ip_obj.tray_quantity}) => counted as REUSED")
+                    else:
+                         print(f"    -> {t_id}: NOT in IQFTrayId => NOT counted (new tray)")
 
             used_reusable_count = len(used_reusable_trays)
             
@@ -3504,20 +3563,23 @@ def iqf_reject_check_tray_id_simple(request):
                 if already_allocated_count > 0:
                     # Assume worst case: all already-allocated trays could be reusable
                     used_reusable_count = min(already_allocated_count, max_reusable_trays)
-                    print(f"[IQF DEBUG] FALLBACK: Using already_allocated={already_allocated_count} as proxy, used_reusable_count={used_reusable_count}")
+                    print(f"[IQF Reject Reuse - Calculation] FALLBACK: Using already_allocated={already_allocated_count} as proxy, used_reusable_count={used_reusable_count}")
             
             remaining_reuse_slots = max(0, max_reusable_trays - used_reusable_count)
             
-            print(f"  [IQF Reject Validation] REUSE CALCULATION (Physical Capacity Formula):")
-            print(f"  - Total Tray Count: {total_tray_count}")
-            print(f"  - Total Quantity (Sum): {total_qty}")
-            print(f"  - Total IQF Rejected Qty: {total_iqf_rejected_qty}")
-            print(f"  - Remaining Qty (Accepted): {remaining_qty}")
-            print(f"  - Tray Capacity: {tray_capacity}")
-            print(f"  - Trays Needed for Accepted: {trays_needed_for_accepted} (ceil({remaining_qty}/{tray_capacity}))")
-            print(f"  = Max Reusable Trays: {max_reusable_trays} ({total_tray_count} - {trays_needed_for_accepted})")
-            print(f"  - Used Reusable Count: {used_reusable_count}")
-            print(f"  = Remaining Slots: {remaining_reuse_slots}")
+            print(f"\n[IQF Reject Reuse - Calculation] === FINAL SUMMARY ===")
+            print(f"  Step 1: Total Tray Count (IQFTrayId): {total_tray_count}")
+            print(f"  Step 2: Total Qty (Physical Sum): {total_qty}")
+            print(f"  Step 3a: IQF Rejected Qty (Committed Store): {iqf_rejected_qty}")
+            print(f"  Step 3b: IQF Rejected Qty (Draft): {draft_rejected_qty}")
+            print(f"  Step 3c: Total IQF Rejected Qty: {total_iqf_rejected_qty}")
+            print(f"  Step 4: Remaining Qty (Accepted) = {total_qty} - {total_iqf_rejected_qty} = {remaining_qty}")
+            print(f"  Step 5: Trays Needed for Accepted = ceil({remaining_qty}/{tray_capacity}) = {trays_needed_for_accepted}")
+            print(f"  Step 6: Max Reusable Trays = {total_tray_count} - {trays_needed_for_accepted} = {max_reusable_trays}")
+            print(f"  Tray Capacity: {tray_capacity} (source: {tray_capacity_source})")
+            print(f"  Used Reusable Trays: {used_reusable_count} => {used_reusable_trays}")
+            print(f"  ★ Remaining Reuse Slots: {remaining_reuse_slots}")
+            print(f"{'='*60}")
 
         except Exception as e:
             print(f"  Error Calculating Reuse Limit: {e}")
