@@ -2946,6 +2946,32 @@ async function loadOptimalDistributionDraft(lotId) {
         result.draft_data.delink_trays || []
       );
 
+      console.log('Accepted trays payload:', result.accepted_tray_data?.accepted_trays);
+      // AFTER accepted tray rows are generated
+      setTimeout(() => {
+
+        const acceptedTrays = draftData.accepted_tray_data?.accepted_trays || [];
+        const rows = document.querySelectorAll('.accepted-tray-row');
+
+        console.log('Restoring trays after rows created:', rows.length);
+
+        acceptedTrays.forEach((tray, index) => {
+
+          if (rows[index] && tray.tray_id) {
+
+            const input = rows[index].querySelector('input');
+
+            if (input) {
+              input.value = tray.tray_id;
+              console.log('Restored tray:', tray.tray_id);
+            }
+
+          }
+
+        });
+
+      }, 200);
+
       // Update button to show draft exists
       const draftBtn = document.getElementById('acceptedTrayDraftBtn');
       if (draftBtn) {
@@ -4102,7 +4128,9 @@ async function renderModalWithOptimalDistribution(allRemainingTrays, allComments
   if (typeof autoSaveManager !== 'undefined') {
     // Setup auto-save listeners for this modal
     setTimeout(() => {
-      autoSaveManager.setupAutoSaveListeners(lotId, '');
+      if (typeof autoSaveManager !== 'undefined') {
+            autoSaveManager.setupAutoSaveListeners(lotId, '');
+      }
       console.log('✅ [AUTO-SAVE] Auto-save setup for accepted tray modal complete');
     }, 500);
   }
@@ -4532,7 +4560,9 @@ async function loadDraftData(lotId) {
       
       // Show notification if any draft was found
       if (foundAnyDraft) {
-        autoSaveManager.showAutoSaveNotification('Draft data restored');
+        if (typeof autoSaveManager !== 'undefined') {
+          autoSaveManager.showAutoSaveNotification('Draft data restored');
+        }
         console.log('✅ [DRAFT-LOAD] All draft data loaded successfully');
       } else {
         console.log('ℹ️ [DRAFT-LOAD] No existing draft data found');
@@ -4719,81 +4749,76 @@ function loadTrayRejectionDraft(draftData) {
   }
 }
 
-// ✅ NEW: Load accepted tray draft (top tray and delink trays)
 function loadAcceptedTrayDraft(draftData) {
   try {
     console.log('🔄 [DRAFT-LOAD] Loading accepted tray draft:', draftData);
-    
-    // Wait a bit for DOM to be ready, then restore
-    setTimeout(() => {
-      
-      // Restore top tray ID
+
+    const waitForRows = setInterval(() => {
+
+      const acceptedRows = document.querySelectorAll('#accepted-tray-table-body tr');
+      const delinkInputs = document.querySelectorAll('.delink-tray-input');
+
+      // Wait until accepted tray rows exist
+      if (acceptedRows.length === 0) {
+        console.log('⏳ Waiting for accepted tray rows...');
+        return;
+      }
+
+      clearInterval(waitForRows);
+      console.log('✅ Accepted tray rows detected:', acceptedRows.length);
+
+      /* ---------- Restore top tray ---------- */
       if (draftData.top_tray_id) {
         const topTrayInput = document.getElementById('topTrayIdInput');
         if (topTrayInput) {
           topTrayInput.value = draftData.top_tray_id;
-          topTrayInput.dispatchEvent(new Event('input'));
-          console.log('✅ [DRAFT-LOAD] Restored top tray ID:', draftData.top_tray_id);
+          topTrayInput.dispatchEvent(new Event('input', { bubbles: true }));
+          console.log('✅ Restored top tray ID:', draftData.top_tray_id);
         }
       }
-      
-      // Restore delink trays
-      if (draftData.delink_trays && Array.isArray(draftData.delink_trays)) {
-        const delinkInputs = document.querySelectorAll('.delink-tray-input');
+
+      /* ---------- Restore delink trays ---------- */
+      if (Array.isArray(draftData.delink_trays)) {
         draftData.delink_trays.forEach((trayId, index) => {
           if (delinkInputs[index] && trayId) {
             delinkInputs[index].value = trayId;
-            delinkInputs[index].dispatchEvent(new Event('input'));
-            console.log('✅ [DRAFT-LOAD] Restored delink tray:', trayId);
+            delinkInputs[index].dispatchEvent(new Event('input', { bubbles: true }));
+            console.log('✅ Restored delink tray:', trayId);
           }
         });
       }
 
-      // Restore accepted tray IDs in accepted tray table
-      const acceptedRows = document.querySelectorAll('#accepted-tray-table-body tr');
-      if (draftData.accepted_trays && Array.isArray(draftData.accepted_trays)) {
+      /* ---------- Restore accepted trays ---------- */
+      if (Array.isArray(draftData.accepted_trays)) {
         draftData.accepted_trays.forEach((tray, index) => {
-          if (!acceptedRows[index]) return;
-          const trayInput = acceptedRows[index].querySelector('.accepted-tray-id-input');
-          const trayId = (tray && tray.tray_id) ? tray.tray_id : '';
+
+          const trayId = tray?.tray_id || '';
+          const trayInput = acceptedRows[index]?.querySelector('.accepted-tray-id-input');
+
           if (trayInput && trayId) {
             trayInput.value = trayId;
             trayInput.dispatchEvent(new Event('input', { bubbles: true }));
             trayInput.dispatchEvent(new Event('change', { bubbles: true }));
-            console.log(`✅ [DRAFT-LOAD] Restored accepted tray ${index + 1}: ${trayId}`);
+            console.log(`✅ Restored accepted tray ${index + 1}: ${trayId}`);
           }
-        });
-      } else if (draftData.delink_trays && Array.isArray(draftData.delink_trays)) {
-        // Backward compatibility with old payload where accepted IDs were saved in delink_trays
-        draftData.delink_trays.forEach((trayId, index) => {
-          if (!acceptedRows[index] || !trayId) return;
-          const trayInput = acceptedRows[index].querySelector('.accepted-tray-id-input');
-          if (trayInput) {
-            trayInput.value = trayId;
-            trayInput.dispatchEvent(new Event('input', { bubbles: true }));
-            trayInput.dispatchEvent(new Event('change', { bubbles: true }));
-            console.log(`✅ [DRAFT-LOAD] Restored accepted tray (legacy) ${index + 1}: ${trayId}`);
-          }
+
         });
       }
-      
-      // Restore acceptance remarks  
+
+      /* ---------- Restore remarks ---------- */
       if (draftData.acceptance_remarks) {
         const remarksInput = document.getElementById('acceptanceRemarksInput');
         if (remarksInput) {
           remarksInput.value = draftData.acceptance_remarks;
           remarksInput.dispatchEvent(new Event('input', { bubbles: true }));
-          console.log('✅ [DRAFT-LOAD] Restored acceptance remarks:', draftData.acceptance_remarks);
-        } else {
-          console.log('⚠️ [DRAFT-LOAD] Acceptance remarks input not found');
+          console.log('✅ Restored acceptance remarks:', draftData.acceptance_remarks);
         }
-      } else {
-        console.log('ℹ️ [DRAFT-LOAD] No acceptance remarks to restore');
       }
-      
-      console.log('✅ [DRAFT-LOAD] Accepted tray draft loaded successfully');
-    }, 300);
-    
+
+      console.log('✅ Accepted tray draft restoration complete');
+
+    }, 100);
+
   } catch (error) {
     console.error('❌ [DRAFT-LOAD] Error loading accepted tray draft:', error);
   }
@@ -7208,11 +7233,11 @@ function addAcceptedTrayIdValidation() {
     // Get CSRF token
     const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || 
                       document.cookie.split(';').find(c => c.trim().startsWith('csrftoken='))?.split('=')[1] || '';
-    
+    const accepted_Trays = collectAcceptedTrays();
     const payload = {
       lot_id: lotId,
       is_auto_save: true,
-      accepted_trays: acceptedTrays,
+      accepted_trays: accepted_Trays,
       delink_trays: [],
       top_tray_id: '',
       top_tray_qty: 0
@@ -11882,8 +11907,23 @@ function extractLotIdFromContext() {
 }
 
 console.log('✅ [AUTO-SAVE] IQF Auto-save system loaded successfully');
+function collectAcceptedTrays() {
+  const rows = document.querySelectorAll('#accepted-tray-table-body tr');
 
+  const trays = [];
 
+  rows.forEach((row, index) => {
+    const input = row.querySelector('.accepted-tray-id-input');
+    const trayId = input ? input.value.trim() : '';
+
+    trays.push({
+      tray_id: trayId,
+      position: index + 1
+    });
+  });
+
+  return trays;
+}
 </script>
 
 {% endblock %} {% endblock content %}
