@@ -959,8 +959,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                                     style="background-color: #e57373;"
                                     data-stock-lot-id="{{ data.stock_lot_id }}"
                                     data-batch-id="{{ data.batch_id }}"
-                                    data-is-delink-only="false"
-                                    {% if not data.brass_qc_accepted_qty_verified %}disabled{% endif %}>
+                                    data-is-delink-only="false">
                               <i class="fa fa-times-circle"></i>Set Delink
                             </button>
                           {% else %}
@@ -970,8 +969,7 @@ box-shadow: 2px 0 8px rgba(0,0,0,0.04);
                                     data-stock-lot-id="{{ data.stock_lot_id }}"
                                     data-batch-id="{{ data.batch_id }}"
                                     data-is-delink-only="false"
-                                    data-tray-capacity="{{ data.tray_capacity|default:'0' }}"
-                                    {% if not data.brass_qc_accepted_qty_verified %}disabled{% endif %}>
+                                    data-tray-capacity="{{ data.tray_capacity|default:'0' }}">
                               <i class="fa fa-times-circle"></i>Set Top Tray
                             </button>
                           {% endif %}
@@ -8484,29 +8482,6 @@ function getCookie(name) {
 <!-- Checkbox functionality -->
 <script nonce="{{ csp_nonce }}">
     document.addEventListener("DOMContentLoaded", function () {
-      // Safety gate: Reject action must stay disabled until lot qty is verified.
-      function isLotQtyVerified(row) {
-        if (!row) return false;
-        const attrVerified = (row.getAttribute('data-brass-qc-accepted-qty-verified') || '').toLowerCase() === 'true';
-        const checkbox = row.querySelector('.brass-checkbox');
-        const checkboxVerified = checkbox ? (checkbox.checked && checkbox.disabled) : false;
-        return attrVerified || checkboxVerified;
-      }
-
-      function enforceRejectGate(row) {
-        if (!row) return;
-        const rejectButtons = row.querySelectorAll('.btn-youtube.tray-scan-btn');
-        const verified = isLotQtyVerified(row);
-        rejectButtons.forEach(btn => {
-          if (!verified) {
-            btn.disabled = true;
-          }
-        });
-      }
-
-      // Enforce initial state on page load for all rows.
-      document.querySelectorAll('#order-listing tbody tr').forEach(enforceRejectGate);
-
       document.querySelectorAll('.brass-checkbox').forEach(function (checkbox) {
         const row = checkbox.closest('tr');
         const lotQtySpan = row.querySelector('.lot-qty');
@@ -8615,18 +8590,6 @@ function getCookie(name) {
           });
         });
       });
-
-      // Block any reject click if qty verification has not completed.
-      document.addEventListener('click', function (e) {
-        const rejectBtn = e.target.closest('.btn-youtube.tray-scan-btn');
-        if (!rejectBtn) return;
-        const row = rejectBtn.closest('tr');
-        if (!isLotQtyVerified(row)) {
-          e.preventDefault();
-          e.stopPropagation();
-          rejectBtn.disabled = true;
-        }
-      }, true);
     });
     </script>
 
