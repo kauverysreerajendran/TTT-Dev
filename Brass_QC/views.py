@@ -1018,9 +1018,7 @@ class BrassTrayDelinkTopTrayCalcAPIView(APIView):
             # Get trays for the lot, ordered by creation/ID to maintain consistency
             trays = BrassTrayId.objects.filter(
                 lot_id=lot_id,
-                tray_quantity__gt=0,   # Only trays with quantity > 0
-                rejected_tray=False,   # Exclude rejected trays from accepted-top-tray math
-                delink_tray=False      # Exclude already-delinked trays
+                tray_quantity__gt=0  # Only trays with quantity > 0
             ).order_by('id').values('tray_id', 'tray_quantity')
 
             if not trays.exists():
@@ -1091,24 +1089,17 @@ class BrassTrayDelinkTopTrayCalcAPIView(APIView):
                     break
             
             print(f"[DELINK DEBUG] Final delink_count: {len(delink_trays)}")
-            # ✅ PATCH: If missing_qty is exactly consumed by full trays, select next top tray
-            # from the sorted remaining trays (not by original unsorted index).
-            if remaining_missing == 0 and len(delink_trays) > 0 and top_tray is None:
-                remaining_trays = [t for t in tray_list_sorted if t['tray_id'] not in delink_trays]
-                if remaining_trays:
-                    next_tray = remaining_trays[0]
-                else:
-                    next_tray = None
+            # ✅ PATCH: If missing_qty is exactly consumed by full trays, show next tray as top tray
+            if remaining_missing == 0 and len(delink_trays) > 0 and len(tray_list) > len(delink_trays) and top_tray is None:
+                next_tray = tray_list[len(delink_trays)]
+                top_tray = {
+                    'tray_id': next_tray['tray_id'],
+                    'qty': next_tray['tray_quantity'],
+                    'original_qty': next_tray['tray_quantity'],
+                    'delinked_qty': 0,
+                    'top_tray': True  # <-- Add this line
 
-                if next_tray:
-                    top_tray = {
-                        'tray_id': next_tray['tray_id'],
-                        'qty': next_tray['tray_quantity'],
-                        'original_qty': next_tray['tray_quantity'],
-                        'delinked_qty': 0,
-                        'top_tray': True  # <-- Add this line
-
-                    }
+                }
 
             # Prepare response
             result = {
