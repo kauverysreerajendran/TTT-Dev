@@ -38,6 +38,44 @@ from .models import Module, UserModuleProvision
 from Recovery_DP.models import *
 
 
+# ---------------------------------------------------------------------------
+# Module-wise access control for fixed User Categories
+# Maps group name → list of menu_title values whose modules they can access
+# ---------------------------------------------------------------------------
+USER_CATEGORY_MODULE_MAP = {
+    "DP User":  ["Day Planning"],
+    "IS User":  ["Input Screening"],
+    "BQC User": ["Brass QC"],
+    "IQF User": ["IQF"],
+    "BA User":  ["Brass Audit"],
+}
+
+
+def auto_provision_modules_for_group(user, group):
+    """
+    If `group` is one of the five fixed User Categories, wipe the user's
+    existing UserModuleProvision records and create new ones for every
+    Module whose menu_title matches the category's mapped list.
+
+    Returns True  → modules were auto-provisioned (skip manual step).
+    Returns False → not a fixed category; caller handles manually.
+    """
+    menu_titles = USER_CATEGORY_MODULE_MAP.get(group.name)
+    if menu_titles is None:
+        return False
+
+    UserModuleProvision.objects.filter(user=user).delete()
+    modules = Module.objects.filter(menu_title__in=menu_titles)
+    for mod in modules:
+        UserModuleProvision.objects.create(
+            user=user,
+            module_name=mod.name,
+            headings=mod.headings or [],
+            file_name=mod.html_file or '',
+        )
+    return True
+
+
 def get_allowed_modules_for_user(user):
     if not user.is_authenticated:
         return []
@@ -2054,12 +2092,13 @@ class UserCreateAPIView(APIView):
                         user.set_password(password)
                     user.save()
 
-                    # Update group if provided
+                    # Update group + auto-provision modules for fixed User Categories
                     if group_id:
                         try:
                             grp = Group.objects.get(id=group_id)
                             user.groups.clear()
                             user.groups.add(grp)
+                            auto_provision_modules_for_group(user, grp)
                         except Group.DoesNotExist:
                             pass
 
@@ -2093,7 +2132,7 @@ class UserCreateAPIView(APIView):
                 user.first_name = first_name or ""
                 user.last_name = last_name or ""
 
-                # Attach group and preserve original Admin flag behaviour on creation
+                # Attach group + auto-provision modules for fixed User Categories
                 if group_id:
                     try:
                         group = Group.objects.get(id=group_id)
@@ -2102,6 +2141,7 @@ class UserCreateAPIView(APIView):
                             user.is_active = True
                             user.is_staff = True
                             user.is_superuser = True
+                        auto_provision_modules_for_group(user, group)
                     except Group.DoesNotExist:
                         pass
 
@@ -2413,11 +2453,11 @@ class UserDetailAPIView(APIView):
 
             group_id = data.get('group')
             if group_id:
-
                 group = Group.objects.filter(id=group_id).first()
                 if group:
                     user.groups.clear()
                     user.groups.add(group)
+                    auto_provision_modules_for_group(user, group)
 
             return Response({'success': True, 'message': 'User updated successfully.'})
         except User.DoesNotExist:
