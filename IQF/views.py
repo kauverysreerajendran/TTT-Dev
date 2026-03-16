@@ -2346,21 +2346,34 @@ class IQFTrayRejectionAPIView(APIView):
                 except Exception:
                     pass
                 return max(qtys) if qtys else 0
+            # ✅ CRITICAL FIX: Get batch tray_capacity for accurate rejection allocation
+            # When NEW acceptance tray is used, we need to allocate rejection qty based on
+            # actual tray capacity (not current qty) to avoid distribution errors
+            batch_tray_capacity = None
+            if stock and stock.batch_id and hasattr(stock.batch_id, 'tray_capacity'):
+                batch_tray_capacity = int(stock.batch_id.tray_capacity or 0)
+                print(f"📦 [CAPACITY] Batch tray_capacity: {batch_tray_capacity}")
+
             original_available_trays = []
             for tray_id in eligible_tray_ids:
                 qty = _best_qty_for_tray(tray_id)
                 if qty > 0:
                     master_tray = TrayId.objects.filter(tray_id=tray_id).first()
                     if master_tray:
+                        # ✅ FIXED: Use batch_tray_capacity first, then master_tray.tray_capacity,
+                        # then qty as last resort. This ensures rejection can be allocated up to
+                        # full capacity, not limited by current qty.
+                        tray_capacity = batch_tray_capacity or master_tray.tray_capacity or qty or 12
                         tray_data = {
                             'tray_id': tray_id,
                             'tray_quantity': qty,
-                            'tray_capacity': int(master_tray.tray_capacity or qty or 12),
+                            'tray_capacity': int(tray_capacity),
                             'tray_type': getattr(master_tray, 'tray_type', ''),
                             'top_tray': False,
                             'rejected_tray': False
                         }
                         original_available_trays.append(tray_data)
+                        print(f"📦 [ORIGINAL-TRAY] {tray_id}: qty={qty}, capacity={tray_capacity}")
             original_available_tray_ids = set(tray['tray_id'] for tray in original_available_trays)
             
             # Step 2a: Classify accepted trays as NEW or EXISTING
@@ -2384,53 +2397,79 @@ class IQFTrayRejectionAPIView(APIView):
             # Step 2b: Check if delink is required for NEW tray usage
             if new_trays_used:
                 print(f"🔗 [DELINK CHECK] Processing {len(new_trays_used)} NEW trays for delink requirements...")
-                
-                # Calculate total quantity displaced by new tray usage
-                total_new_qty = sum(tray['qty'] for tray in new_trays_used)
-                print(f"   📊 Total quantity from NEW trays: {total_new_qty}")
-                
-                # Get existing trays that should be delinked (not used by frontend)
-                trays_to_delink = []
-                remaining_qty_to_displace = total_new_qty
-                
-                # Sort original available trays by quantity descending (largest first) for optimal delinking
-                sorted_original_trays = sorted(original_available_trays, key=lambda x: x['tray_quantity'], reverse=True)
-                
+
+                # When user provides a new acceptance tray, original trays serve only as
+                # rejection containers.  We determine the minimum set of original trays
+                # (sorted ascending by capacity — smallest first) that can hold
+                # total_rejection_qty, then FULLY delink every other original tray.
+                # This avoids the partial-delink bug that left a residual qty=1 in
+                # NB-A00010 and caused a Distribution Error.
+
+                existing_tray_ids_set = set(existing_trays_used)
+
+                # Sort ascending by tray_quantity (smallest-filled tray first).
+                # This ensures the tray with the fewest items becomes the rejection
+                # container, and larger surplus trays are fully delinked.
+                sorted_original_trays = sorted(
+                    original_available_trays,
+                    key=lambda x: int(x.get('tray_quantity', 0))
+                )
+
+                remaining_rejection = total_rejection_qty
+                rejection_allocations = {}  # tray_id → qty to hold for rejection
+                trays_to_fully_delink = []  # surplus trays not needed for rejection
+
                 for orig_tray in sorted_original_trays:
-                    if orig_tray['tray_id'] not in existing_trays_used and remaining_qty_to_displace > 0:
-                        # This existing tray should be delinked
-                        qty_to_delink = min(remaining_qty_to_displace, orig_tray['tray_quantity'])
-                        trays_to_delink.append({
-                            'tray_id': orig_tray['tray_id'],
-                            'qty_delinked': qty_to_delink,
-                            'original_qty': orig_tray['tray_quantity']
-                        })
-                        remaining_qty_to_displace -= qty_to_delink
-                        print(f"   🔗 Will delink: {orig_tray['tray_id']} (qty: {qty_to_delink})")
-                
-                if trays_to_delink:
-                    print(f"   📋 Delink required for {len(trays_to_delink)} trays")
+                    tid = orig_tray['tray_id']
+                    if tid in existing_tray_ids_set:
+                        continue  # already counted as accepted; skip
+                    cap = int(orig_tray.get('tray_capacity', orig_tray.get('tray_quantity', 0)))
+                    if remaining_rejection > 0 and cap > 0:
+                        allot = min(remaining_rejection, cap)
+                        rejection_allocations[tid] = allot
+                        remaining_rejection -= allot
+                        print(f"   📦 Rejection container: {tid} will hold {allot} items")
+                    else:
+                        trays_to_fully_delink.append(orig_tray)
+                        print(f"   🔗 Will fully delink (surplus): {tid}")
+
+                if trays_to_fully_delink:
+                    print(f"   📋 Delink required for {len(trays_to_fully_delink)} trays")
                     if not delink_confirmed:
                         return Response({
                             'success': False,
                             'delink_required': True,
-                            'delink_trays': trays_to_delink,
-                            'message': f'Delink required for {len(trays_to_delink)} trays due to new tray usage. Please confirm delink before proceeding.'
+                            'delink_trays': [
+                                {
+                                    'tray_id': t['tray_id'],
+                                    'qty_delinked': t['tray_quantity'],
+                                    'original_qty': t['tray_quantity']
+                                }
+                                for t in trays_to_fully_delink
+                            ],
+                            'message': f'Delink required for {len(trays_to_fully_delink)} tray(s) due to new acceptance tray usage. Please confirm delink before proceeding.'
                         }, status=200)
                     else:
-                        # Perform delink
-                        for delink_item in trays_to_delink:
-                            tray_id = delink_item['tray_id']
-                            qty_delinked = delink_item['qty_delinked']
-                            original_qty = delink_item['original_qty']
+                        # FULLY delink surplus trays (qty → 0 so they are excluded from
+                        # get_iqf_available_trays_for_allocation)
+                        for delink_tray in trays_to_fully_delink:
+                            tray_id = delink_tray['tray_id']
                             tray_obj = IQFTrayId.objects.filter(tray_id=tray_id, lot_id=lot_id).first()
                             if tray_obj:
-                                # Reduce tray qty by delinked amount (do not set entire tray to 0)
-                                remaining_qty = max(0, original_qty - qty_delinked)
-                                tray_obj.tray_quantity = remaining_qty
+                                tray_obj.tray_quantity = 0
                                 tray_obj.delink_tray = True
                                 tray_obj.save()
-                                print(f"   🔗 Delinked tray: {tray_id}, qty_delinked: {qty_delinked}, remaining: {remaining_qty}")
+                                print(f"   🔗 Fully delinked surplus tray: {tray_id}")
+
+                        # Update rejection containers with their allocated qty so that
+                        # auto_allocate_iqf_rejection sees the correct available amount
+                        for rej_tid, allot_qty in rejection_allocations.items():
+                            tray_obj = IQFTrayId.objects.filter(tray_id=rej_tid, lot_id=lot_id).first()
+                            if tray_obj:
+                                tray_obj.tray_quantity = allot_qty
+                                tray_obj.delink_tray = False
+                                tray_obj.save()
+                                print(f"   📦 Set rejection container {rej_tid} qty={allot_qty}")
             
             # Step 2c: Update EXISTING accepted trays in IQFTrayId to reflect consumed quantities
             if existing_trays_used and accepted_trays:
