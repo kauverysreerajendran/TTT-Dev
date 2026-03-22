@@ -85,7 +85,7 @@ def add_all_jig_loading_masters():
                 }
             )
             if created:
-                print(f"✅ Added: {stock_no} ({jig_type}, {jig_capacity}, {nickel_bath})")
+                print(f"[ADDED] {stock_no} ({jig_type}, {jig_capacity}, {nickel_bath})")
             else:
                 # Update existing entry if forging_info differs
                 if obj.forging_info != nickel_bath:
@@ -93,9 +93,9 @@ def add_all_jig_loading_masters():
                     obj.save()
                     print(f"🔄 Updated: {stock_no} forging_info to {nickel_bath}")
                 else:
-                    print(f"⚠️ Already exists: {stock_no}")
+                    print(f"[EXISTS] Already exists: {stock_no}")
         except ModelMaster.DoesNotExist:
-            print(f"❌ ModelMaster not found: {stock_no}")
+            print(f"[ERROR] ModelMaster not found: {stock_no}")
 
 if __name__ == "__main__":
     add_all_jig_loading_masters()

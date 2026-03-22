@@ -174,7 +174,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'watchcase2026',
         'USER':'postgres',
-        'PASSWORD':'postgres',
+        'PASSWORD':'mugesh',
         'HOST':'localhost',
         'PORT':'5432',
     }
@@ -249,19 +249,19 @@ LOGGING = {
             'level': 'DEBUG',
             'class': 'logging.FileHandler',
             #'filename': 'JL_PickTable.log',
-            'filename': r'A:\Workspace\Watchcase Tracker Titan\Jig_Loading\JL_PickTable.log',
+            'filename': os.path.join(BASE_DIR, 'JL_PickTable.log'),
             'formatter': 'detailed',
         },
         'broken_hooks_file': {
             'level': 'DEBUG',
             'class': 'logging.FileHandler',
-            'filename': r'A:\Workspace\Watchcase Tracker Titan\broken_hooks_detailed.log',
+            'filename': os.path.join(BASE_DIR, 'broken_hooks_detailed.log'),
             'formatter': 'broken_hooks',
         },
         'latency_file': {
             'level': 'INFO',
             'class': 'logging.FileHandler',
-            'filename': 'latency.log',
+            'filename': os.path.join(BASE_DIR, 'latency.log'),
             'formatter': 'simple',
         },
         'input_screening_file': {
