@@ -249,7 +249,7 @@ LOGGING = {
             'level': 'DEBUG',
             'class': 'logging.FileHandler',
             #'filename': 'JL_PickTable.log',
-            'filename': os.path.join(BASE_DIR, 'JL_PickTable.log'),
+            'filename': r'A:\Workspace\Watchcase Tracker Titan\Jig_Loading\JL_PickTable.log',
             'formatter': 'detailed',
         },
         'broken_hooks_file': {

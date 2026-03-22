@@ -2337,17 +2337,16 @@ class IQFTrayRejectionAPIView(APIView):
                 if qty > 0:
                     # Build tray data even if master TrayId doesn't exist (e.g. new rejection trays)
                     master_tray = TrayId.objects.filter(tray_id=tray_id).first()
-                    tray_capacity = batch_tray_capacity or (master_tray.tray_capacity if master_tray else None) or qty or 12
-                    tray_data = {
-                        'tray_id': tray_id,
-                        'tray_quantity': qty,
-                        'tray_capacity': int(tray_capacity),
-                        'tray_type': getattr(master_tray, 'tray_type', '') if master_tray else '',
-                        'top_tray': False,
-                        'rejected_tray': False
-                    }
-                    original_available_trays.append(tray_data)
-                    print(f"📦 [ORIGINAL-TRAY] {tray_id}: qty={qty}, capacity={tray_capacity}")
+                    if master_tray:
+                        tray_data = {
+                            'tray_id': tray_id,
+                            'tray_quantity': qty,
+                            'tray_capacity': int(master_tray.tray_capacity or qty or 12),
+                            'tray_type': getattr(master_tray, 'tray_type', ''),
+                            'top_tray': False,
+                            'rejected_tray': False
+                        }
+                        original_available_trays.append(tray_data)
             original_available_tray_ids = set(tray['tray_id'] for tray in original_available_trays)
             
             # Step 2a: Classify accepted trays as NEW or EXISTING
